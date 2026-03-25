@@ -14,6 +14,8 @@ pub struct AppConfig {
     pub admin: AdminConfig,
     #[serde(default)]
     pub redis: RedisConfig,
+    #[serde(default)]
+    pub security: SecurityConfig,
 }
 
 /// Database configuration section.
@@ -37,6 +39,15 @@ pub struct RedisConfig {
     /// Redis connection URL, e.g. "redis://127.0.0.1:6379"
     #[serde(default)]
     pub url: String,
+}
+
+/// Security configuration section.
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct SecurityConfig {
+    /// Hex-encoded 256-bit (32-byte) key used for AES-256-GCM encryption of sensitive fields
+    /// (e.g., OpenAI endpoint API keys). Generate with: `openssl rand -hex 32`
+    #[serde(default)]
+    pub encryption_key: String,
 }
 
 /// Resolve the config file path.

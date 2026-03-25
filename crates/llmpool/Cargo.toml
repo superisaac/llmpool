@@ -29,4 +29,7 @@ jsonwebtoken.workspace = true
 axum-jrpc.workspace = true
 apalis.workspace = true
 apalis-redis.workspace = true
+aes-gcm.workspace = true
+base64.workspace = true
+hex.workspace = true
 redis.workspace = true

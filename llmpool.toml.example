@@ -13,3 +13,10 @@ jwt_secret = "your-jwt-secret-here"
 # Redis connection URL for task queue
 # Can also be set via REDIS_URL environment variable (takes priority)
 url = "redis://127.0.0.1:6379"
+
+[security]
+# Hex-encoded 256-bit (32-byte) key for AES-256-GCM encryption of sensitive fields
+# (e.g., OpenAI endpoint API keys stored in the database).
+# Generate a key with: openssl rand -hex 32
+# If left empty, API keys will be stored in plaintext (not recommended for production).
+encryption_key = ""

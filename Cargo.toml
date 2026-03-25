@@ -33,3 +33,6 @@ axum-jrpc = "0.9"
 apalis = { version = "1.0.0-rc.6", features = ["limit"] }
 apalis-redis = { version = "1.0.0-rc.6", features = ["tokio"] }
 redis = { version = "1.0.4", features = ["aio", "connection-manager", "tokio-comp"] }
+aes-gcm = "0.10"
+base64 = "0.22"
+hex = "0.4"

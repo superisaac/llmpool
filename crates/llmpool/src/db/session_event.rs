@@ -55,12 +55,10 @@ pub async fn find_balance_change_by_id_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: i64,
 ) -> Result<Option<BalanceChange>, sqlx::Error> {
-    sqlx::query_as::<_, BalanceChange>(
-        "SELECT * FROM balance_changes WHERE id = $1 FOR UPDATE",
-    )
-    .bind(id)
-    .fetch_optional(&mut **tx)
-    .await
+    sqlx::query_as::<_, BalanceChange>("SELECT * FROM balance_changes WHERE id = $1 FOR UPDATE")
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await
 }
 
 /// Mark a balance change as applied using an existing transaction

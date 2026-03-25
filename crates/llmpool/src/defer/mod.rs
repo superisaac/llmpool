@@ -77,8 +77,10 @@ pub async fn cleanup_stale_workers(worker_names: &[&str]) {
         .expect("Failed to connect to Redis for worker cleanup");
 
     // Build configs matching what RedisStorage::new() would produce for each type
-    let event_config = RedisConfig::default().set_namespace(std::any::type_name::<OpenAIEventTask>());
-    let balance_config = RedisConfig::default().set_namespace(std::any::type_name::<BalanceChangeTask>());
+    let event_config =
+        RedisConfig::default().set_namespace(std::any::type_name::<OpenAIEventTask>());
+    let balance_config =
+        RedisConfig::default().set_namespace(std::any::type_name::<BalanceChangeTask>());
 
     let configs = [event_config, balance_config];
 

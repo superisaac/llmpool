@@ -150,18 +150,18 @@ pub async fn handle_openai_event(
         };
 
         // 3. Create the balance change record
-        let balance_change = match db::session_event::create_balance_change_with_tx(&mut tx, &new_change).await
-        {
-            Ok(bc) => bc,
-            Err(e) => {
-                warn!(
-                    error = %e,
-                    session_id = %session_id,
-                    "Failed to create balance change"
-                );
-                return;
-            }
-        };
+        let balance_change =
+            match db::session_event::create_balance_change_with_tx(&mut tx, &new_change).await {
+                Ok(bc) => bc,
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        session_id = %session_id,
+                        "Failed to create balance change"
+                    );
+                    return;
+                }
+            };
 
         // Commit the transaction before enqueuing the balance change task
         if let Err(e) = tx.commit().await {
@@ -243,7 +243,12 @@ pub async fn handle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
     };
 
     // 1. Fetch the balance change record (with FOR UPDATE lock)
-    let balance_change = match db::session_event::find_balance_change_by_id_with_tx(&mut tx, balance_change_id).await {
+    let balance_change = match db::session_event::find_balance_change_by_id_with_tx(
+        &mut tx,
+        balance_change_id,
+    )
+    .await
+    {
         Ok(Some(bc)) => bc,
         Ok(None) => {
             warn!(
@@ -285,21 +290,26 @@ pub async fn handle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
     };
 
     // 4. Apply the balance change to the user's balance within the same transaction
-    let updated_balance = match db::balance::apply_balance_change_with_tx(&mut tx, balance_change.user_id, &content).await {
-        Ok(ub) => ub,
-        Err(e) => {
-            warn!(
-                error = %e,
-                balance_change_id = balance_change_id,
-                user_id = balance_change.user_id,
-                "Failed to apply balance change"
-            );
-            return;
-        }
-    };
+    let updated_balance =
+        match db::balance::apply_balance_change_with_tx(&mut tx, balance_change.user_id, &content)
+            .await
+        {
+            Ok(ub) => ub,
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    balance_change_id = balance_change_id,
+                    user_id = balance_change.user_id,
+                    "Failed to apply balance change"
+                );
+                return;
+            }
+        };
 
     // 5. Mark the balance change as applied
-    if let Err(e) = db::session_event::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await {
+    if let Err(e) =
+        db::session_event::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await
+    {
         warn!(
             error = %e,
             balance_change_id = balance_change_id,

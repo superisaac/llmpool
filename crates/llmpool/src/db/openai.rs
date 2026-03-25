@@ -1,8 +1,28 @@
 use sqlx::PgPool;
 
+use crate::crypto;
 use crate::models::*;
 
 pub type DbPool = PgPool;
+
+// ============================================================
+// Helper: decrypt api_key in an OpenAIEndpoint after reading from DB
+// ============================================================
+
+/// Decrypt the `api_key` field of an `OpenAIEndpoint`.
+/// If encryption is not configured, the value is returned as-is.
+fn decrypt_endpoint(mut endpoint: OpenAIEndpoint) -> Result<OpenAIEndpoint, sqlx::Error> {
+    endpoint.api_key = crypto::decrypt_if_configured(&endpoint.api_key)
+        .map_err(|e| sqlx::Error::Protocol(format!("Failed to decrypt api_key: {}", e)))?;
+    Ok(endpoint)
+}
+
+/// Encrypt a plaintext api_key before storing it in the database.
+/// If encryption is not configured, the value is returned as-is.
+fn encrypt_api_key(api_key: &str) -> Result<String, sqlx::Error> {
+    crypto::encrypt_if_configured(api_key)
+        .map_err(|e| sqlx::Error::Protocol(format!("Failed to encrypt api_key: {}", e)))
+}
 
 // ============================================================
 // OpenAIEndpoint CRUD operations
@@ -13,43 +33,50 @@ pub async fn create_endpoint(
     pool: &DbPool,
     new_endpoint: &NewOpenAIEndpoint,
 ) -> Result<OpenAIEndpoint, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIEndpoint>(
+    let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
+    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
         "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api)
          VALUES ($1, $2, $3, $4)
          RETURNING *",
     )
     .bind(&new_endpoint.name)
     .bind(&new_endpoint.api_base)
-    .bind(&new_endpoint.api_key)
+    .bind(&encrypted_key)
     .bind(new_endpoint.has_responses_api)
     .fetch_one(pool)
-    .await
+    .await?;
+    decrypt_endpoint(endpoint)
 }
 
-/// List all OpenAI endpoints
+/// List all OpenAI endpoints (with decrypted api_keys)
 pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints")
+    let endpoints = sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints")
         .fetch_all(pool)
-        .await
+        .await?;
+    endpoints.into_iter().map(decrypt_endpoint).collect()
 }
 
-/// Get an OpenAI endpoint by ID
+/// Get an OpenAI endpoint by ID (with decrypted api_key)
 pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpoint, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
-        .bind(endpoint_id)
-        .fetch_one(pool)
-        .await
+    let endpoint =
+        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+            .bind(endpoint_id)
+            .fetch_one(pool)
+            .await?;
+    decrypt_endpoint(endpoint)
 }
 
-/// Get an OpenAI endpoint by api_base
+/// Get an OpenAI endpoint by api_base (with decrypted api_key)
 pub async fn get_endpoint_by_api_base(
     pool: &DbPool,
     api_base: &str,
 ) -> Result<OpenAIEndpoint, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE api_base = $1")
-        .bind(api_base)
-        .fetch_one(pool)
-        .await
+    let endpoint =
+        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE api_base = $1")
+            .bind(api_base)
+            .fetch_one(pool)
+            .await?;
+    decrypt_endpoint(endpoint)
 }
 
 /// Update an OpenAI endpoint
@@ -58,18 +85,20 @@ pub async fn update_endpoint(
     endpoint_id: i32,
     update: &UpdateOpenAIEndpoint,
 ) -> Result<OpenAIEndpoint, sqlx::Error> {
-    // Fetch current values first
+    // Fetch current values first (already decrypted by get_endpoint)
     let current = get_endpoint(pool, endpoint_id).await?;
 
     let name = update.name.as_deref().unwrap_or(&current.name);
     let api_base = update.api_base.as_deref().unwrap_or(&current.api_base);
-    let api_key = update.api_key.as_deref().unwrap_or(&current.api_key);
+    // If a new api_key is provided, encrypt it; otherwise re-encrypt the current (decrypted) key
+    let plaintext_key = update.api_key.as_deref().unwrap_or(&current.api_key);
+    let encrypted_key = encrypt_api_key(plaintext_key)?;
     let has_responses_api = update
         .has_responses_api
         .unwrap_or(current.has_responses_api);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
-    sqlx::query_as::<_, OpenAIEndpoint>(
+    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
         "UPDATE openai_endpoints
          SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, updated_at = $5
          WHERE id = $6
@@ -77,12 +106,13 @@ pub async fn update_endpoint(
     )
     .bind(name)
     .bind(api_base)
-    .bind(api_key)
+    .bind(&encrypted_key)
     .bind(has_responses_api)
     .bind(updated_at)
     .bind(endpoint_id)
     .fetch_one(pool)
-    .await
+    .await?;
+    decrypt_endpoint(endpoint)
 }
 
 /// Delete an OpenAI endpoint
@@ -276,7 +306,7 @@ struct ModelEndpointRow {
 }
 
 impl ModelEndpointRow {
-    fn into_tuple(self) -> (OpenAIModel, OpenAIEndpoint) {
+    fn into_tuple(self) -> Result<(OpenAIModel, OpenAIEndpoint), sqlx::Error> {
         let model = OpenAIModel {
             id: self.id,
             endpoint_id: self.endpoint_id,
@@ -299,7 +329,9 @@ impl ModelEndpointRow {
             created_at: self.ep_created_at,
             updated_at: self.ep_updated_at,
         };
-        (model, endpoint)
+        // Decrypt the api_key from the joined endpoint data
+        let endpoint = decrypt_endpoint(endpoint)?;
+        Ok((model, endpoint))
     }
 }
 
@@ -367,5 +399,7 @@ pub async fn find_models_by_name_and_capacity(
     }
 
     let rows = query.fetch_all(pool).await?;
-    Ok(rows.into_iter().map(|r| r.into_tuple()).collect())
+    rows.into_iter()
+        .map(|r| r.into_tuple())
+        .collect::<Result<Vec<_>, _>>()
 }

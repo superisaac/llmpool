@@ -11,6 +11,7 @@ LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It
 - **Usage Tracking & Billing** — Automatically records token usage per request, calculates costs based on model pricing, and manages cash balance, credit, and debt
 - **Async Task Queue** — Redis + [Apalis](https://github.com/geofmureithi/apalis)-based async task processing for event logging and balance updates
 - **Admin JSON-RPC API** — JWT-authenticated management interface for querying balances, creating users, and generating API keys
+- **API Key Encryption** — OpenAI endpoint API keys are encrypted at rest in the database using AES algorithm; decryption happens transparently at runtime
 - **OpenTelemetry Observability** — Built-in OpenTelemetry tracing support
 - **Docker Support** — Includes Dockerfile and docker-compose.yml for one-command development environment setup
 
@@ -45,9 +46,6 @@ LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It
 ### Build from Source
 
 ```bash
-# Clone the repository
-git clone https://github.com/superisaac/selfish.git
-cd selfish/rust/aigateway
 
 # Build in release mode
 cargo build --release
@@ -93,6 +91,12 @@ jwt_secret = "your-jwt-secret-here"
 [redis]
 # Redis connection URL (can also be set via REDIS_URL env var, which takes priority)
 url = "redis://127.0.0.1:6379"
+
+[security]
+# Hex-encoded 256-bit key for AES-256-GCM encryption of API keys at rest.
+# Generate with: openssl rand -hex 32
+# Leave empty to store API keys in plaintext (not recommended for production).
+encryption_key = "your-64-char-hex-key-here"
 ```
 
 Config file resolution priority:
