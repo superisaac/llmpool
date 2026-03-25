@@ -188,7 +188,7 @@ pub async fn detect_and_save_features(
     name: &str,
     api_key: &str,
     api_base: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // 1. Detect features from the remote API
     let api_features = detect_features(api_key, api_base).await?;
 

@@ -65,3 +65,9 @@ Deposit和Withdraw 都不更改credit。
 
 ========
 BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕后设置成true.   initial_schema和migration文件可以直接修改，不需要新建。handle_balance_change的执行要在一个数据库事务中执行。
+
+========
+使用axum 实现一个restful api, 用于管理llmpool的运行，验证采用jsonrpc同样的方法和secret, 先实现 GET /api/v1/endpoints 方法，返回当前运行中的endpoint列表, 支持page参数。
+
+========
+再实现一个RESTful api, 用于管理用户 GET|POST /api/v1/users。

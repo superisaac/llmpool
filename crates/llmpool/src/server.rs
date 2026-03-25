@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 
 // use crate::openai;
 use crate::telemetry;
-use crate::views::admin_rpc;
+use crate::views::admin_rest;
 use crate::views::openai_proxy;
 
 pub async fn serve(bind: &str) {
@@ -19,7 +19,7 @@ pub async fn serve(bind: &str) {
     let event_storage = crate::defer::create_event_storage().await;
 
     let openai_router = openai_proxy::get_router(pool.clone(), event_storage);
-    let admin_router = admin_rpc::get_router(pool);
+    let admin_rest_router = admin_rest::get_router(pool);
     // Route configuration
     // Note: we can directly destructure async_openai types as Axum Json extractor inputs
     let app = Router::new()
@@ -27,7 +27,7 @@ pub async fn serve(bind: &str) {
             "/openai/v1",
             openai_router.layer(CorsLayer::very_permissive()),
         )
-        .nest("/admin/rpc", admin_router)
+        .nest("/api/v1", admin_rest_router)
         .layer(TraceLayer::new_for_http());
 
     // Parse bind address from CLI argument

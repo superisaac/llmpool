@@ -56,6 +56,31 @@ pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<OpenAIEndpoint>, sqlx::
     endpoints.into_iter().map(decrypt_endpoint).collect()
 }
 
+/// Count total number of OpenAI endpoints
+pub async fn count_endpoints(pool: &DbPool) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_endpoints")
+        .fetch_one(pool)
+        .await?;
+    Ok(row.0)
+}
+
+/// List OpenAI endpoints with pagination (with decrypted api_keys).
+/// `offset` is the number of rows to skip, `limit` is the max number of rows to return.
+pub async fn list_endpoints_paginated(
+    pool: &DbPool,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
+    let endpoints = sqlx::query_as::<_, OpenAIEndpoint>(
+        "SELECT * FROM openai_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
+    )
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await?;
+    endpoints.into_iter().map(decrypt_endpoint).collect()
+}
+
 /// Get an OpenAI endpoint by ID (with decrypted api_key)
 pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpoint, sqlx::Error> {
     let endpoint =
@@ -259,6 +284,100 @@ pub async fn find_first_model_by_name(
         .bind(model_name)
         .fetch_one(pool)
         .await
+}
+
+/// Filter options for listing models
+pub struct ListModelsFilter {
+    pub endpoint_id: Option<i32>,
+    pub endpoint_name: Option<String>,
+    pub name: Option<String>,
+}
+
+/// Count models matching the given filters
+pub async fn count_models_filtered(
+    pool: &DbPool,
+    filter: &ListModelsFilter,
+) -> Result<i64, sqlx::Error> {
+    let mut sql = String::from(
+        "SELECT COUNT(*) FROM openai_models m
+         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+         WHERE 1=1",
+    );
+    let mut param_idx = 0u32;
+    if filter.endpoint_id.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.endpoint_id = ${}", param_idx));
+    }
+    if filter.endpoint_name.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND e.name = ${}", param_idx));
+    }
+    if filter.name.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
+    }
+    let _ = param_idx;
+
+    let mut query = sqlx::query_as::<_, (i64,)>(&sql);
+    if let Some(ref eid) = filter.endpoint_id {
+        query = query.bind(eid);
+    }
+    if let Some(ref ename) = filter.endpoint_name {
+        query = query.bind(ename);
+    }
+    if let Some(ref name) = filter.name {
+        query = query.bind(name);
+    }
+    let row = query.fetch_one(pool).await?;
+    Ok(row.0)
+}
+
+/// List models matching the given filters with pagination
+pub async fn list_models_filtered_paginated(
+    pool: &DbPool,
+    filter: &ListModelsFilter,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<OpenAIModel>, sqlx::Error> {
+    let mut sql = String::from(
+        "SELECT m.* FROM openai_models m
+         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+         WHERE 1=1",
+    );
+    let mut param_idx = 0u32;
+    if filter.endpoint_id.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.endpoint_id = ${}", param_idx));
+    }
+    if filter.endpoint_name.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND e.name = ${}", param_idx));
+    }
+    if filter.name.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
+    }
+    param_idx += 1;
+    let limit_idx = param_idx;
+    param_idx += 1;
+    let offset_idx = param_idx;
+    sql.push_str(&format!(
+        " ORDER BY m.id ASC LIMIT ${} OFFSET ${}",
+        limit_idx, offset_idx
+    ));
+
+    let mut query = sqlx::query_as::<_, OpenAIModel>(&sql);
+    if let Some(ref eid) = filter.endpoint_id {
+        query = query.bind(eid);
+    }
+    if let Some(ref ename) = filter.endpoint_name {
+        query = query.bind(ename);
+    }
+    if let Some(ref name) = filter.name {
+        query = query.bind(name);
+    }
+    query = query.bind(limit).bind(offset);
+    query.fetch_all(pool).await
 }
 
 /// Delete an OpenAI model

@@ -10,7 +10,7 @@ LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It
 - **User & API Key Management** — Create users, generate API keys, and authenticate via Bearer Token
 - **Usage Tracking & Billing** — Automatically records token usage per request, calculates costs based on model pricing, and manages cash balance, credit, and debt
 - **Async Task Queue** — Redis + [Apalis](https://github.com/geofmureithi/apalis)-based async task processing for event logging and balance updates
-- **Admin JSON-RPC API** — JWT-authenticated management interface for querying balances, creating users, and generating API keys
+- **Admin REST API** — JWT-authenticated RESTful management interface for managing endpoints, models, users, and API keys with paginated responses
 - **API Key Encryption** — OpenAI endpoint API keys are encrypted at rest in the database using AES algorithm; decryption happens transparently at runtime
 - **OpenTelemetry Observability** — Built-in OpenTelemetry tracing support
 - **Docker Support** — Includes Dockerfile and docker-compose.yml for one-command development environment setup
@@ -22,7 +22,7 @@ LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It
 │   Client    │────▶│              LLMPool Server              │
 │(OpenAI SDK) │     │                                          │
 └─────────────┘     │  /openai/v1/*   ──▶  OpenAI Proxy        │
-                    │  /admin/rpc     ──▶  Admin JSON-RPC API  │
+                    │  /api/v1/*      ──▶  Admin REST API      │
                     └──────────┬───────────────────┬───────────┘
                                │                   │
                     ┌──────────▼──┐     ┌──────────▼──────────┐
@@ -227,44 +227,112 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-### Admin JSON-RPC API
+### Admin REST API
 
-The Admin API uses the JSON-RPC protocol and requires JWT Bearer Token authentication:
+The Admin API is a RESTful interface under `/api/v1/` and requires JWT Bearer Token authentication. All list endpoints support pagination via `page` and `page_size` query parameters.
+
+#### Endpoints
 
 ```bash
-# Get user balance
-curl http://localhost:19324/admin/rpc \
-  -H "Authorization: Bearer <jwt-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "getBalance",
-    "params": {"user_id": 1},
-    "id": 1
-  }'
+# List all OpenAI endpoints (paginated)
+curl http://localhost:19324/api/v1/endpoints \
+  -H "Authorization: Bearer <jwt-token>"
 
-# Create a user
-curl http://localhost:19324/admin/rpc \
-  -H "Authorization: Bearer <jwt-token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "jsonrpc": "2.0",
-    "method": "createUser",
-    "params": {"username": "alice"},
-    "id": 1
-  }'
+# List endpoints with pagination
+curl "http://localhost:19324/api/v1/endpoints?page=1&page_size=10" \
+  -H "Authorization: Bearer <jwt-token>"
 
-# Create an API key
-curl http://localhost:19324/admin/rpc \
+# Create a new endpoint (auto-detects features and models)
+curl -X POST http://localhost:19324/api/v1/endpoints \
   -H "Authorization: Bearer <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "jsonrpc": "2.0",
-    "method": "createApiKey",
-    "params": {"user_id": 1},
-    "id": 1
+    "name": "OpenAI",
+    "api_key": "sk-xxx",
+    "api_base": "https://api.openai.com/v1"
   }'
 ```
+
+#### Endpoint Testing
+
+```bash
+# Test an endpoint (detect features without saving)
+curl -X POST http://localhost:19324/api/v1/endpoint-tests \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "api_key": "sk-xxx",
+    "api_base": "https://api.openai.com/v1"
+  }'
+```
+
+#### Models
+
+```bash
+# List all models (paginated)
+curl http://localhost:19324/api/v1/models \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Filter models by endpoint ID, endpoint name, or model name
+curl "http://localhost:19324/api/v1/models?endpoint_id=1" \
+  -H "Authorization: Bearer <jwt-token>"
+
+curl "http://localhost:19324/api/v1/models?endpoint_name=OpenAI&name=gpt-4o" \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### Users
+
+```bash
+# List all users (paginated)
+curl http://localhost:19324/api/v1/users \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Create a user
+curl -X POST http://localhost:19324/api/v1/users \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice"}'
+
+# Get a user by ID
+curl http://localhost:19324/api/v1/users/1 \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Get a user by username
+curl http://localhost:19324/api/v1/users_by_name/alice \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### API Keys
+
+```bash
+# List API keys for a user (paginated)
+curl http://localhost:19324/api/v1/users/1/apikeys \
+  -H "Authorization: Bearer <jwt-token>"
+
+# Create an API key for a user
+curl -X POST http://localhost:19324/api/v1/users/1/apikeys \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### Admin REST API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/endpoints` | List all OpenAI endpoints (paginated) |
+| `POST` | `/api/v1/endpoints` | Create a new endpoint (auto-detects features) |
+| `POST` | `/api/v1/endpoint-tests` | Test an endpoint without saving |
+| `GET` | `/api/v1/models` | List models (filterable, paginated) |
+| `GET` | `/api/v1/users` | List all users (paginated) |
+| `POST` | `/api/v1/users` | Create a new user |
+| `GET` | `/api/v1/users/:user_id` | Get a user by ID |
+| `GET` | `/api/v1/users_by_name/:username` | Get a user by username |
+| `GET` | `/api/v1/users/:user_id/apikeys` | List API keys for a user (paginated) |
+| `POST` | `/api/v1/users/:user_id/apikeys` | Create an API key for a user |
+
+All paginated endpoints accept the following query parameters:
+- `page` (default: 1) — Page number (1-based)
+- `page_size` (default: 20, max: 100) — Number of items per page
 
 ## Quick Start
 

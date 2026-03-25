@@ -26,7 +26,6 @@ rand.workspace = true
 bigdecimal.workspace = true
 uuid.workspace = true
 jsonwebtoken.workspace = true
-axum-jrpc.workspace = true
 apalis.workspace = true
 apalis-redis.workspace = true
 aes-gcm.workspace = true

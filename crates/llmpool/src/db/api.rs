@@ -43,6 +43,36 @@ pub async fn find_user_by_username(
         .await
 }
 
+/// Count total number of access keys for a user
+pub async fn count_access_keys_by_user(
+    pool: &DbPool,
+    user_id: i32,
+) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM access_keys WHERE user_id = $1")
+        .bind(user_id)
+        .fetch_one(pool)
+        .await?;
+    Ok(row.0)
+}
+
+/// List access keys for a user with pagination.
+/// `offset` is the number of rows to skip, `limit` is the max number of rows to return.
+pub async fn list_access_keys_by_user_paginated(
+    pool: &DbPool,
+    user_id: i32,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<AccessKey>, sqlx::Error> {
+    sqlx::query_as::<_, AccessKey>(
+        "SELECT * FROM access_keys WHERE user_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+    )
+    .bind(user_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+}
+
 /// Create a new access key for a user
 pub async fn create_access_key_for_user(
     pool: &DbPool,
