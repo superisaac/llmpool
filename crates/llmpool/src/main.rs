@@ -360,7 +360,7 @@ async fn main() {
                         .backend(balance_change_storage.clone())
                         .data(pool_clone.clone())
                         .concurrency(concurrency)
-                        .build(defer::tasks::handle_balance_change)
+                        .build(defer::tasks::settle_balance_change)
                 })
                 .run()
                 .await

@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // ============================================================
-// UserBalance
+// Fund
 // ============================================================
 
-/// Represents a user's balance record
+/// Represents a user's fund record
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct UserBalance {
+pub struct Fund {
     pub id: i32,
     pub user_id: i32,
     pub cash: BigDecimal,
@@ -19,18 +19,18 @@ pub struct UserBalance {
     pub updated_at: NaiveDateTime,
 }
 
-/// Used to insert a new user balance
+/// Used to insert a new fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewUserBalance {
+pub struct NewFund {
     pub user_id: i32,
     pub cash: BigDecimal,
     pub credit: BigDecimal,
     pub debt: BigDecimal,
 }
 
-/// Used to update an existing user balance
+/// Used to update an existing fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateUserBalance {
+pub struct UpdateFund {
     pub cash: Option<BigDecimal>,
     pub credit: Option<BigDecimal>,
     pub debt: Option<BigDecimal>,

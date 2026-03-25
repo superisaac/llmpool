@@ -78,13 +78,14 @@ pub async fn mark_balance_change_applied_with_tx(
 pub async fn create_balance_change(
     pool: &DbPool,
     new_change: &NewBalanceChange,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("INSERT INTO balance_changes (user_id, content) VALUES ($1, $2)")
-        .bind(new_change.user_id)
-        .bind(&new_change.content)
-        .execute(pool)
-        .await?;
-    Ok(())
+) -> Result<BalanceChange, sqlx::Error> {
+    sqlx::query_as::<_, BalanceChange>(
+        "INSERT INTO balance_changes (user_id, content) VALUES ($1, $2) RETURNING *",
+    )
+    .bind(new_change.user_id)
+    .bind(&new_change.content)
+    .fetch_one(pool)
+    .await
 }
 
 /// Create a new balance change entry using an existing transaction, returning the created record

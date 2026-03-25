@@ -61,8 +61,8 @@ CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
 );
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (session_id);
 
--- Create user_balances table
-CREATE TABLE IF NOT EXISTS user_balances (
+-- Create funds table
+CREATE TABLE IF NOT EXISTS funds (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id),
     cash DECIMAL NOT NULL DEFAULT 0,
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS user_balances (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_user_balances_user_id ON user_balances (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_user_id ON funds (user_id);
 
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (

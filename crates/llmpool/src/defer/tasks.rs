@@ -51,7 +51,7 @@ fn extract_usage(data: &OpenAIEventData) -> Option<UsageInfo> {
 /// This performs the following:
 /// 1. Create a session event record in the database
 /// 2. If the event contains usage info, look up model token prices and create a balance change
-/// 3. Enqueue a handle_balance_change task to apply the balance change asynchronously
+/// 3. Enqueue a settle_balance_change task to apply the balance change asynchronously
 ///
 /// Database operations for session event and balance change creation are executed within a single transaction.
 pub async fn handle_openai_event(
@@ -173,7 +173,7 @@ pub async fn handle_openai_event(
             return;
         }
 
-        // 4. Enqueue a handle_balance_change task to apply the balance change asynchronously
+        // 4. Enqueue a settle_balance_change task to apply the balance change asynchronously
         let entry = BalanceChangeTask {
             balance_change_id: balance_change.id as i64,
         };
@@ -221,7 +221,7 @@ pub async fn handle_openai_event(
 /// 3. Parses its content JSON into a BalanceChangeContent enum
 /// 4. Applies the balance change to the user's balance
 /// 5. Marks the balance change as applied
-pub async fn handle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>) {
+pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>) {
     let balance_change_id = entry.balance_change_id;
 
     info!(
@@ -291,7 +291,7 @@ pub async fn handle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
 
     // 4. Apply the balance change to the user's balance within the same transaction
     let updated_balance =
-        match db::balance::apply_balance_change_with_tx(&mut tx, balance_change.user_id, &content)
+        match db::fund::apply_balance_change_with_tx(&mut tx, balance_change.user_id, &content)
             .await
         {
             Ok(ub) => ub,

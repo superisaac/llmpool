@@ -17,9 +17,10 @@ pub async fn serve(bind: &str) {
 
     let pool = crate::db::create_pool_from_config().await;
     let event_storage = crate::defer::create_event_storage().await;
+    let balance_change_storage = crate::defer::create_balance_change_storage().await;
 
     let openai_router = openai_proxy::get_router(pool.clone(), event_storage);
-    let admin_rest_router = admin_rest::get_router(pool);
+    let admin_rest_router = admin_rest::get_router(pool, balance_change_storage);
     // Route configuration
     // Note: we can directly destructure async_openai types as Axum Json extractor inputs
     let app = Router::new()

@@ -1,3 +1,5 @@
+use apalis::prelude::*;
+use apalis_redis::RedisStorage;
 use axum::{
     Json, Router,
     extract::{Path, Query, Request, State},
@@ -6,6 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use bigdecimal::BigDecimal;
 use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -13,6 +16,8 @@ use tracing::warn;
 
 use crate::config;
 use crate::db::{self, DbPool};
+use crate::defer::BalanceChangeTask;
+use crate::models::{BalanceChangeContent, NewBalanceChange};
 
 // --- JWT Claims ---
 
@@ -28,6 +33,7 @@ struct Claims {
 
 struct AppState {
     pool: DbPool,
+    balance_change_storage: RedisStorage<BalanceChangeTask>,
 }
 
 // --- Error Response ---
@@ -198,6 +204,34 @@ impl From<crate::models::User> for UserResponse {
 #[derive(Deserialize)]
 struct CreateUserRequest {
     username: String,
+}
+
+// --- Fund Response DTO ---
+
+/// Response DTO for a user's fund
+#[derive(Serialize)]
+struct FundResponse {
+    id: i32,
+    user_id: i32,
+    cash: String,
+    credit: String,
+    debt: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<crate::models::Fund> for FundResponse {
+    fn from(f: crate::models::Fund) -> Self {
+        Self {
+            id: f.id,
+            user_id: f.user_id,
+            cash: f.cash.to_string(),
+            credit: f.credit.to_string(),
+            debt: f.debt.to_string(),
+            created_at: f.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            updated_at: f.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
 }
 
 // --- AccessKey Response DTO ---
@@ -446,6 +480,62 @@ async fn get_user_by_username(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
                 "Failed to query user",
+            )
+        }
+    }
+}
+
+// --- Fund Handlers ---
+
+/// GET /api/v1/users/:user_id/fund
+///
+/// Returns the fund (asset) information for a given user.
+/// If the user has no fund record yet, returns a default fund with zero balances.
+async fn get_user_fund(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<i32>,
+) -> Response {
+    // Verify the user exists
+    match db::user::get_user_by_id(&state.pool, user_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("User with id {} not found", user_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get user by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user",
+            );
+        }
+    }
+
+    match db::fund::find_user_fund(&state.pool, user_id).await {
+        Ok(Some(fund)) => Json(FundResponse::from(fund)).into_response(),
+        Ok(None) => {
+            // User exists but has no fund record yet, return default zero balances
+            Json(FundResponse {
+                id: 0,
+                user_id,
+                cash: "0".to_string(),
+                credit: "0".to_string(),
+                debt: "0".to_string(),
+                created_at: String::new(),
+                updated_at: String::new(),
+            })
+            .into_response()
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get fund for user");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user fund",
             )
         }
     }
@@ -898,21 +988,300 @@ async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
     }
 }
 
+// --- Deposit / Withdraw DTOs ---
+
+/// Request body for creating a deposit
+#[derive(Deserialize)]
+struct CreateDepositRequest {
+    user_id: i32,
+    amount: BigDecimal,
+}
+
+/// Request body for creating a withdrawal
+#[derive(Deserialize)]
+struct CreateWithdrawRequest {
+    user_id: i32,
+    amount: BigDecimal,
+}
+
+/// Response DTO for a balance change (deposit)
+#[derive(Serialize)]
+struct BalanceChangeResponse {
+    id: i32,
+    user_id: i32,
+    content: serde_json::Value,
+    is_applied: bool,
+    created_at: String,
+}
+
+impl From<crate::models::BalanceChange> for BalanceChangeResponse {
+    fn from(bc: crate::models::BalanceChange) -> Self {
+        Self {
+            id: bc.id,
+            user_id: bc.user_id,
+            content: bc.content,
+            is_applied: bc.is_applied,
+            created_at: bc.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+// --- Deposit Handler ---
+
+/// POST /api/v1/deposits
+///
+/// Creates a deposit for a user. This creates a BalanceChange record and enqueues
+/// a BalanceChangeTask to apply it asynchronously.
+///
+/// Request body (JSON):
+/// - `user_id` (required): The ID of the user to deposit to
+/// - `amount` (required): The deposit amount (must be positive)
+///
+/// Returns the balance_change_id of the created deposit.
+async fn create_deposit(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateDepositRequest>,
+) -> Response {
+    // Validate amount is positive
+    if payload.amount <= BigDecimal::from(0) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "Amount must be positive",
+        );
+    }
+
+    // Verify the user exists
+    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("User with id {} not found", payload.user_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get user by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user",
+            );
+        }
+    }
+
+    // Create the BalanceChange content
+    let content = BalanceChangeContent::Deposit {
+        amount: payload.amount.clone(),
+    };
+    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+        Ok(change) => change,
+        Err(e) => {
+            warn!(error = %e, "Failed to serialize balance change content");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "serialization_error",
+                "Failed to serialize deposit content",
+            );
+        }
+    };
+
+    // Create the balance change record in the database
+    let balance_change = match db::session_event::create_balance_change(&state.pool, &new_change).await {
+        Ok(bc) => bc,
+        Err(e) => {
+            warn!(error = %e, "Failed to create balance change record");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to create deposit record",
+            );
+        }
+    };
+
+    // Enqueue a BalanceChangeTask to apply the balance change asynchronously
+    let task = BalanceChangeTask {
+        balance_change_id: balance_change.id as i64,
+    };
+    let mut storage = state.balance_change_storage.clone();
+    if let Err(e) = storage.push(task).await {
+        warn!(
+            error = %e,
+            balance_change_id = balance_change.id,
+            "Failed to enqueue balance change task"
+        );
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "queue_error",
+            "Deposit record created but failed to enqueue processing task",
+        );
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(BalanceChangeResponse::from(balance_change)),
+    )
+        .into_response()
+}
+
+// --- Withdraw Handler ---
+
+/// POST /api/v1/withdrawals
+///
+/// Creates a withdrawal for a user. This first checks that the user's fund has
+/// sufficient cash (cash >= amount). If not, returns an error. Otherwise, creates
+/// a BalanceChange record and enqueues a BalanceChangeTask to apply it asynchronously.
+///
+/// Request body (JSON):
+/// - `user_id` (required): The ID of the user to withdraw from
+/// - `amount` (required): The withdrawal amount (must be positive)
+///
+/// Returns the created BalanceChange record.
+async fn create_withdraw(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateWithdrawRequest>,
+) -> Response {
+    // Validate amount is positive
+    if payload.amount <= BigDecimal::from(0) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "Amount must be positive",
+        );
+    }
+
+    // Verify the user exists
+    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("User with id {} not found", payload.user_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get user by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user",
+            );
+        }
+    }
+
+    // Check that the user's fund has sufficient cash
+    match db::fund::find_user_fund(&state.pool, payload.user_id).await {
+        Ok(Some(fund)) => {
+            if fund.cash < payload.amount {
+                return error_response(
+                    StatusCode::BAD_REQUEST,
+                    "insufficient_funds",
+                    &format!(
+                        "Insufficient cash balance. Available: {}, requested: {}",
+                        fund.cash, payload.amount
+                    ),
+                );
+            }
+        }
+        Ok(None) => {
+            // User has no fund record, so cash is effectively 0
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "insufficient_funds",
+                &format!(
+                    "Insufficient cash balance. Available: 0, requested: {}",
+                    payload.amount
+                ),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to query user fund");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user fund",
+            );
+        }
+    }
+
+    // Create the BalanceChange content
+    let content = BalanceChangeContent::Withdraw {
+        amount: payload.amount.clone(),
+    };
+    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+        Ok(change) => change,
+        Err(e) => {
+            warn!(error = %e, "Failed to serialize balance change content");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "serialization_error",
+                "Failed to serialize withdrawal content",
+            );
+        }
+    };
+
+    // Create the balance change record in the database
+    let balance_change =
+        match db::session_event::create_balance_change(&state.pool, &new_change).await {
+            Ok(bc) => bc,
+            Err(e) => {
+                warn!(error = %e, "Failed to create balance change record");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to create withdrawal record",
+                );
+            }
+        };
+
+    // Enqueue a BalanceChangeTask to apply the balance change asynchronously
+    let task = BalanceChangeTask {
+        balance_change_id: balance_change.id as i64,
+    };
+    let mut storage = state.balance_change_storage.clone();
+    if let Err(e) = storage.push(task).await {
+        warn!(
+            error = %e,
+            balance_change_id = balance_change.id,
+            "Failed to enqueue balance change task"
+        );
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "queue_error",
+            "Withdrawal record created but failed to enqueue processing task",
+        );
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(BalanceChangeResponse::from(balance_change)),
+    )
+        .into_response()
+}
+
 // --- Router ---
 
-pub fn get_router(pool: DbPool) -> Router {
-    let state = Arc::new(AppState { pool });
+pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChangeTask>) -> Router {
+    let state = Arc::new(AppState {
+        pool,
+        balance_change_storage,
+    });
     Router::new()
         .route("/endpoints", get(list_endpoints).post(create_endpoint))
         .route("/models", get(list_models))
         .route("/users", get(list_users).post(create_user))
         .route("/users/{user_id}", get(get_user_by_id))
+        .route("/users/{user_id}/fund", get(get_user_fund))
         .route(
             "/users/{user_id}/apikeys",
             get(list_user_apikeys).post(create_user_apikey),
         )
         .route("/users_by_name/{username}", get(get_user_by_username))
         .route("/endpoint-tests", post(test_endpoint))
+        .route("/deposits", post(create_deposit))
+        .route("/withdrawals", post(create_withdraw))
         .route_layer(middleware::from_fn(auth_jwt))
         .with_state(state)
 }
