@@ -9,12 +9,10 @@ mod server;
 mod telemetry;
 mod views;
 
-use apalis::prelude::*;
 use clap::{Parser, Subcommand};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::Serialize;
 use std::io::{self, Write};
-use tracing::info;
 
 #[derive(Parser)]
 #[command(name = "llmpool", about = "LLM Pool Server")]
@@ -328,43 +326,7 @@ async fn main() {
             }
         }
         Commands::Worker { concurrency } => {
-            // Initialize tracing for the worker
-            let _tracer_provider = telemetry::init_telemetry();
-
-            let pool = db::create_pool_from_config().await;
-            let event_storage = defer::create_event_storage().await;
-            let balance_change_storage = defer::create_balance_change_storage().await;
-
-            info!(
-                concurrency = concurrency,
-                "Starting deferred task queue worker"
-            );
-
-            // Clean up stale worker entries in Redis to prevent
-            // "worker is still active within threshold" errors on restart
-            defer::cleanup_stale_workers(&["event-worker", "balance-change-worker"]).await;
-
-            let pool_clone = pool.clone();
-            let balance_change_storage_clone = balance_change_storage.clone();
-            Monitor::new()
-                .register(move |_| {
-                    WorkerBuilder::new("event-worker")
-                        .backend(event_storage.clone())
-                        .data(pool.clone())
-                        .data(balance_change_storage_clone.clone())
-                        .concurrency(concurrency)
-                        .build(defer::tasks::handle_openai_event)
-                })
-                .register(move |_| {
-                    WorkerBuilder::new("balance-change-worker")
-                        .backend(balance_change_storage.clone())
-                        .data(pool_clone.clone())
-                        .concurrency(concurrency)
-                        .build(defer::tasks::settle_balance_change)
-                })
-                .run()
-                .await
-                .expect("Failed to run deferred task worker");
+            defer::worker::run_worker(concurrency).await;
         }
     }
 }

@@ -19,6 +19,12 @@ pub struct Fund {
     pub updated_at: NaiveDateTime,
 }
 
+impl Fund {
+    pub fn available(&self) -> BigDecimal {
+        self.cash.clone() + self.credit.clone()
+    }
+}
+
 /// Used to insert a new fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewFund {

@@ -18,6 +18,7 @@ use axum::{
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use bigdecimal::BigDecimal;
 use futures::stream::{Stream, StreamExt};
 use std::collections::HashSet;
 use std::convert::Infallible;
@@ -158,6 +159,45 @@ async fn auth_openai_api(
         .await
 }
 
+// --- Helpers ---
+
+/// Check if the user has sufficient funds (available > 0).
+/// Returns Ok(()) if funds are sufficient, or Err(Response) with an error response.
+async fn check_fund_available(pool: &DbPool, user_id: i32) -> Result<(), Response> {
+    let zero = BigDecimal::from(0);
+    match db::fund::find_user_fund(pool, user_id).await {
+        Ok(Some(fund)) if fund.available() > zero => Ok(()),
+        Ok(Some(_fund)) => Err(insufficient_funds_response()),
+        Ok(None) => {
+            // No fund record means no balance
+            Err(insufficient_funds_response())
+        }
+        Err(e) => {
+            warn!(error = %e, "Database error during fund lookup");
+            Err(auth_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error during fund check.",
+                "internal_error",
+            ))
+        }
+    }
+}
+
+/// Build a JSON error response for insufficient funds.
+fn insufficient_funds_response() -> Response {
+    (
+        StatusCode::PAYMENT_REQUIRED,
+        Json(serde_json::json!({
+            "error": {
+                "message": "Insufficient funds. Please add funds to your account to continue.",
+                "type": "insufficient_funds",
+                "code": "insufficient_funds"
+            }
+        })),
+    )
+        .into_response()
+}
+
 // --- Handlers ---
 /// Handle /v1/models endpoint, return available model list from database
 async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
@@ -260,6 +300,12 @@ async fn chat_completions(
 ) -> Response {
     let model_name = &payload.model;
     let user_id = USER.with(|u| u.id);
+
+    // Check if the user has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+        return resp;
+    }
+
     let capacity = CapacityOption {
         has_chat_completion: Some(true),
         ..Default::default()
@@ -344,6 +390,12 @@ async fn generate_images(
 ) -> axum::response::Response {
     let model_name = image_model_to_string(&payload.model);
     let user_id = USER.with(|u| u.id);
+
+    // Check if the user has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+        return resp;
+    }
+
     let capacity = CapacityOption {
         has_image_generation: Some(true),
         ..Default::default()
@@ -478,6 +530,12 @@ async fn create_embeddings(
 ) -> Response {
     let model_name = &payload.model;
     let user_id = USER.with(|u| u.id);
+
+    // Check if the user has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+        return resp;
+    }
+
     let capacity = CapacityOption {
         has_embedding: Some(true),
         ..Default::default()

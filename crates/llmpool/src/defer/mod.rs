@@ -1,4 +1,5 @@
 pub mod tasks;
+pub mod worker;
 
 use async_openai::{
     types::chat::{
