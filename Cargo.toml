@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/llmpool",
+]
+
+[workspace.dependencies]
+toml = "0.8"
+tokio = { version = "1.50.0", features = ["full"] }
+axum = {version="0.8.8", features = ["macros"] }
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+futures = { version = "0.3.2" }
+async-openai = { version = "0.33.1", features = ["full"] }
+async-stream = "0.3.6"
+bigdecimal = { version = "0.4", features = ["serde"] }
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "json", "bigdecimal", "migrate"] }
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4.6.0", features = ["derive"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "registry"] }
+tracing-opentelemetry = "0.32.1"
+opentelemetry = "0.31.0"
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", features = ["grpc-tonic"] }
+tower-http = { version = "0.6.8", features = ["trace", "cors"] }
+rand = "0.9"
+bcrypt = "0.17"
+rpassword = "7.3"
+uuid = { version = "1", features = ["v7", "serde"] }
+jsonwebtoken = "9"
+axum-jrpc = "0.9"
+apalis = { version = "1.0.0-rc.6", features = ["limit"] }
+apalis-redis = { version = "1.0.0-rc.6", features = ["tokio"] }
+redis = { version = "1.0.4", features = ["aio", "connection-manager", "tokio-comp"] }

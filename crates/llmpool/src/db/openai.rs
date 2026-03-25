@@ -1,0 +1,371 @@
+use sqlx::PgPool;
+
+use crate::models::*;
+
+pub type DbPool = PgPool;
+
+// ============================================================
+// OpenAIEndpoint CRUD operations
+// ============================================================
+
+/// Create a new OpenAI endpoint
+pub async fn create_endpoint(
+    pool: &DbPool,
+    new_endpoint: &NewOpenAIEndpoint,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIEndpoint>(
+        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api)
+         VALUES ($1, $2, $3, $4)
+         RETURNING *",
+    )
+    .bind(&new_endpoint.name)
+    .bind(&new_endpoint.api_base)
+    .bind(&new_endpoint.api_key)
+    .bind(new_endpoint.has_responses_api)
+    .fetch_one(pool)
+    .await
+}
+
+/// List all OpenAI endpoints
+pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints")
+        .fetch_all(pool)
+        .await
+}
+
+/// Get an OpenAI endpoint by ID
+pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpoint, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+        .bind(endpoint_id)
+        .fetch_one(pool)
+        .await
+}
+
+/// Get an OpenAI endpoint by api_base
+pub async fn get_endpoint_by_api_base(
+    pool: &DbPool,
+    api_base: &str,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE api_base = $1")
+        .bind(api_base)
+        .fetch_one(pool)
+        .await
+}
+
+/// Update an OpenAI endpoint
+pub async fn update_endpoint(
+    pool: &DbPool,
+    endpoint_id: i32,
+    update: &UpdateOpenAIEndpoint,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    // Fetch current values first
+    let current = get_endpoint(pool, endpoint_id).await?;
+
+    let name = update.name.as_deref().unwrap_or(&current.name);
+    let api_base = update.api_base.as_deref().unwrap_or(&current.api_base);
+    let api_key = update.api_key.as_deref().unwrap_or(&current.api_key);
+    let has_responses_api = update
+        .has_responses_api
+        .unwrap_or(current.has_responses_api);
+    let updated_at = update.updated_at.unwrap_or(current.updated_at);
+
+    sqlx::query_as::<_, OpenAIEndpoint>(
+        "UPDATE openai_endpoints
+         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, updated_at = $5
+         WHERE id = $6
+         RETURNING *",
+    )
+    .bind(name)
+    .bind(api_base)
+    .bind(api_key)
+    .bind(has_responses_api)
+    .bind(updated_at)
+    .bind(endpoint_id)
+    .fetch_one(pool)
+    .await
+}
+
+/// Delete an OpenAI endpoint
+pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM openai_endpoints WHERE id = $1")
+        .bind(endpoint_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+// ============================================================
+// OpenAIModel CRUD operations
+// ============================================================
+
+/// Create a new OpenAI model
+pub async fn create_model(
+    pool: &DbPool,
+    new_model: &NewOpenAIModel,
+) -> Result<OpenAIModel, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>(
+        "INSERT INTO openai_models (endpoint_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *"
+    )
+    .bind(new_model.endpoint_id)
+    .bind(&new_model.model_id)
+    .bind(new_model.has_image_generation)
+    .bind(new_model.has_speech)
+    .bind(new_model.has_chat_completion)
+    .bind(new_model.has_embedding)
+    .bind(&new_model.input_token_price)
+    .bind(&new_model.output_token_price)
+    .fetch_one(pool)
+    .await
+}
+
+/// List all OpenAI models
+pub async fn list_models(pool: &DbPool) -> Result<Vec<OpenAIModel>, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models")
+        .fetch_all(pool)
+        .await
+}
+
+/// List models belonging to a specific endpoint
+pub async fn list_models_by_endpoint(
+    pool: &DbPool,
+    endpoint_id: i32,
+) -> Result<Vec<OpenAIModel>, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE endpoint_id = $1")
+        .bind(endpoint_id)
+        .fetch_all(pool)
+        .await
+}
+
+/// Get an OpenAI model by ID
+pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<OpenAIModel, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE id = $1")
+        .bind(model_id)
+        .fetch_one(pool)
+        .await
+}
+
+/// Get an OpenAI model by ID using a transaction
+pub async fn get_model_with_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    model_id: i32,
+) -> Result<OpenAIModel, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE id = $1")
+        .bind(model_id)
+        .fetch_one(&mut **tx)
+        .await
+}
+
+/// Find a model by endpoint_id and model_id string
+pub async fn find_model_by_endpoint_and_model_id(
+    pool: &DbPool,
+    endpoint_id: i32,
+    model_id_str: &str,
+) -> Result<OpenAIModel, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>(
+        "SELECT * FROM openai_models WHERE endpoint_id = $1 AND model_id = $2",
+    )
+    .bind(endpoint_id)
+    .bind(model_id_str)
+    .fetch_one(pool)
+    .await
+}
+
+/// Update an OpenAI model
+pub async fn update_model(
+    pool: &DbPool,
+    model_pk: i32,
+    update: &UpdateOpenAIModel,
+) -> Result<OpenAIModel, sqlx::Error> {
+    // Fetch current values first
+    let current = get_model(pool, model_pk).await?;
+
+    let model_id = update.model_id.as_deref().unwrap_or(&current.model_id);
+    let has_image_generation = update
+        .has_image_generation
+        .unwrap_or(current.has_image_generation);
+    let has_speech = update.has_speech.unwrap_or(current.has_speech);
+    let has_chat_completion = update
+        .has_chat_completion
+        .unwrap_or(current.has_chat_completion);
+    let has_embedding = update.has_embedding.unwrap_or(current.has_embedding);
+    let input_token_price = update
+        .input_token_price
+        .as_ref()
+        .unwrap_or(&current.input_token_price);
+    let output_token_price = update
+        .output_token_price
+        .as_ref()
+        .unwrap_or(&current.output_token_price);
+    let updated_at = update.updated_at.unwrap_or(current.updated_at);
+
+    sqlx::query_as::<_, OpenAIModel>(
+        "UPDATE openai_models
+         SET model_id = $1, has_image_generation = $2, has_speech = $3, has_chat_completion = $4,
+             has_embedding = $5, input_token_price = $6, output_token_price = $7, updated_at = $8
+         WHERE id = $9
+         RETURNING *",
+    )
+    .bind(model_id)
+    .bind(has_image_generation)
+    .bind(has_speech)
+    .bind(has_chat_completion)
+    .bind(has_embedding)
+    .bind(input_token_price)
+    .bind(output_token_price)
+    .bind(updated_at)
+    .bind(model_pk)
+    .fetch_one(pool)
+    .await
+}
+
+/// Find the first model by model_id string (name)
+pub async fn find_first_model_by_name(
+    pool: &DbPool,
+    model_name: &str,
+) -> Result<OpenAIModel, sqlx::Error> {
+    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE model_id = $1 LIMIT 1")
+        .bind(model_name)
+        .fetch_one(pool)
+        .await
+}
+
+/// Delete an OpenAI model
+pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM openai_models WHERE id = $1")
+        .bind(model_pk)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected())
+}
+
+/// Get an endpoint with all its models
+pub async fn get_endpoint_with_models(
+    pool: &DbPool,
+    endpoint_id: i32,
+) -> Result<(OpenAIEndpoint, Vec<OpenAIModel>), sqlx::Error> {
+    let endpoint = get_endpoint(pool, endpoint_id).await?;
+    let models = list_models_by_endpoint(pool, endpoint_id).await?;
+    Ok((endpoint, models))
+}
+
+/// A helper struct for the joined query result of OpenAIModel + OpenAIEndpoint
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct ModelEndpointRow {
+    // OpenAIModel fields
+    pub id: i32,
+    pub endpoint_id: i32,
+    pub model_id: String,
+    pub has_image_generation: bool,
+    pub has_speech: bool,
+    pub has_chat_completion: bool,
+    pub has_embedding: bool,
+    pub input_token_price: bigdecimal::BigDecimal,
+    pub output_token_price: bigdecimal::BigDecimal,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+    // OpenAIEndpoint fields (aliased)
+    pub ep_id: i32,
+    pub ep_name: String,
+    pub ep_api_base: String,
+    pub ep_api_key: String,
+    pub ep_has_responses_api: bool,
+    pub ep_created_at: chrono::NaiveDateTime,
+    pub ep_updated_at: chrono::NaiveDateTime,
+}
+
+impl ModelEndpointRow {
+    fn into_tuple(self) -> (OpenAIModel, OpenAIEndpoint) {
+        let model = OpenAIModel {
+            id: self.id,
+            endpoint_id: self.endpoint_id,
+            model_id: self.model_id,
+            has_image_generation: self.has_image_generation,
+            has_speech: self.has_speech,
+            has_chat_completion: self.has_chat_completion,
+            has_embedding: self.has_embedding,
+            input_token_price: self.input_token_price,
+            output_token_price: self.output_token_price,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        };
+        let endpoint = OpenAIEndpoint {
+            id: self.ep_id,
+            name: self.ep_name,
+            api_base: self.ep_api_base,
+            api_key: self.ep_api_key,
+            has_responses_api: self.ep_has_responses_api,
+            created_at: self.ep_created_at,
+            updated_at: self.ep_updated_at,
+        };
+        (model, endpoint)
+    }
+}
+
+/// Find all OpenAI models with a given model_id (name) that match the specified capacity options,
+/// along with their associated endpoint information (api_key, api_base).
+///
+/// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
+pub async fn find_models_by_name_and_capacity(
+    pool: &DbPool,
+    model_name: &str,
+    capacity: &CapacityOption,
+) -> Result<Vec<(OpenAIModel, OpenAIEndpoint)>, sqlx::Error> {
+    // Build dynamic query with optional capacity filters
+    let mut sql = String::from(
+        "SELECT m.id, m.endpoint_id, m.model_id, m.has_image_generation, m.has_speech,
+                m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
+                m.created_at, m.updated_at,
+                e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
+                e.api_key AS ep_api_key, e.has_responses_api AS ep_has_responses_api,
+                e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
+         FROM openai_models m
+         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+         WHERE m.model_id = $1",
+    );
+
+    let mut param_idx = 2u32;
+    let mut conditions = Vec::new();
+
+    if capacity.has_chat_completion == Some(true) {
+        conditions.push(format!("m.has_chat_completion = ${}", param_idx));
+        param_idx += 1;
+    }
+    if capacity.has_embedding == Some(true) {
+        conditions.push(format!("m.has_embedding = ${}", param_idx));
+        param_idx += 1;
+    }
+    if capacity.has_image_generation == Some(true) {
+        conditions.push(format!("m.has_image_generation = ${}", param_idx));
+        param_idx += 1;
+    }
+    if capacity.has_speech == Some(true) {
+        conditions.push(format!("m.has_speech = ${}", param_idx));
+        let _ = param_idx; // suppress unused warning
+    }
+
+    for cond in &conditions {
+        sql.push_str(" AND ");
+        sql.push_str(cond);
+    }
+
+    let mut query = sqlx::query_as::<_, ModelEndpointRow>(&sql).bind(model_name);
+
+    // Bind the `true` values for each capacity filter
+    if capacity.has_chat_completion == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_embedding == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_image_generation == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_speech == Some(true) {
+        query = query.bind(true);
+    }
+
+    let rows = query.fetch_all(pool).await?;
+    Ok(rows.into_iter().map(|r| r.into_tuple()).collect())
+}

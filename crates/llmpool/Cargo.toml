@@ -1,0 +1,32 @@
+[package]
+name = "llmpool"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+toml.workspace = true
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+futures.workspace = true
+async-openai.workspace = true
+async-stream.workspace = true
+sqlx.workspace = true
+chrono.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-opentelemetry.workspace = true
+opentelemetry.workspace = true
+opentelemetry_sdk.workspace = true
+opentelemetry-otlp.workspace = true
+tower-http.workspace = true
+rand.workspace = true
+bigdecimal.workspace = true
+uuid.workspace = true
+jsonwebtoken.workspace = true
+axum-jrpc.workspace = true
+apalis.workspace = true
+apalis-redis.workspace = true
+redis.workspace = true

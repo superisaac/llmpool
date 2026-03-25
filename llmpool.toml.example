@@ -1,0 +1,15 @@
+# LLMPool Configuration File
+# Copy this file to llmpool.toml and adjust the values.
+
+[database]
+# PostgreSQL connection URL
+url = "postgres://user:password@localhost/llmpool"
+
+[admin]
+# JWT secret for authenticating admin API requests
+jwt_secret = "your-jwt-secret-here"
+
+[redis]
+# Redis connection URL for task queue
+# Can also be set via REDIS_URL environment variable (takes priority)
+url = "redis://127.0.0.1:6379"

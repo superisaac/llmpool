@@ -1,0 +1,96 @@
+# docker-compose.yml for llmpool development environment
+# Usage:
+#   cd docker
+#   docker compose up -d postgres redis   # start infra first
+#   docker compose run --rm llmpool-migrate  # run DB migrations
+#   docker compose up llmpool llmpool-defer # start app services
+
+services:
+  # ── Infrastructure ──────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: llmpool
+      POSTGRES_PASSWORD: llmpool
+      POSTGRES_DB: llmpool
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U llmpool"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-bookworm
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Database Migrations ─────────────────────────────────────
+
+  llmpool-migrate:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["migrate"]
+    volumes:
+      - ./llmpool.toml:/app/llmpool.toml:ro
+    environment:
+      LLMPOOL_CONFIG: /app/llmpool.toml
+      DATABASE_URL: postgres://llmpool:llmpool@postgres/llmpool
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - migrate
+
+  # ── Application Services ────────────────────────────────────
+
+  llmpool:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["serve", "--bind", "0.0.0.0:19324"]
+    ports:
+      - "19324:19324"
+    volumes:
+      - ./llmpool.toml:/app/llmpool.toml:ro
+    environment:
+      LLMPOOL_CONFIG: /app/llmpool.toml
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://llmpool:llmpool@postgres/llmpool
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  llmpool-defer:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["worker", "--concurrency", "4"]
+    volumes:
+      - ./llmpool.toml:/app/llmpool.toml:ro
+    environment:
+      LLMPOOL_CONFIG: /app/llmpool.toml
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
