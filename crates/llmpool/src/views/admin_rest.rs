@@ -204,6 +204,9 @@ impl From<crate::models::User> for UserResponse {
 #[derive(Deserialize)]
 struct CreateUserRequest {
     username: String,
+    /// Optional initial credit amount to add to the user's fund after creation.
+    /// If greater than zero, a credit balance change will be created and enqueued.
+    initial_credit: Option<BigDecimal>,
 }
 
 // --- Fund Response DTO ---
@@ -396,6 +399,8 @@ async fn list_users(
 ///
 /// Request body (JSON):
 /// - `username` (required): The username for the new user
+/// - `initial_credit` (optional): Initial credit amount to add to the user's fund.
+///   If greater than zero, a credit balance change will be created and applied asynchronously.
 async fn create_user(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateUserRequest>,
@@ -408,12 +413,23 @@ async fn create_user(
         );
     }
 
+    // Validate initial_credit if provided
+    if let Some(ref initial_credit) = payload.initial_credit {
+        if *initial_credit < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "initial_credit must not be negative",
+            );
+        }
+    }
+
     let new_user = crate::models::NewUser {
         username: payload.username.trim().to_string(),
     };
 
-    match db::user::create_user(&state.pool, &new_user).await {
-        Ok(user) => (StatusCode::CREATED, Json(UserResponse::from(user))).into_response(),
+    let user = match db::user::create_user(&state.pool, &new_user).await {
+        Ok(user) => user,
         Err(e) => {
             // Check for unique constraint violation
             if let sqlx::Error::Database(ref db_err) = e {
@@ -426,13 +442,55 @@ async fn create_user(
                 }
             }
             warn!(error = %e, "Failed to create user");
-            error_response(
+            return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
                 "Failed to create user",
-            )
+            );
+        }
+    };
+
+    // If initial_credit is provided and greater than zero, create a credit balance change
+    if let Some(ref initial_credit) = payload.initial_credit {
+        if *initial_credit > BigDecimal::from(0) {
+            let content = BalanceChangeContent::Credit {
+                amount: initial_credit.clone(),
+            };
+            let new_change = match NewBalanceChange::from_content(user.id, &content) {
+                Ok(change) => change,
+                Err(e) => {
+                    warn!(error = %e, user_id = user.id, "Failed to serialize initial credit content");
+                    // User was created successfully, but credit failed — still return the user
+                    return (StatusCode::CREATED, Json(UserResponse::from(user))).into_response();
+                }
+            };
+
+            let balance_change =
+                match db::session_event::create_balance_change(&state.pool, &new_change).await {
+                    Ok(bc) => bc,
+                    Err(e) => {
+                        warn!(error = %e, user_id = user.id, "Failed to create initial credit balance change record");
+                        return (StatusCode::CREATED, Json(UserResponse::from(user)))
+                            .into_response();
+                    }
+                };
+
+            let task = BalanceChangeTask {
+                balance_change_id: balance_change.id as i64,
+            };
+            let mut storage = state.balance_change_storage.clone();
+            if let Err(e) = storage.push(task).await {
+                warn!(
+                    error = %e,
+                    user_id = user.id,
+                    balance_change_id = balance_change.id,
+                    "Failed to enqueue initial credit balance change task"
+                );
+            }
         }
     }
+
+    (StatusCode::CREATED, Json(UserResponse::from(user))).into_response()
 }
 
 /// GET /api/v1/users/:user_id
@@ -1004,6 +1062,13 @@ struct CreateWithdrawRequest {
     amount: BigDecimal,
 }
 
+/// Request body for creating a credit
+#[derive(Deserialize)]
+struct CreateCreditRequest {
+    user_id: i32,
+    amount: BigDecimal,
+}
+
 /// Response DTO for a balance change (deposit)
 #[derive(Serialize)]
 struct BalanceChangeResponse {
@@ -1261,6 +1326,107 @@ async fn create_withdraw(
         .into_response()
 }
 
+// --- Credit Handler ---
+
+/// POST /api/v1/credits
+///
+/// Creates a credit for a user. This creates a BalanceChange record and enqueues
+/// a BalanceChangeTask to apply it asynchronously. Unlike deposits which add to
+/// the cash field, credits add to the credit field of the user's fund.
+///
+/// Request body (JSON):
+/// - `user_id` (required): The ID of the user to credit
+/// - `amount` (required): The credit amount (must be positive)
+///
+/// Returns the created BalanceChange record.
+async fn create_credit(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateCreditRequest>,
+) -> Response {
+    // Validate amount is positive
+    if payload.amount <= BigDecimal::from(0) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "Amount must be positive",
+        );
+    }
+
+    // Verify the user exists
+    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("User with id {} not found", payload.user_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get user by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query user",
+            );
+        }
+    }
+
+    // Create the BalanceChange content
+    let content = BalanceChangeContent::Credit {
+        amount: payload.amount.clone(),
+    };
+    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+        Ok(change) => change,
+        Err(e) => {
+            warn!(error = %e, "Failed to serialize balance change content");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "serialization_error",
+                "Failed to serialize credit content",
+            );
+        }
+    };
+
+    // Create the balance change record in the database
+    let balance_change =
+        match db::session_event::create_balance_change(&state.pool, &new_change).await {
+            Ok(bc) => bc,
+            Err(e) => {
+                warn!(error = %e, "Failed to create balance change record");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to create credit record",
+                );
+            }
+        };
+
+    // Enqueue a BalanceChangeTask to apply the balance change asynchronously
+    let task = BalanceChangeTask {
+        balance_change_id: balance_change.id as i64,
+    };
+    let mut storage = state.balance_change_storage.clone();
+    if let Err(e) = storage.push(task).await {
+        warn!(
+            error = %e,
+            balance_change_id = balance_change.id,
+            "Failed to enqueue balance change task"
+        );
+        return error_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "queue_error",
+            "Credit record created but failed to enqueue processing task",
+        );
+    }
+
+    (
+        StatusCode::CREATED,
+        Json(BalanceChangeResponse::from(balance_change)),
+    )
+        .into_response()
+}
+
 // --- Router ---
 
 pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChangeTask>) -> Router {
@@ -1282,6 +1448,7 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
         .route("/endpoint-tests", post(test_endpoint))
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))
+        .route("/credits", post(create_credit))
         .route_layer(middleware::from_fn(auth_jwt))
         .with_state(state)
 }

@@ -156,6 +156,35 @@ pub async fn apply_balance_change_with_tx(
                 )
             }
         }
+        BalanceChangeContent::Credit { amount } => {
+            // Credit: if debt > 0, pay off debt first; any remaining amount is added to credit
+            if user_fund.debt > zero {
+                let remaining_debt = &user_fund.debt - amount;
+                if remaining_debt > zero {
+                    // Credit is not enough to cover all debt
+                    (
+                        user_fund.cash.clone(),
+                        user_fund.credit.clone(),
+                        remaining_debt,
+                    )
+                } else {
+                    // Credit covers all debt, remainder goes to credit field
+                    let surplus = zero.clone() - &remaining_debt;
+                    (
+                        user_fund.cash.clone(),
+                        &user_fund.credit + &surplus,
+                        zero,
+                    )
+                }
+            } else {
+                let new_credit = &user_fund.credit + amount;
+                (
+                    user_fund.cash.clone(),
+                    new_credit,
+                    user_fund.debt.clone(),
+                )
+            }
+        }
     };
 
     let update = UpdateFund {

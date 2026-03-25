@@ -59,6 +59,7 @@ pub enum BalanceChangeContent {
     SpendToken(SpendToken),
     Deposit { amount: BigDecimal },
     Withdraw { amount: BigDecimal },
+    Credit { amount: BigDecimal },
 }
 
 /// Represents a balance change record
