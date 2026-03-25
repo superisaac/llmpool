@@ -294,12 +294,26 @@ curl -X POST http://localhost:19324/api/v1/users \
   -H "Content-Type: application/json" \
   -d '{"username": "alice"}'
 
+# Create a user with initial credit
+curl -X POST http://localhost:19324/api/v1/users \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "alice", "initial_credit": "100.00"}'
+
 # Get a user by ID
 curl http://localhost:19324/api/v1/users/1 \
   -H "Authorization: Bearer <jwt-token>"
 
 # Get a user by username
 curl http://localhost:19324/api/v1/users_by_name/alice \
+  -H "Authorization: Bearer <jwt-token>"
+```
+
+#### Funds
+
+```bash
+# Get a user's fund (balance information)
+curl http://localhost:19324/api/v1/users/1/fund \
   -H "Authorization: Bearer <jwt-token>"
 ```
 
@@ -315,6 +329,28 @@ curl -X POST http://localhost:19324/api/v1/users/1/apikeys \
   -H "Authorization: Bearer <jwt-token>"
 ```
 
+#### Deposits, Withdrawals & Credits
+
+```bash
+# Create a deposit (adds to user's cash balance)
+curl -X POST http://localhost:19324/api/v1/deposits \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 1, "amount": "100.00"}'
+
+# Create a withdrawal (deducts from user's cash balance)
+curl -X POST http://localhost:19324/api/v1/withdrawals \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 1, "amount": "50.00"}'
+
+# Create a credit (adds to user's credit balance)
+curl -X POST http://localhost:19324/api/v1/credits \
+  -H "Authorization: Bearer <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": 1, "amount": "200.00"}'
+```
+
 #### Admin REST API Reference
 
 | Method | Endpoint | Description |
@@ -324,11 +360,15 @@ curl -X POST http://localhost:19324/api/v1/users/1/apikeys \
 | `POST` | `/api/v1/endpoint-tests` | Test an endpoint without saving |
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
 | `GET` | `/api/v1/users` | List all users (paginated) |
-| `POST` | `/api/v1/users` | Create a new user |
+| `POST` | `/api/v1/users` | Create a new user (with optional `initial_credit`) |
 | `GET` | `/api/v1/users/:user_id` | Get a user by ID |
 | `GET` | `/api/v1/users_by_name/:username` | Get a user by username |
+| `GET` | `/api/v1/users/:user_id/fund` | Get a user's fund (cash, credit, debt) |
 | `GET` | `/api/v1/users/:user_id/apikeys` | List API keys for a user (paginated) |
 | `POST` | `/api/v1/users/:user_id/apikeys` | Create an API key for a user |
+| `POST` | `/api/v1/deposits` | Create a deposit for a user |
+| `POST` | `/api/v1/withdrawals` | Create a withdrawal for a user |
+| `POST` | `/api/v1/credits` | Create a credit for a user |
 
 All paginated endpoints accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)

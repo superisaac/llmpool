@@ -44,10 +44,7 @@ pub async fn find_user_by_username(
 }
 
 /// Count total number of access keys for a user
-pub async fn count_access_keys_by_user(
-    pool: &DbPool,
-    user_id: i32,
-) -> Result<i64, sqlx::Error> {
+pub async fn count_access_keys_by_user(pool: &DbPool, user_id: i32) -> Result<i64, sqlx::Error> {
     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM access_keys WHERE user_id = $1")
         .bind(user_id)
         .fetch_one(pool)

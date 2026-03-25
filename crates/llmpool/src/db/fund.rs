@@ -5,10 +5,7 @@ use crate::db::DbPool;
 use crate::models::{BalanceChangeContent, Fund, NewFund, UpdateFund};
 
 /// Find a user's fund by user_id
-pub async fn find_user_fund(
-    pool: &DbPool,
-    user_id: i32,
-) -> Result<Option<Fund>, sqlx::Error> {
+pub async fn find_user_fund(pool: &DbPool, user_id: i32) -> Result<Option<Fund>, sqlx::Error> {
     sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE user_id = $1")
         .bind(user_id)
         .fetch_optional(pool)
@@ -96,11 +93,7 @@ pub async fn apply_balance_change_with_tx(
                 let remaining_after_cash = &user_fund.cash - &remainder;
                 if remaining_after_cash >= zero {
                     // Cash covers the remainder
-                    (
-                        remaining_after_cash,
-                        zero.clone(),
-                        user_fund.debt.clone(),
-                    )
+                    (remaining_after_cash, zero.clone(), user_fund.debt.clone())
                 } else {
                     // Cash is also exhausted, add deficit to debt
                     let deficit = zero.clone() - &remaining_after_cash;
@@ -123,19 +116,11 @@ pub async fn apply_balance_change_with_tx(
                 } else {
                     // Deposit covers all debt, remainder goes to cash
                     let surplus = zero.clone() - &remaining_debt;
-                    (
-                        &user_fund.cash + &surplus,
-                        user_fund.credit.clone(),
-                        zero,
-                    )
+                    (&user_fund.cash + &surplus, user_fund.credit.clone(), zero)
                 }
             } else {
                 let new_bal = &user_fund.cash + amount;
-                (
-                    new_bal,
-                    user_fund.credit.clone(),
-                    user_fund.debt.clone(),
-                )
+                (new_bal, user_fund.credit.clone(), user_fund.debt.clone())
             }
         }
         BalanceChangeContent::Withdraw { amount } => {
@@ -143,17 +128,9 @@ pub async fn apply_balance_change_with_tx(
             let remaining = &user_fund.cash - amount;
             if remaining < zero {
                 let deficit = zero.clone() - &remaining;
-                (
-                    zero,
-                    user_fund.credit.clone(),
-                    &user_fund.debt + &deficit,
-                )
+                (zero, user_fund.credit.clone(), &user_fund.debt + &deficit)
             } else {
-                (
-                    remaining,
-                    user_fund.credit.clone(),
-                    user_fund.debt.clone(),
-                )
+                (remaining, user_fund.credit.clone(), user_fund.debt.clone())
             }
         }
         BalanceChangeContent::Credit { amount } => {
@@ -170,19 +147,11 @@ pub async fn apply_balance_change_with_tx(
                 } else {
                     // Credit covers all debt, remainder goes to credit field
                     let surplus = zero.clone() - &remaining_debt;
-                    (
-                        user_fund.cash.clone(),
-                        &user_fund.credit + &surplus,
-                        zero,
-                    )
+                    (user_fund.cash.clone(), &user_fund.credit + &surplus, zero)
                 }
             } else {
                 let new_credit = &user_fund.credit + amount;
-                (
-                    user_fund.cash.clone(),
-                    new_credit,
-                    user_fund.debt.clone(),
-                )
+                (user_fund.cash.clone(), new_credit, user_fund.debt.clone())
             }
         }
     };

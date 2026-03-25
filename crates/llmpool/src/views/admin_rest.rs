@@ -258,7 +258,9 @@ impl From<crate::models::AccessKey> for AccessKeyResponse {
             user_id: ak.user_id,
             apikey: ak.apikey,
             is_active: ak.is_active,
-            expires_at: ak.expires_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            expires_at: ak
+                .expires_at
+                .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
             created_at: ak.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: ak.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -465,15 +467,18 @@ async fn create_user(
                 }
             };
 
-            let balance_change =
-                match db::session_event::create_balance_change(&state.pool, &new_change).await {
-                    Ok(bc) => bc,
-                    Err(e) => {
-                        warn!(error = %e, user_id = user.id, "Failed to create initial credit balance change record");
-                        return (StatusCode::CREATED, Json(UserResponse::from(user)))
-                            .into_response();
-                    }
-                };
+            let balance_change = match db::session_event::create_balance_change(
+                &state.pool,
+                &new_change,
+            )
+            .await
+            {
+                Ok(bc) => bc,
+                Err(e) => {
+                    warn!(error = %e, user_id = user.id, "Failed to create initial credit balance change record");
+                    return (StatusCode::CREATED, Json(UserResponse::from(user))).into_response();
+                }
+            };
 
             let task = BalanceChangeTask {
                 balance_change_id: balance_change.id as i64,
@@ -496,10 +501,7 @@ async fn create_user(
 /// GET /api/v1/users/:user_id
 ///
 /// Returns a single user by their ID.
-async fn get_user_by_id(
-    State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
-) -> Response {
+async fn get_user_by_id(State(state): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
     match db::user::get_user_by_id(&state.pool, user_id).await {
         Ok(Some(user)) => Json(UserResponse::from(user)).into_response(),
         Ok(None) => error_response(
@@ -549,10 +551,7 @@ async fn get_user_by_username(
 ///
 /// Returns the fund (asset) information for a given user.
 /// If the user has no fund record yet, returns a default fund with zero balances.
-async fn get_user_fund(
-    State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
-) -> Response {
+async fn get_user_fund(State(state): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
     // Verify the user exists
     match db::user::get_user_by_id(&state.pool, user_id).await {
         Ok(Some(_)) => {}
@@ -1153,17 +1152,18 @@ async fn create_deposit(
     };
 
     // Create the balance change record in the database
-    let balance_change = match db::session_event::create_balance_change(&state.pool, &new_change).await {
-        Ok(bc) => bc,
-        Err(e) => {
-            warn!(error = %e, "Failed to create balance change record");
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database_error",
-                "Failed to create deposit record",
-            );
-        }
-    };
+    let balance_change =
+        match db::session_event::create_balance_change(&state.pool, &new_change).await {
+            Ok(bc) => bc,
+            Err(e) => {
+                warn!(error = %e, "Failed to create balance change record");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to create deposit record",
+                );
+            }
+        };
 
     // Enqueue a BalanceChangeTask to apply the balance change asynchronously
     let task = BalanceChangeTask {
