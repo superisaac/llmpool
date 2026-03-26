@@ -458,7 +458,8 @@ async fn create_user(
             let content = BalanceChangeContent::Credit {
                 amount: initial_credit.clone(),
             };
-            let new_change = match NewBalanceChange::from_content(user.id, &content) {
+            let unique_request_id = format!("initial-credit-{}", user.id);
+            let new_change = match NewBalanceChange::from_content(user.id, unique_request_id, &content) {
                 Ok(change) => change,
                 Err(e) => {
                     warn!(error = %e, user_id = user.id, "Failed to serialize initial credit content");
@@ -1051,6 +1052,7 @@ async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
 #[derive(Deserialize)]
 struct CreateDepositRequest {
     user_id: i32,
+    unique_request_id: String,
     amount: BigDecimal,
 }
 
@@ -1058,6 +1060,7 @@ struct CreateDepositRequest {
 #[derive(Deserialize)]
 struct CreateWithdrawRequest {
     user_id: i32,
+    unique_request_id: String,
     amount: BigDecimal,
 }
 
@@ -1065,6 +1068,7 @@ struct CreateWithdrawRequest {
 #[derive(Deserialize)]
 struct CreateCreditRequest {
     user_id: i32,
+    unique_request_id: String,
     amount: BigDecimal,
 }
 
@@ -1073,6 +1077,7 @@ struct CreateCreditRequest {
 struct BalanceChangeResponse {
     id: i32,
     user_id: i32,
+    unique_request_id: String,
     content: serde_json::Value,
     is_applied: bool,
     created_at: String,
@@ -1083,6 +1088,7 @@ impl From<crate::models::BalanceChange> for BalanceChangeResponse {
         Self {
             id: bc.id,
             user_id: bc.user_id,
+            unique_request_id: bc.unique_request_id,
             content: bc.content,
             is_applied: bc.is_applied,
             created_at: bc.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -1139,7 +1145,11 @@ async fn create_deposit(
     let content = BalanceChangeContent::Deposit {
         amount: payload.amount.clone(),
     };
-    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+    let new_change = match NewBalanceChange::from_content(
+        payload.user_id,
+        payload.unique_request_id,
+        &content,
+    ) {
         Ok(change) => change,
         Err(e) => {
             warn!(error = %e, "Failed to serialize balance change content");
@@ -1275,7 +1285,11 @@ async fn create_withdraw(
     let content = BalanceChangeContent::Withdraw {
         amount: payload.amount.clone(),
     };
-    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+    let new_change = match NewBalanceChange::from_content(
+        payload.user_id,
+        payload.unique_request_id,
+        &content,
+    ) {
         Ok(change) => change,
         Err(e) => {
             warn!(error = %e, "Failed to serialize balance change content");
@@ -1376,7 +1390,11 @@ async fn create_credit(
     let content = BalanceChangeContent::Credit {
         amount: payload.amount.clone(),
     };
-    let new_change = match NewBalanceChange::from_content(payload.user_id, &content) {
+    let new_change = match NewBalanceChange::from_content(
+        payload.user_id,
+        payload.unique_request_id,
+        &content,
+    ) {
         Ok(change) => change,
         Err(e) => {
             warn!(error = %e, "Failed to serialize balance change content");

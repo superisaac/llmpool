@@ -73,6 +73,7 @@ pub enum BalanceChangeContent {
 pub struct BalanceChange {
     pub id: i32,
     pub user_id: i32,
+    pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
     pub created_at: NaiveDateTime,
@@ -89,18 +90,33 @@ pub struct BalanceChange {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewBalanceChange {
     pub user_id: i32,
+    pub unique_request_id: String,
     pub content: serde_json::Value,
 }
 
 impl NewBalanceChange {
-    /// Create a new balance change from a BalanceChangeContent enum
+    /// Create a new balance change from a BalanceChangeContent enum with a given unique_request_id
     pub fn from_content(
         user_id: i32,
+        unique_request_id: String,
         content: &BalanceChangeContent,
     ) -> Result<Self, serde_json::Error> {
         Ok(Self {
             user_id,
+            unique_request_id,
             content: serde_json::to_value(content)?,
         })
     }
+
+    // /// Create a new balance change with an auto-generated UUIDv7 unique_request_id
+    // pub fn from_content_auto_id(
+    //     user_id: i32,
+    //     content: &BalanceChangeContent,
+    // ) -> Result<Self, serde_json::Error> {
+    //     Ok(Self {
+    //         user_id,
+    //         unique_request_id: Uuid::now_v7().to_string(),
+    //         content: serde_json::to_value(content)?,
+    //     })
+    // }
 }

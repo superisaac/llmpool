@@ -60,6 +60,7 @@ CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     event_data JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_session_events_session_id_index ON session_events (session_id, session_index);
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (session_id);
 
 -- Create funds table
@@ -78,8 +79,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_user_id ON funds (user_id);
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(id),
+    unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_balance_changes_user_id ON balance_changes (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_changes_unique_request_id ON balance_changes (unique_request_id);

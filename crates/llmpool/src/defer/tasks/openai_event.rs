@@ -139,7 +139,9 @@ pub async fn handle_openai_event(
         };
 
         let content = BalanceChangeContent::SpendToken(spend_token);
-        let new_change = match NewBalanceChange::from_content(user_id, &content) {
+        let unique_request_id = format!("spendtoken-{}-{}", event.session_id, event.session_index);
+        let new_change = match NewBalanceChange::from_content(user_id, unique_request_id, &content)
+        {
             Ok(change) => change,
             Err(e) => {
                 warn!(
