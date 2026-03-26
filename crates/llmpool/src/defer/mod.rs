@@ -36,6 +36,7 @@ pub enum OpenAIEventData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenAIEventTask {
     pub session_id: String,
+    pub session_index: i32,
     pub user_id: i32,
     pub model_id: i32,
     pub event_data: OpenAIEventData,

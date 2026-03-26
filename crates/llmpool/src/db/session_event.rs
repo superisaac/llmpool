@@ -8,11 +8,12 @@ pub async fn create_session_event(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, user_id, model_id, event_data)
-         VALUES ($1, $2, $3, $4)
+        "INSERT INTO session_events (session_id, session_index, user_id, model_id, event_data)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *",
     )
     .bind(&new_event.session_id)
+    .bind(new_event.session_index)
     .bind(new_event.user_id)
     .bind(new_event.model_id)
     .bind(&new_event.event_data)
@@ -26,11 +27,12 @@ pub async fn create_session_event_with_tx(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, user_id, model_id, event_data)
-         VALUES ($1, $2, $3, $4)
+        "INSERT INTO session_events (session_id, session_index, user_id, model_id, event_data)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING *",
     )
     .bind(&new_event.session_id)
+    .bind(new_event.session_index)
     .bind(new_event.user_id)
     .bind(new_event.model_id)
     .bind(&new_event.event_data)

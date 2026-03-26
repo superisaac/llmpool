@@ -8,6 +8,7 @@ use sqlx::FromRow;
 pub struct SessionEvent {
     pub id: i64,
     pub session_id: String,
+    pub session_index: i32,
     pub user_id: i32,
     pub model_id: i32,
     pub event_data: serde_json::Value,
@@ -18,6 +19,7 @@ pub struct SessionEvent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewSessionEvent {
     pub session_id: String,
+    pub session_index: i32,
     pub user_id: i32,
     pub model_id: i32,
     pub event_data: serde_json::Value,

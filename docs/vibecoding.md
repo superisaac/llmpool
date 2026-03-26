@@ -71,3 +71,6 @@ BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕
 
 ========
 再实现一个RESTful api, 用于管理用户 GET|POST /api/v1/users。
+
+========
+SessionEvent 增加一个session_index 字段，从OpenAIEventTask 中获取； initial_schema和migrations 文件可以修改，不用新增。

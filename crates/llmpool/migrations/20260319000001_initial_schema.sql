@@ -54,6 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_access_keys_user_id ON access_keys (user_id);
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     id BIGSERIAL PRIMARY KEY,
     session_id VARCHAR NOT NULL,
+    session_index INT NOT NULL DEFAULT 0,
     user_id INT NOT NULL,
     model_id INT NOT NULL,
     event_data JSONB NOT NULL DEFAULT '{}',
