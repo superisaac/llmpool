@@ -202,6 +202,7 @@ pub async fn detect_and_save_features(
                 api_key: Some(api_key.to_string()),
                 has_responses_api: Some(api_features.has_responses_api),
                 tags: None,
+                proxies: None,
                 updated_at: Some(Utc::now().naive_utc()),
             };
             db::openai::update_endpoint(pool, existing.id, &update).await?
@@ -214,6 +215,7 @@ pub async fn detect_and_save_features(
                 api_key: api_key.to_string(),
                 has_responses_api: api_features.has_responses_api,
                 tags: vec![],
+                proxies: vec![],
             };
             db::openai::create_endpoint(pool, &new_endpoint).await?
         }

@@ -10,6 +10,7 @@ use axum::{
 use rand::seq::IndexedRandom;
 use std::sync::Arc;
 use tracing::{info, warn};
+use tracing::error;
 
 use crate::db::{self, DbPool};
 use crate::middlewares::admin_auth;
@@ -18,7 +19,6 @@ use crate::middlewares::admin_auth;
 
 struct PassthroughState {
     pool: DbPool,
-    http_client: reqwest::Client,
 }
 
 // --- Helpers ---
@@ -59,9 +59,30 @@ fn is_hop_by_hop(name: &str) -> bool {
 
 // --- Handler ---
 
+/// Build a reqwest::Client with an optional random proxy from the endpoint's proxies list.
+fn build_http_client_for_endpoint(
+    endpoint: &crate::models::OpenAIEndpoint,
+) -> Result<reqwest::Client, reqwest::Error> {
+    let mut builder = reqwest::Client::builder();
+    if !endpoint.proxies.is_empty() {
+        let mut rng = rand::rng();
+        if let Some(proxy_url) = endpoint.proxies.choose(&mut rng) {
+            info!(
+                endpoint_name = %endpoint.name,
+                proxy = %proxy_url,
+                "Passthrough: using proxy for endpoint"
+            );
+            let proxy = reqwest::Proxy::all(proxy_url.as_str())
+                .expect("Invalid proxy URL");
+            builder = builder.proxy(proxy);
+        }
+    }
+    builder.build()
+}
+
 /// Proxy the request to the given endpoint, rewriting the URL to /{rest}.
 async fn proxy_to_endpoint(
-    state: &PassthroughState,
+    _state: &PassthroughState,
     endpoint: &crate::models::OpenAIEndpoint,
     rest: &str,
     req: Request,
@@ -85,6 +106,22 @@ async fn proxy_to_endpoint(
     let headers = req.headers().clone();
     let body = req.into_body();
 
+    // Build a per-request HTTP client with optional proxy
+    let http_client = match build_http_client_for_endpoint(endpoint) {
+        Ok(client) => client,
+        Err(e) => {
+            error!(
+                endpoint_name = %endpoint.name,
+                error = %e,
+                "Passthrough: failed to build HTTP client with proxy"
+            );
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &format!("Failed to build HTTP client: {}", e),
+            );
+        }
+    };
+
     // Build the upstream request
     let reqwest_method = match method {
         Method::GET => reqwest::Method::GET,
@@ -102,7 +139,7 @@ async fn proxy_to_endpoint(
         }
     };
 
-    let mut upstream_req = state.http_client.request(reqwest_method, &upstream_url);
+    let mut upstream_req = http_client.request(reqwest_method, &upstream_url);
 
     // Forward headers (skip hop-by-hop headers)
     for (name, value) in headers.iter() {
@@ -252,7 +289,6 @@ async fn passthrough_by_endpoint_id_handler(
 pub fn get_router(pool: DbPool) -> Router {
     let state = Arc::new(PassthroughState {
         pool,
-        http_client: reqwest::Client::new(),
     });
 
     Router::new()

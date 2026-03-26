@@ -231,7 +231,8 @@ async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
     }
 }
 
-/// Build a Client from an (OpenAIModel, OpenAIEndpoint) pair
+/// Build a Client from an (OpenAIModel, OpenAIEndpoint) pair.
+/// If the endpoint has proxies configured, a random one is selected and used.
 fn build_client_from_model_endpoint(
     model: &crate::models::OpenAIModel,
     endpoint: &crate::models::OpenAIEndpoint,
@@ -239,7 +240,30 @@ fn build_client_from_model_endpoint(
     let config = OpenAIConfig::new()
         .with_api_key(endpoint.api_key.clone())
         .with_api_base(endpoint.api_base.clone());
-    let client = Client::with_config(config);
+
+    let client = if !endpoint.proxies.is_empty() {
+        use rand::seq::IndexedRandom;
+        let mut rng = rand::rng();
+        if let Some(proxy_url) = endpoint.proxies.choose(&mut rng) {
+            info!(
+                endpoint_name = %endpoint.name,
+                proxy = %proxy_url,
+                "OpenAI proxy: using proxy for endpoint"
+            );
+            let proxy = reqwest::Proxy::all(proxy_url.as_str())
+                .expect("Invalid proxy URL");
+            let http_client = reqwest::Client::builder()
+                .proxy(proxy)
+                .build()
+                .expect("Failed to build reqwest client with proxy");
+            Client::with_config(config).with_http_client(http_client)
+        } else {
+            Client::with_config(config)
+        }
+    } else {
+        Client::with_config(config)
+    };
+
     (client, model.id)
 }
 

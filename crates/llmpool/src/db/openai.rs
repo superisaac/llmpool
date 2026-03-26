@@ -35,8 +35,8 @@ pub async fn create_endpoint(
 ) -> Result<OpenAIEndpoint, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
     let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags)
-         VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags, proxies)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING *",
     )
     .bind(&new_endpoint.name)
@@ -44,6 +44,7 @@ pub async fn create_endpoint(
     .bind(&encrypted_key)
     .bind(new_endpoint.has_responses_api)
     .bind(&new_endpoint.tags)
+    .bind(&new_endpoint.proxies)
     .fetch_one(pool)
     .await?;
     decrypt_endpoint(endpoint)
@@ -123,12 +124,13 @@ pub async fn update_endpoint(
         .has_responses_api
         .unwrap_or(current.has_responses_api);
     let tags = update.tags.as_ref().unwrap_or(&current.tags);
+    let proxies = update.proxies.as_ref().unwrap_or(&current.proxies);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
     let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
         "UPDATE openai_endpoints
-         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, updated_at = $6
-         WHERE id = $7
+         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, proxies = $6, updated_at = $7
+         WHERE id = $8
          RETURNING *",
     )
     .bind(name)
@@ -136,6 +138,7 @@ pub async fn update_endpoint(
     .bind(&encrypted_key)
     .bind(has_responses_api)
     .bind(tags)
+    .bind(proxies)
     .bind(updated_at)
     .bind(endpoint_id)
     .fetch_one(pool)
@@ -438,6 +441,7 @@ struct ModelEndpointRow {
     pub ep_api_key: String,
     pub ep_has_responses_api: bool,
     pub ep_tags: Vec<String>,
+    pub ep_proxies: Vec<String>,
     pub ep_created_at: chrono::NaiveDateTime,
     pub ep_updated_at: chrono::NaiveDateTime,
 }
@@ -464,6 +468,7 @@ impl ModelEndpointRow {
             api_key: self.ep_api_key,
             has_responses_api: self.ep_has_responses_api,
             tags: self.ep_tags,
+            proxies: self.ep_proxies,
             created_at: self.ep_created_at,
             updated_at: self.ep_updated_at,
         };
@@ -489,7 +494,7 @@ pub async fn find_models_by_name_and_capacity(
                 m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
                 e.api_key AS ep_api_key, e.has_responses_api AS ep_has_responses_api,
-                e.tags AS ep_tags,
+                e.tags AS ep_tags, e.proxies AS ep_proxies,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
          FROM openai_models m
          INNER JOIN openai_endpoints e ON m.endpoint_id = e.id

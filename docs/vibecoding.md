@@ -89,3 +89,6 @@ admin rest api 使用"x-admin-token" header作为验证， header的内容是jwt
 
 ========
 middleware auth_jwt 的逻辑抽出来单独放在 middlewares/admin_auth.rs 中，并修改passthrough.rs 和admin_rest.rs 中使用middleware.
+
+========
+给OpenAIEndpoint 增加一个字段 proxies: Vec<String>, 用于记录该endpoint的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。

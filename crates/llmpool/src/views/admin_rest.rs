@@ -95,6 +95,7 @@ struct EndpointResponse {
     api_base: String,
     has_responses_api: bool,
     tags: Vec<String>,
+    proxies: Vec<String>,
     created_at: String,
     updated_at: String,
 }
@@ -107,6 +108,7 @@ impl From<crate::models::OpenAIEndpoint> for EndpointResponse {
             api_base: ep.api_base,
             has_responses_api: ep.has_responses_api,
             tags: ep.tags,
+            proxies: ep.proxies,
             created_at: ep.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: ep.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -770,6 +772,8 @@ struct CreateEndpointRequest {
     api_base: String,
     #[serde(default)]
     tags: Vec<String>,
+    #[serde(default)]
+    proxies: Vec<String>,
 }
 
 /// Request body for testing an OpenAI endpoint
@@ -884,14 +888,15 @@ async fn create_endpoint(
             // Fetch the saved endpoint and update tags if provided
             match db::openai::get_endpoint_by_api_base(&state.pool, payload.api_base.trim()).await {
                 Ok(endpoint) => {
-                    // Update tags if the request included them
-                    let endpoint = if !payload.tags.is_empty() {
+                    // Update tags and proxies if the request included them
+                    let endpoint = if !payload.tags.is_empty() || !payload.proxies.is_empty() {
                         let update = crate::models::UpdateOpenAIEndpoint {
                             name: None,
                             api_base: None,
                             api_key: None,
                             has_responses_api: None,
-                            tags: Some(payload.tags),
+                            tags: if payload.tags.is_empty() { None } else { Some(payload.tags) },
+                            proxies: if payload.proxies.is_empty() { None } else { Some(payload.proxies) },
                             updated_at: None,
                         };
                         match db::openai::update_endpoint(&state.pool, endpoint.id, &update).await {
