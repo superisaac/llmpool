@@ -1,12 +1,8 @@
 use clap::Subcommand;
 use serde::Serialize;
 
+use super::{PaginatedResponse, UserResponse, print_pagination, resolve_user_id, truncate};
 use crate::client::ApiClient;
-use super::{
-    PaginatedResponse, UserResponse,
-    print_pagination, truncate,
-    resolve_user_id,
-};
 
 // ============================================================
 // CLI Definitions
@@ -107,16 +103,18 @@ fn print_user_info(u: &UserResponse) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_user(action: UserAction, client: &ApiClient, json_output: bool) -> Result<(), String> {
+pub async fn handle_user(
+    action: UserAction,
+    client: &ApiClient,
+    json_output: bool,
+) -> Result<(), String> {
     match action {
         UserAction::List => {
             if json_output {
                 let raw = client.get_raw("/users").await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<UserResponse> = client
-                    .get("/users")
-                    .await?;
+                let resp: PaginatedResponse<UserResponse> = client.get("/users").await?;
                 print_users(&resp.data);
                 print_pagination(&resp.pagination);
             }
@@ -145,9 +143,7 @@ pub async fn handle_user(action: UserAction, client: &ApiClient, json_output: bo
                 let raw = client.post_raw("/users", &body).await?;
                 println!("{}", raw);
             } else {
-                let resp: UserResponse = client
-                    .post("/users", &body)
-                    .await?;
+                let resp: UserResponse = client.post("/users", &body).await?;
                 print_user_detail(&resp);
             }
         }
@@ -162,12 +158,12 @@ pub async fn handle_user(action: UserAction, client: &ApiClient, json_output: bo
                 is_active,
             };
             if json_output {
-                let raw = client.put_raw(&format!("/users/{}", user_id), &body).await?;
+                let raw = client
+                    .put_raw(&format!("/users/{}", user_id), &body)
+                    .await?;
                 println!("{}", raw);
             } else {
-                let resp: UserResponse = client
-                    .put(&format!("/users/{}", user_id), &body)
-                    .await?;
+                let resp: UserResponse = client.put(&format!("/users/{}", user_id), &body).await?;
                 println!("User updated successfully!");
                 println!();
                 print_user_info(&resp);

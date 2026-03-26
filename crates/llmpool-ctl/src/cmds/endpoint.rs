@@ -1,13 +1,12 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use crate::client::ApiClient;
 use super::{
-    EndpointResponse, EndpointWithModelsResponse,
-    PaginatedResponse, TagsResponse, TestEndpointResponse,
-    bool_mark, parse_comma_list, print_models, print_pagination, truncate,
-    resolve_endpoint_id,
+    EndpointResponse, EndpointWithModelsResponse, PaginatedResponse, TagsResponse,
+    TestEndpointResponse, bool_mark, parse_comma_list, print_models, print_pagination,
+    resolve_endpoint_id, truncate,
 };
+use crate::client::ApiClient;
 
 // ============================================================
 // CLI Definitions
@@ -164,7 +163,14 @@ fn print_endpoints(endpoints: &[EndpointResponse]) {
 }
 
 fn print_test_result(result: &TestEndpointResponse) {
-    println!("Responses API: {}", if result.has_responses_api { "yes" } else { "no" });
+    println!(
+        "Responses API: {}",
+        if result.has_responses_api {
+            "yes"
+        } else {
+            "no"
+        }
+    );
     println!();
     if result.models.is_empty() {
         println!("No models detected.");
@@ -195,7 +201,14 @@ fn print_endpoint_with_models(resp: &EndpointWithModelsResponse) {
     println!("  Name:           {}", resp.endpoint.name);
     println!("  API Base:       {}", resp.endpoint.api_base);
     println!("  Status:         {}", resp.endpoint.status);
-    println!("  Responses API:  {}", if resp.endpoint.has_responses_api { "yes" } else { "no" });
+    println!(
+        "  Responses API:  {}",
+        if resp.endpoint.has_responses_api {
+            "yes"
+        } else {
+            "no"
+        }
+    );
     println!("  Tags:           {}", resp.endpoint.tags.join(", "));
     println!("  Proxies:        {}", resp.endpoint.proxies.join(", "));
     println!("  Description:    {}", resp.endpoint.description);
@@ -213,7 +226,10 @@ fn print_endpoint_detail(ep: &EndpointResponse) {
     println!("  Name:           {}", ep.name);
     println!("  API Base:       {}", ep.api_base);
     println!("  Status:         {}", ep.status);
-    println!("  Responses API:  {}", if ep.has_responses_api { "yes" } else { "no" });
+    println!(
+        "  Responses API:  {}",
+        if ep.has_responses_api { "yes" } else { "no" }
+    );
     println!("  Tags:           {}", ep.tags.join(", "));
     println!("  Proxies:        {}", ep.proxies.join(", "));
     println!("  Description:    {}", ep.description);
@@ -225,30 +241,33 @@ fn print_endpoint_detail(ep: &EndpointResponse) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_output: bool) -> Result<(), String> {
+pub async fn handle_endpoint(
+    action: EndpointAction,
+    client: &ApiClient,
+    json_output: bool,
+) -> Result<(), String> {
     match action {
         EndpointAction::List => {
             if json_output {
                 let raw = client.get_raw("/endpoints").await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<EndpointResponse> = client
-                    .get("/endpoints")
-                    .await?;
+                let resp: PaginatedResponse<EndpointResponse> = client.get("/endpoints").await?;
                 print_endpoints(&resp.data);
                 print_pagination(&resp.pagination);
             }
         }
         EndpointAction::Test { api_key, api_base } => {
-            let body = TestEndpointRequest { api_key, api_base: api_base.clone() };
+            let body = TestEndpointRequest {
+                api_key,
+                api_base: api_base.clone(),
+            };
             if json_output {
                 let raw = client.post_raw("/endpoint-tests", &body).await?;
                 println!("{}", raw);
             } else {
                 println!("Testing endpoint {}...", api_base);
-                let resp: TestEndpointResponse = client
-                    .post("/endpoint-tests", &body)
-                    .await?;
+                let resp: TestEndpointResponse = client.post("/endpoint-tests", &body).await?;
                 println!();
                 print_test_result(&resp);
             }
@@ -273,9 +292,7 @@ pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_ou
                 println!("{}", raw);
             } else {
                 println!("Adding endpoint {}...", api_base);
-                let resp: EndpointWithModelsResponse = client
-                    .post("/endpoints", &body)
-                    .await?;
+                let resp: EndpointWithModelsResponse = client.post("/endpoints", &body).await?;
                 println!();
                 print_endpoint_with_models(&resp);
             }
@@ -297,7 +314,9 @@ pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_ou
                 status,
             };
             if json_output {
-                let raw = client.put_raw(&format!("/endpoints/{}", endpoint_id), &body).await?;
+                let raw = client
+                    .put_raw(&format!("/endpoints/{}", endpoint_id), &body)
+                    .await?;
                 println!("{}", raw);
             } else {
                 let resp: EndpointResponse = client
@@ -309,7 +328,9 @@ pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_ou
         EndpointAction::Listtags { endpoint } => {
             let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
             if json_output {
-                let raw = client.get_raw(&format!("/endpoints/{}/tags", endpoint_id)).await?;
+                let raw = client
+                    .get_raw(&format!("/endpoints/{}/tags", endpoint_id))
+                    .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
@@ -329,13 +350,18 @@ pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_ou
             let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
             let body = AddTagRequestBody { tag: tag.clone() };
             if json_output {
-                let raw = client.post_raw(&format!("/endpoints/{}/tags", endpoint_id), &body).await?;
+                let raw = client
+                    .post_raw(&format!("/endpoints/{}/tags", endpoint_id), &body)
+                    .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
                     .post(&format!("/endpoints/{}/tags", endpoint_id), &body)
                     .await?;
-                println!("Tag '{}' added to endpoint {} (ID: {}).", tag, endpoint, resp.endpoint_id);
+                println!(
+                    "Tag '{}' added to endpoint {} (ID: {}).",
+                    tag, endpoint, resp.endpoint_id
+                );
                 println!("Current tags:");
                 for t in &resp.tags {
                     println!("  - {}", t);
@@ -345,13 +371,18 @@ pub async fn handle_endpoint(action: EndpointAction, client: &ApiClient, json_ou
         EndpointAction::Deltag { endpoint, tag } => {
             let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
             if json_output {
-                let raw = client.delete_raw(&format!("/endpoints/{}/tags/{}", endpoint_id, tag)).await?;
+                let raw = client
+                    .delete_raw(&format!("/endpoints/{}/tags/{}", endpoint_id, tag))
+                    .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
                     .delete(&format!("/endpoints/{}/tags/{}", endpoint_id, tag))
                     .await?;
-                println!("Tag '{}' removed from endpoint {} (ID: {}).", tag, endpoint, resp.endpoint_id);
+                println!(
+                    "Tag '{}' removed from endpoint {} (ID: {}).",
+                    tag, endpoint, resp.endpoint_id
+                );
                 println!("Current tags:");
                 if resp.tags.is_empty() {
                     println!("  (no tags)");

@@ -5,8 +5,8 @@ mod client;
 mod cmds;
 
 use cmds::{
-    EndpointAction, ModelAction, UserAction, ApiKeyAction, FundAction,
-    handle_endpoint, handle_model, handle_user, handle_apikey, handle_fund,
+    ApiKeyAction, EndpointAction, FundAction, ModelAction, UserAction, handle_apikey,
+    handle_endpoint, handle_fund, handle_model, handle_user,
 };
 
 // ============================================================
@@ -14,7 +14,10 @@ use cmds::{
 // ============================================================
 
 #[derive(Parser)]
-#[command(name = "llmpool-ctl", about = "CLI tool for managing LLMPool via Admin API")]
+#[command(
+    name = "llmpool-ctl",
+    about = "CLI tool for managing LLMPool via Admin API"
+)]
 struct Cli {
     /// Output format: "" (default) for human-readable, "json" for JSON
     #[arg(long, default_value = "", global = true)]

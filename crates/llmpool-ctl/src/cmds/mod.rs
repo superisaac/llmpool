@@ -1,23 +1,23 @@
+pub mod apikey;
 pub mod endpoint;
+pub mod fund;
 pub mod model;
 pub mod user;
-pub mod apikey;
-pub mod fund;
 
 use serde::Deserialize;
 
 // Re-export subcommand enums and handlers
+pub use apikey::ApiKeyAction;
 pub use endpoint::EndpointAction;
+pub use fund::FundAction;
 pub use model::ModelAction;
 pub use user::UserAction;
-pub use apikey::ApiKeyAction;
-pub use fund::FundAction;
 
+pub use apikey::handle_apikey;
 pub use endpoint::handle_endpoint;
+pub use fund::handle_fund;
 pub use model::handle_model;
 pub use user::handle_user;
-pub use apikey::handle_apikey;
-pub use fund::handle_fund;
 
 // ============================================================
 // Common API Response Types
@@ -60,6 +60,8 @@ pub struct ModelResponse {
     pub has_embedding: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
+    pub input_token_price: String,
+    pub output_token_price: String,
     pub description: String,
     pub created_at: String,
     pub updated_at: String,
@@ -179,13 +181,22 @@ pub fn print_models(models: &[ModelResponse]) {
     }
 
     println!(
-        "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<30}",
-        "ID", "EP ID", "Model ID", "Chat", "Embed", "Image", "Speech", "Description"
+        "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
+        "ID",
+        "EP ID",
+        "Model ID",
+        "Chat",
+        "Embed",
+        "Image",
+        "Speech",
+        "Input Price",
+        "Output Price",
+        "Description"
     );
-    println!("{}", "-".repeat(110));
+    println!("{}", "-".repeat(128));
     for m in models {
         println!(
-            "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<30}",
+            "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
             m.id,
             m.endpoint_id,
             truncate(&m.model_id, 33),
@@ -193,7 +204,9 @@ pub fn print_models(models: &[ModelResponse]) {
             bool_mark(m.has_embedding),
             bool_mark(m.has_image_generation),
             bool_mark(m.has_speech),
-            truncate(&m.description, 28),
+            truncate(&m.input_token_price, 12),
+            truncate(&m.output_token_price, 12),
+            truncate(&m.description, 18),
         );
     }
 }
@@ -203,7 +216,10 @@ pub fn print_models(models: &[ModelResponse]) {
 // ============================================================
 
 /// Resolve an endpoint name or ID string to a numeric endpoint ID.
-pub async fn resolve_endpoint_id(endpoint: &str, client: &crate::client::ApiClient) -> Result<i32, String> {
+pub async fn resolve_endpoint_id(
+    endpoint: &str,
+    client: &crate::client::ApiClient,
+) -> Result<i32, String> {
     if let Ok(id) = endpoint.parse::<i32>() {
         return Ok(id);
     }
@@ -218,8 +234,6 @@ pub async fn resolve_user_id(user: &str, client: &crate::client::ApiClient) -> R
     if let Ok(id) = user.parse::<i32>() {
         return Ok(id);
     }
-    let resp: UserResponse = client
-        .get(&format!("/users_by_name/{}", user))
-        .await?;
+    let resp: UserResponse = client.get(&format!("/users_by_name/{}", user)).await?;
     Ok(resp.id)
 }

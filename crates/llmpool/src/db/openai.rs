@@ -141,7 +141,10 @@ pub async fn update_endpoint(
     let tags = update.tags.as_ref().unwrap_or(&current.tags);
     let proxies = update.proxies.as_ref().unwrap_or(&current.proxies);
     let status = update.status.as_deref().unwrap_or(&current.status);
-    let description = update.description.as_deref().unwrap_or(&current.description);
+    let description = update
+        .description
+        .as_deref()
+        .unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
     let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
@@ -431,13 +434,15 @@ pub async fn get_endpoint_with_models(
 }
 
 /// Get the tags of an endpoint by its ID.
-pub async fn get_endpoint_tags(pool: &DbPool, endpoint_id: i32) -> Result<Vec<String>, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "SELECT * FROM openai_endpoints WHERE id = $1",
-    )
-    .bind(endpoint_id)
-    .fetch_one(pool)
-    .await?;
+pub async fn get_endpoint_tags(
+    pool: &DbPool,
+    endpoint_id: i32,
+) -> Result<Vec<String>, sqlx::Error> {
+    let endpoint =
+        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+            .bind(endpoint_id)
+            .fetch_one(pool)
+            .await?;
     Ok(endpoint.tags)
 }
 

@@ -129,10 +129,7 @@ impl ApiClient {
     }
 
     /// Handle the HTTP response and return raw JSON text
-    async fn handle_response_raw(
-        &self,
-        resp: reqwest::Response,
-    ) -> Result<String, String> {
+    async fn handle_response_raw(&self, resp: reqwest::Response) -> Result<String, String> {
         let status = resp.status();
 
         let text = resp
@@ -170,11 +167,7 @@ impl ApiClient {
     }
 
     /// Send a POST request with a JSON body and return raw JSON text
-    pub async fn post_raw<B: Serialize>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<String, String> {
+    pub async fn post_raw<B: Serialize>(&self, path: &str, body: &B) -> Result<String, String> {
         let url = self.url(path);
         let resp = self
             .client
@@ -189,11 +182,7 @@ impl ApiClient {
     }
 
     /// Send a PUT request with a JSON body and return raw JSON text
-    pub async fn put_raw<B: Serialize>(
-        &self,
-        path: &str,
-        body: &B,
-    ) -> Result<String, String> {
+    pub async fn put_raw<B: Serialize>(&self, path: &str, body: &B) -> Result<String, String> {
         let url = self.url(path);
         let resp = self
             .client

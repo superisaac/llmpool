@@ -9,8 +9,8 @@ use axum::{
 };
 use rand::seq::IndexedRandom;
 use std::sync::Arc;
-use tracing::{info, warn};
 use tracing::error;
+use tracing::{info, warn};
 
 use crate::db::{self, DbPool};
 use crate::middlewares::admin_auth;
@@ -72,8 +72,7 @@ fn build_http_client_for_endpoint(
                 proxy = %proxy_url,
                 "Passthrough: using proxy for endpoint"
             );
-            let proxy = reqwest::Proxy::all(proxy_url.as_str())
-                .expect("Invalid proxy URL");
+            let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
             builder = builder.proxy(proxy);
         }
     }
@@ -287,9 +286,7 @@ async fn passthrough_by_endpoint_id_handler(
 // --- Router ---
 
 pub fn get_router(pool: DbPool) -> Router {
-    let state = Arc::new(PassthroughState {
-        pool,
-    });
+    let state = Arc::new(PassthroughState { pool });
 
     Router::new()
         .route("/tag/{tag}/{*rest}", any(passthrough_by_tag_handler))

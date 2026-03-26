@@ -1,11 +1,8 @@
 use clap::Subcommand;
 use serde::Serialize;
 
+use super::{BalanceChangeResponse, FundResponse, resolve_user_id};
 use crate::client::ApiClient;
-use super::{
-    BalanceChangeResponse, FundResponse,
-    resolve_user_id,
-};
 
 // ============================================================
 // CLI Definitions
@@ -105,7 +102,10 @@ fn print_balance_change(bc: &BalanceChangeResponse, action: &str) {
     println!("  User ID:           {}", bc.user_id);
     println!("  Request ID:        {}", bc.unique_request_id);
     println!("  Content:           {}", bc.content);
-    println!("  Applied:           {}", if bc.is_applied { "yes" } else { "no" });
+    println!(
+        "  Applied:           {}",
+        if bc.is_applied { "yes" } else { "no" }
+    );
     println!("  Created At:        {}", bc.created_at);
 }
 
@@ -113,7 +113,11 @@ fn print_balance_change(bc: &BalanceChangeResponse, action: &str) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_fund(action: FundAction, client: &ApiClient, json_output: bool) -> Result<(), String> {
+pub async fn handle_fund(
+    action: FundAction,
+    client: &ApiClient,
+    json_output: bool,
+) -> Result<(), String> {
     match action {
         FundAction::Show { user } => {
             let user_id = resolve_user_id(&user, client).await?;
@@ -121,9 +125,7 @@ pub async fn handle_fund(action: FundAction, client: &ApiClient, json_output: bo
                 let raw = client.get_raw(&format!("/users/{}/fund", user_id)).await?;
                 println!("{}", raw);
             } else {
-                let resp: FundResponse = client
-                    .get(&format!("/users/{}/fund", user_id))
-                    .await?;
+                let resp: FundResponse = client.get(&format!("/users/{}/fund", user_id)).await?;
                 print_fund_detail(&resp);
             }
         }
@@ -142,9 +144,7 @@ pub async fn handle_fund(action: FundAction, client: &ApiClient, json_output: bo
                 let raw = client.post_raw("/deposits", &body).await?;
                 println!("{}", raw);
             } else {
-                let resp: BalanceChangeResponse = client
-                    .post("/deposits", &body)
-                    .await?;
+                let resp: BalanceChangeResponse = client.post("/deposits", &body).await?;
                 print_balance_change(&resp, "Deposit");
             }
         }
@@ -163,9 +163,7 @@ pub async fn handle_fund(action: FundAction, client: &ApiClient, json_output: bo
                 let raw = client.post_raw("/withdrawals", &body).await?;
                 println!("{}", raw);
             } else {
-                let resp: BalanceChangeResponse = client
-                    .post("/withdrawals", &body)
-                    .await?;
+                let resp: BalanceChangeResponse = client.post("/withdrawals", &body).await?;
                 print_balance_change(&resp, "Withdrawal");
             }
         }
@@ -184,9 +182,7 @@ pub async fn handle_fund(action: FundAction, client: &ApiClient, json_output: bo
                 let raw = client.post_raw("/credits", &body).await?;
                 println!("{}", raw);
             } else {
-                let resp: BalanceChangeResponse = client
-                    .post("/credits", &body)
-                    .await?;
+                let resp: BalanceChangeResponse = client.post("/credits", &body).await?;
                 print_balance_change(&resp, "Credit");
             }
         }

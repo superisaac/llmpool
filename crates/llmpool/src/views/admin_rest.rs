@@ -684,7 +684,8 @@ async fn list_user_apikeys(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<OpenAIAPIKeyResponse> = keys.into_iter().map(OpenAIAPIKeyResponse::from).collect();
+    let data: Vec<OpenAIAPIKeyResponse> =
+        keys.into_iter().map(OpenAIAPIKeyResponse::from).collect();
 
     Json(PaginatedResponse {
         data,
@@ -874,6 +875,8 @@ struct ModelResponse {
     has_embedding: bool,
     has_image_generation: bool,
     has_speech: bool,
+    input_token_price: String,
+    output_token_price: String,
     description: String,
     created_at: String,
     updated_at: String,
@@ -889,6 +892,8 @@ impl From<crate::models::OpenAIModel> for ModelResponse {
             has_embedding: m.has_embedding,
             has_image_generation: m.has_image_generation,
             has_speech: m.has_speech,
+            input_token_price: m.input_token_price.to_string(),
+            output_token_price: m.output_token_price.to_string(),
             description: m.description,
             created_at: m.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: m.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -978,8 +983,16 @@ async fn create_endpoint(
                             api_base: None,
                             api_key: None,
                             has_responses_api: None,
-                            tags: if payload.tags.is_empty() { None } else { Some(payload.tags) },
-                            proxies: if payload.proxies.is_empty() { None } else { Some(payload.proxies) },
+                            tags: if payload.tags.is_empty() {
+                                None
+                            } else {
+                                Some(payload.tags)
+                            },
+                            proxies: if payload.proxies.is_empty() {
+                                None
+                            } else {
+                                Some(payload.proxies)
+                            },
                             status: None,
                             description: None,
                             updated_at: None,
@@ -1266,6 +1279,8 @@ async fn get_model_by_id(
 #[derive(Deserialize)]
 struct UpdateModelRequest {
     description: Option<String>,
+    input_token_price: Option<BigDecimal>,
+    output_token_price: Option<BigDecimal>,
 }
 
 /// PUT /api/v1/models/:model_id
@@ -1274,19 +1289,41 @@ struct UpdateModelRequest {
 ///
 /// Request body (JSON):
 /// - `description` (optional): Description of the model
+/// - `input_token_price` (optional): Price per input token
+/// - `output_token_price` (optional): Price per output token
 async fn update_model_by_id(
     State(state): State<Arc<AppState>>,
     Path(model_id): Path<i32>,
     Json(payload): Json<UpdateModelRequest>,
 ) -> Response {
+    // Validate prices if provided (must not be negative)
+    if let Some(ref price) = payload.input_token_price {
+        if *price < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "input_token_price must not be negative",
+            );
+        }
+    }
+    if let Some(ref price) = payload.output_token_price {
+        if *price < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "output_token_price must not be negative",
+            );
+        }
+    }
+
     let update = crate::models::UpdateOpenAIModel {
         model_id: None,
         has_image_generation: None,
         has_speech: None,
         has_chat_completion: None,
         has_embedding: None,
-        input_token_price: None,
-        output_token_price: None,
+        input_token_price: payload.input_token_price,
+        output_token_price: payload.output_token_price,
         description: payload.description,
         updated_at: Some(chrono::Utc::now().naive_utc()),
     };
@@ -1852,10 +1889,7 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
             get(list_user_apikeys).post(create_user_apikey),
         )
         .route("/users_by_name/{username}", get(get_user_by_username))
-        .route(
-            "/endpoint_by_name/{name}",
-            get(get_endpoint_by_name),
-        )
+        .route("/endpoint_by_name/{name}", get(get_endpoint_by_name))
         .route(
             "/endpoints/{endpoint_id}/tags",
             get(list_endpoint_tags).post(add_endpoint_tag),

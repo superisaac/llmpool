@@ -1,12 +1,8 @@
 use clap::Subcommand;
 use serde::Serialize;
 
+use super::{OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_user_id, truncate};
 use crate::client::ApiClient;
-use super::{
-    OpenAIAPIKeyResponse, PaginatedResponse,
-    print_pagination, truncate,
-    resolve_user_id,
-};
 
 // ============================================================
 // CLI Definitions
@@ -85,17 +81,22 @@ fn print_apikey_detail(ak: &OpenAIAPIKeyResponse) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_apikey(action: ApiKeyAction, client: &ApiClient, json_output: bool) -> Result<(), String> {
+pub async fn handle_apikey(
+    action: ApiKeyAction,
+    client: &ApiClient,
+    json_output: bool,
+) -> Result<(), String> {
     match action {
         ApiKeyAction::List { user } => {
             let user_id = resolve_user_id(&user, client).await?;
             if json_output {
-                let raw = client.get_raw(&format!("/users/{}/apikeys", user_id)).await?;
+                let raw = client
+                    .get_raw(&format!("/users/{}/apikeys", user_id))
+                    .await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<OpenAIAPIKeyResponse> = client
-                    .get(&format!("/users/{}/apikeys", user_id))
-                    .await?;
+                let resp: PaginatedResponse<OpenAIAPIKeyResponse> =
+                    client.get(&format!("/users/{}/apikeys", user_id)).await?;
                 print_apikeys(&resp.data);
                 print_pagination(&resp.pagination);
             }
@@ -104,7 +105,9 @@ pub async fn handle_apikey(action: ApiKeyAction, client: &ApiClient, json_output
             let user_id = resolve_user_id(&user, client).await?;
             let body = CreateApiKeyRequestBody { label };
             if json_output {
-                let raw = client.post_raw(&format!("/users/{}/apikeys", user_id), &body).await?;
+                let raw = client
+                    .post_raw(&format!("/users/{}/apikeys", user_id), &body)
+                    .await?;
                 println!("{}", raw);
             } else {
                 let resp: OpenAIAPIKeyResponse = client

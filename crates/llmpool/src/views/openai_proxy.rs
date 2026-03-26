@@ -250,8 +250,7 @@ fn build_client_from_model_endpoint(
                 proxy = %proxy_url,
                 "OpenAI proxy: using proxy for endpoint"
             );
-            let proxy = reqwest::Proxy::all(proxy_url.as_str())
-                .expect("Invalid proxy URL");
+            let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
             let http_client = reqwest::Client::builder()
                 .proxy(proxy)
                 .build()
