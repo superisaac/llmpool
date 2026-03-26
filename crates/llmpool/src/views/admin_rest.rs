@@ -96,6 +96,8 @@ struct EndpointResponse {
     has_responses_api: bool,
     tags: Vec<String>,
     proxies: Vec<String>,
+    status: String,
+    description: String,
     created_at: String,
     updated_at: String,
 }
@@ -109,6 +111,8 @@ impl From<crate::models::OpenAIEndpoint> for EndpointResponse {
             has_responses_api: ep.has_responses_api,
             tags: ep.tags,
             proxies: ep.proxies,
+            status: ep.status,
+            description: ep.description,
             created_at: ep.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: ep.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -793,6 +797,7 @@ struct ModelResponse {
     has_embedding: bool,
     has_image_generation: bool,
     has_speech: bool,
+    description: String,
     created_at: String,
     updated_at: String,
 }
@@ -807,6 +812,7 @@ impl From<crate::models::OpenAIModel> for ModelResponse {
             has_embedding: m.has_embedding,
             has_image_generation: m.has_image_generation,
             has_speech: m.has_speech,
+            description: m.description,
             created_at: m.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: m.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -897,6 +903,8 @@ async fn create_endpoint(
                             has_responses_api: None,
                             tags: if payload.tags.is_empty() { None } else { Some(payload.tags) },
                             proxies: if payload.proxies.is_empty() { None } else { Some(payload.proxies) },
+                            status: None,
+                            description: None,
                             updated_at: None,
                         };
                         match db::openai::update_endpoint(&state.pool, endpoint.id, &update).await {
@@ -1009,6 +1017,191 @@ async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
                 StatusCode::BAD_GATEWAY,
                 "detection_error",
                 &format!("Failed to detect endpoint features: {}", e),
+            )
+        }
+    }
+}
+
+// --- Endpoint Get/Update Handlers ---
+
+/// Valid status values for an endpoint
+const VALID_ENDPOINT_STATUSES: &[&str] = &["online", "offline", "maintenance"];
+
+/// GET /api/v1/endpoints/:endpoint_id
+///
+/// Returns a single endpoint by its ID.
+async fn get_endpoint_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(endpoint_id): Path<i32>,
+) -> Response {
+    match db::openai::get_endpoint(&state.pool, endpoint_id).await {
+        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with id {} not found", endpoint_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get endpoint by id");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query endpoint",
+            )
+        }
+    }
+}
+
+/// Request body for updating an OpenAI endpoint
+#[derive(Deserialize)]
+struct UpdateEndpointRequest {
+    name: Option<String>,
+    tags: Option<Vec<String>>,
+    proxies: Option<Vec<String>>,
+    description: Option<String>,
+    status: Option<String>,
+}
+
+/// PUT /api/v1/endpoints/:endpoint_id
+///
+/// Updates an existing endpoint. Only the provided fields will be updated.
+///
+/// Request body (JSON):
+/// - `name` (optional): The display name for the endpoint
+/// - `tags` (optional): Tags for the endpoint
+/// - `proxies` (optional): Proxy configurations
+/// - `description` (optional): Description of the endpoint
+/// - `status` (optional): Status of the endpoint (online, offline, maintenance)
+async fn update_endpoint_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(endpoint_id): Path<i32>,
+    Json(payload): Json<UpdateEndpointRequest>,
+) -> Response {
+    // Validate status if provided
+    if let Some(ref status) = payload.status {
+        if !VALID_ENDPOINT_STATUSES.contains(&status.as_str()) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                &format!(
+                    "Invalid status '{}'. Must be one of: {}",
+                    status,
+                    VALID_ENDPOINT_STATUSES.join(", ")
+                ),
+            );
+        }
+    }
+
+    // Validate name if provided
+    if let Some(ref name) = payload.name {
+        if name.trim().is_empty() {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "name cannot be empty",
+            );
+        }
+    }
+
+    let update = crate::models::UpdateOpenAIEndpoint {
+        name: payload.name,
+        api_base: None,
+        api_key: None,
+        has_responses_api: None,
+        tags: payload.tags,
+        proxies: payload.proxies,
+        status: payload.status,
+        description: payload.description,
+        updated_at: Some(chrono::Utc::now().naive_utc()),
+    };
+
+    match db::openai::update_endpoint(&state.pool, endpoint_id, &update).await {
+        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with id {} not found", endpoint_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to update endpoint");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to update endpoint",
+            )
+        }
+    }
+}
+
+// --- Model Get/Update Handlers ---
+
+/// GET /api/v1/models/:model_id
+///
+/// Returns a single model by its ID.
+async fn get_model_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(model_id): Path<i32>,
+) -> Response {
+    match db::openai::get_model(&state.pool, model_id).await {
+        Ok(model) => Json(ModelResponse::from(model)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Model with id {} not found", model_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get model by id");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query model",
+            )
+        }
+    }
+}
+
+/// Request body for updating an OpenAI model
+#[derive(Deserialize)]
+struct UpdateModelRequest {
+    description: Option<String>,
+}
+
+/// PUT /api/v1/models/:model_id
+///
+/// Updates an existing model. Only the provided fields will be updated.
+///
+/// Request body (JSON):
+/// - `description` (optional): Description of the model
+async fn update_model_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(model_id): Path<i32>,
+    Json(payload): Json<UpdateModelRequest>,
+) -> Response {
+    let update = crate::models::UpdateOpenAIModel {
+        model_id: None,
+        has_image_generation: None,
+        has_speech: None,
+        has_chat_completion: None,
+        has_embedding: None,
+        input_token_price: None,
+        output_token_price: None,
+        description: payload.description,
+        updated_at: Some(chrono::Utc::now().naive_utc()),
+    };
+
+    match db::openai::update_model(&state.pool, model_id, &update).await {
+        Ok(model) => Json(ModelResponse::from(model)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Model with id {} not found", model_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to update model");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to update model",
             )
         }
     }
@@ -1422,7 +1615,15 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
     });
     Router::new()
         .route("/endpoints", get(list_endpoints).post(create_endpoint))
+        .route(
+            "/endpoints/{endpoint_id}",
+            get(get_endpoint_by_id).put(update_endpoint_by_id),
+        )
         .route("/models", get(list_models))
+        .route(
+            "/models/{model_id}",
+            get(get_model_by_id).put(update_model_by_id),
+        )
         .route("/users", get(list_users).post(create_user))
         .route("/users/{user_id}", get(get_user_by_id))
         .route("/users/{user_id}/fund", get(get_user_fund))

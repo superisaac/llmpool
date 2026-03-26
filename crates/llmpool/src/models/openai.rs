@@ -13,6 +13,8 @@ pub struct OpenAIEndpoint {
     pub has_responses_api: bool,
     pub tags: Vec<String>,
     pub proxies: Vec<String>,
+    pub status: String,
+    pub description: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -28,6 +30,14 @@ pub struct NewOpenAIEndpoint {
     pub tags: Vec<String>,
     #[serde(default)]
     pub proxies: Vec<String>,
+    #[serde(default = "default_status")]
+    pub status: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+fn default_status() -> String {
+    "online".to_string()
 }
 
 /// Used to update an existing OpenAI endpoint
@@ -39,6 +49,8 @@ pub struct UpdateOpenAIEndpoint {
     pub has_responses_api: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub proxies: Option<Vec<String>>,
+    pub status: Option<String>,
+    pub description: Option<String>,
     pub updated_at: Option<NaiveDateTime>,
 }
 
@@ -54,6 +66,7 @@ pub struct OpenAIModel {
     pub has_embedding: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
+    pub description: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -91,5 +104,6 @@ pub struct UpdateOpenAIModel {
     pub has_embedding: Option<bool>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
+    pub description: Option<String>,
     pub updated_at: Option<NaiveDateTime>,
 }

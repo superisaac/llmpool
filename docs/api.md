@@ -146,6 +146,16 @@ curl "http://localhost:19324/api/v1/models?endpoint_id=1" \
 
 curl "http://localhost:19324/api/v1/models?endpoint_name=OpenAI&name=gpt-4o" \
   -H "x-admin-token: <jwt-token>"
+
+# Get a model by ID
+curl http://localhost:19324/api/v1/models/1 \
+  -H "x-admin-token: <jwt-token>"
+
+# Update a model's description
+curl -X PUT http://localhost:19324/api/v1/models/1 \
+  -H "x-admin-token: <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"description": "GPT-4o model for general chat"}'
 ```
 
 ### Users
@@ -240,6 +250,8 @@ curl -X POST http://localhost:19324/api/v1/credits \
 | `POST` | `/api/v1/endpoints` | Create a new endpoint (auto-detects features) |
 | `POST` | `/api/v1/endpoint-tests` | Test an endpoint without saving |
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
+| `GET` | `/api/v1/models/:model_id` | Get a model by ID |
+| `PUT` | `/api/v1/models/:model_id` | Update a model (description) |
 | `GET` | `/api/v1/users` | List all users (paginated) |
 | `POST` | `/api/v1/users` | Create a new user (with optional `initial_credit`) |
 | `GET` | `/api/v1/users/:user_id` | Get a user by ID |

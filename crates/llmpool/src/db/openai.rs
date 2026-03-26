@@ -35,8 +35,8 @@ pub async fn create_endpoint(
 ) -> Result<OpenAIEndpoint, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
     let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags, proxies)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *",
     )
     .bind(&new_endpoint.name)
@@ -45,6 +45,8 @@ pub async fn create_endpoint(
     .bind(new_endpoint.has_responses_api)
     .bind(&new_endpoint.tags)
     .bind(&new_endpoint.proxies)
+    .bind(&new_endpoint.status)
+    .bind(&new_endpoint.description)
     .fetch_one(pool)
     .await?;
     decrypt_endpoint(endpoint)
@@ -125,12 +127,14 @@ pub async fn update_endpoint(
         .unwrap_or(current.has_responses_api);
     let tags = update.tags.as_ref().unwrap_or(&current.tags);
     let proxies = update.proxies.as_ref().unwrap_or(&current.proxies);
+    let status = update.status.as_deref().unwrap_or(&current.status);
+    let description = update.description.as_deref().unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
     let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
         "UPDATE openai_endpoints
-         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, proxies = $6, updated_at = $7
-         WHERE id = $8
+         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, proxies = $6, status = $7, description = $8, updated_at = $9
+         WHERE id = $10
          RETURNING *",
     )
     .bind(name)
@@ -139,6 +143,8 @@ pub async fn update_endpoint(
     .bind(has_responses_api)
     .bind(tags)
     .bind(proxies)
+    .bind(status)
+    .bind(description)
     .bind(updated_at)
     .bind(endpoint_id)
     .fetch_one(pool)
@@ -259,13 +265,18 @@ pub async fn update_model(
         .output_token_price
         .as_ref()
         .unwrap_or(&current.output_token_price);
+    let description = update
+        .description
+        .as_deref()
+        .unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
     sqlx::query_as::<_, OpenAIModel>(
         "UPDATE openai_models
          SET model_id = $1, has_image_generation = $2, has_speech = $3, has_chat_completion = $4,
-             has_embedding = $5, input_token_price = $6, output_token_price = $7, updated_at = $8
-         WHERE id = $9
+             has_embedding = $5, input_token_price = $6, output_token_price = $7,
+             description = $8, updated_at = $9
+         WHERE id = $10
          RETURNING *",
     )
     .bind(model_id)
@@ -275,6 +286,7 @@ pub async fn update_model(
     .bind(has_embedding)
     .bind(input_token_price)
     .bind(output_token_price)
+    .bind(description)
     .bind(updated_at)
     .bind(model_pk)
     .fetch_one(pool)
@@ -432,6 +444,7 @@ struct ModelEndpointRow {
     pub has_embedding: bool,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
+    pub description: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     // OpenAIEndpoint fields (aliased)
@@ -442,6 +455,8 @@ struct ModelEndpointRow {
     pub ep_has_responses_api: bool,
     pub ep_tags: Vec<String>,
     pub ep_proxies: Vec<String>,
+    pub ep_status: String,
+    pub ep_description: String,
     pub ep_created_at: chrono::NaiveDateTime,
     pub ep_updated_at: chrono::NaiveDateTime,
 }
@@ -458,6 +473,7 @@ impl ModelEndpointRow {
             has_embedding: self.has_embedding,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
+            description: self.description,
             created_at: self.created_at,
             updated_at: self.updated_at,
         };
@@ -469,6 +485,8 @@ impl ModelEndpointRow {
             has_responses_api: self.ep_has_responses_api,
             tags: self.ep_tags,
             proxies: self.ep_proxies,
+            status: self.ep_status,
+            description: self.ep_description,
             created_at: self.ep_created_at,
             updated_at: self.ep_updated_at,
         };
@@ -491,10 +509,11 @@ pub async fn find_models_by_name_and_capacity(
     let mut sql = String::from(
         "SELECT m.id, m.endpoint_id, m.model_id, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
-                m.created_at, m.updated_at,
+                m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
                 e.api_key AS ep_api_key, e.has_responses_api AS ep_has_responses_api,
                 e.tags AS ep_tags, e.proxies AS ep_proxies,
+                e.status AS ep_status, e.description AS ep_description,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
          FROM openai_models m
          INNER JOIN openai_endpoints e ON m.endpoint_id = e.id

@@ -92,3 +92,15 @@ middleware auth_jwt 的逻辑抽出来单独放在 middlewares/admin_auth.rs 中
 
 ========
 给OpenAIEndpoint 增加一个字段 proxies: Vec<String>, 用于记录该endpoint的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。
+
+========
+OpenAIEndpoint 添加一个字段 status: String, 用于记录该endpoint的运行状态, 可选值为 online, offline, maintenance, 默认值为online.
+OpenAIEndpoint 添加一个字段 description: String, 用于记录该endpoint的描述信息, 缺省为空。
+OpenAIModel 添加一个字段 description: String, 用于记录该model的描述信息, 缺省为空。
+可以直接修改migrations 文件，不用新建migration文件。
+
+增加 admin api: GET /api/v1/endpoints/:endpoint_id, 根据endpoint_id 获得endpoint信息
+增加 admin api: PUT /api/v1/endpoints/:endpoint_id, 修改endpoint信息，可修改字段为 name, tags, proxies, description,status
+
+增加 admin api: GET /api/v1/models/:model_id, 根据model_id 获得model信息
+增加 admin api: PUT /api/v1/models/:model_id, 修改model_id信息，可修改字段为 description

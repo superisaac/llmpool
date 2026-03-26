@@ -203,6 +203,8 @@ pub async fn detect_and_save_features(
                 has_responses_api: Some(api_features.has_responses_api),
                 tags: None,
                 proxies: None,
+                status: None,
+                description: None,
                 updated_at: Some(Utc::now().naive_utc()),
             };
             db::openai::update_endpoint(pool, existing.id, &update).await?
@@ -216,6 +218,8 @@ pub async fn detect_and_save_features(
                 has_responses_api: api_features.has_responses_api,
                 tags: vec![],
                 proxies: vec![],
+                status: "online".to_string(),
+                description: String::new(),
             };
             db::openai::create_endpoint(pool, &new_endpoint).await?
         }
@@ -236,6 +240,7 @@ pub async fn detect_and_save_features(
                     has_embedding: Some(mf.has_embedding),
                     input_token_price: None,
                     output_token_price: None,
+                    description: None,
                     updated_at: Some(Utc::now().naive_utc()),
                 };
                 db::openai::update_model(pool, existing_model.id, &update).await?;

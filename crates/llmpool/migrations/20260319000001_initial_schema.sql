@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS openai_endpoints (
     has_responses_api BOOLEAN NOT NULL DEFAULT FALSE,
     tags TEXT[] NOT NULL DEFAULT '{}',
     proxies TEXT[] NOT NULL DEFAULT '{}',
+    status VARCHAR NOT NULL DEFAULT 'online',
+    description VARCHAR NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -24,6 +26,7 @@ CREATE TABLE IF NOT EXISTS openai_models (
     has_embedding BOOLEAN NOT NULL DEFAULT FALSE,
     input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     output_token_price NUMERIC NOT NULL DEFAULT 0.000001,
+    description VARCHAR NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
