@@ -11,6 +11,7 @@ pub struct OpenAIEndpoint {
     pub api_base: String,
     pub api_key: String,
     pub has_responses_api: bool,
+    pub tags: Vec<String>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -22,6 +23,8 @@ pub struct NewOpenAIEndpoint {
     pub api_base: String,
     pub api_key: String,
     pub has_responses_api: bool,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Used to update an existing OpenAI endpoint
@@ -31,6 +34,7 @@ pub struct UpdateOpenAIEndpoint {
     pub api_base: Option<String>,
     pub api_key: Option<String>,
     pub has_responses_api: Option<bool>,
+    pub tags: Option<Vec<String>>,
     pub updated_at: Option<NaiveDateTime>,
 }
 

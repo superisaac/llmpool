@@ -2,32 +2,21 @@ use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use axum::{
     Json, Router,
-    extract::{Path, Query, Request, State},
+    extract::{Path, Query, State},
     http::StatusCode,
-    middleware::{self, Next},
+    middleware,
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use bigdecimal::BigDecimal;
-use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::config;
 use crate::db::{self, DbPool};
 use crate::defer::BalanceChangeTask;
+use crate::middlewares::admin_auth;
 use crate::models::{BalanceChangeContent, NewBalanceChange};
-
-// --- JWT Claims ---
-
-#[derive(Debug, Deserialize)]
-struct Claims {
-    #[allow(dead_code)]
-    sub: Option<String>,
-    #[allow(dead_code)]
-    exp: Option<usize>,
-}
 
 // --- Server State ---
 
@@ -54,60 +43,6 @@ fn error_response(status: StatusCode, error: &str, message: &str) -> Response {
         }),
     )
         .into_response()
-}
-
-// --- JWT Auth Middleware ---
-
-/// Middleware that authenticates admin REST API requests using JWT Bearer token.
-/// Uses the JWT secret configured in the admin section.
-async fn auth_jwt(request: Request, next: Next) -> Response {
-    let cfg = config::get_config();
-    let jwt_secret = &cfg.admin.jwt_secret;
-
-    if jwt_secret.is_empty() {
-        warn!("Admin JWT secret is not configured");
-        return error_response(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "not_configured",
-            "Admin API is not configured",
-        );
-    }
-
-    // Extract the Authorization header
-    let auth_header = request
-        .headers()
-        .get("Authorization")
-        .and_then(|v| v.to_str().ok());
-
-    let token = match auth_header {
-        Some(header) if header.starts_with("Bearer ") => &header[7..],
-        _ => {
-            return error_response(
-                StatusCode::UNAUTHORIZED,
-                "unauthorized",
-                "Missing or invalid Authorization header. Expected: Bearer <jwt_token>",
-            );
-        }
-    };
-
-    // Validate the JWT token
-    let decoding_key = DecodingKey::from_secret(jwt_secret.as_bytes());
-    let mut validation = Validation::default();
-    // Allow tokens without exp claim for flexibility
-    validation.required_spec_claims.remove("exp");
-    validation.validate_exp = false;
-
-    match decode::<Claims>(token, &decoding_key, &validation) {
-        Ok(_) => next.run(request).await,
-        Err(e) => {
-            warn!(error = %e, "JWT validation failed");
-            error_response(
-                StatusCode::UNAUTHORIZED,
-                "invalid_token",
-                "Invalid JWT token",
-            )
-        }
-    }
 }
 
 // --- Pagination ---
@@ -159,6 +94,7 @@ struct EndpointResponse {
     name: String,
     api_base: String,
     has_responses_api: bool,
+    tags: Vec<String>,
     created_at: String,
     updated_at: String,
 }
@@ -170,6 +106,7 @@ impl From<crate::models::OpenAIEndpoint> for EndpointResponse {
             name: ep.name,
             api_base: ep.api_base,
             has_responses_api: ep.has_responses_api,
+            tags: ep.tags,
             created_at: ep.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: ep.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -459,7 +396,11 @@ async fn create_user(
                 amount: initial_credit.clone(),
             };
             let unique_request_id = format!("initial-credit-{}", user.id);
-            let new_change = match NewBalanceChange::from_content(user.id, unique_request_id, &content) {
+            let new_change = match NewBalanceChange::from_content(
+                user.id,
+                unique_request_id,
+                &content,
+            ) {
                 Ok(change) => change,
                 Err(e) => {
                     warn!(error = %e, user_id = user.id, "Failed to serialize initial credit content");
@@ -827,6 +768,8 @@ struct CreateEndpointRequest {
     name: String,
     api_key: String,
     api_base: String,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 /// Request body for testing an OpenAI endpoint
@@ -938,9 +881,29 @@ async fn create_endpoint(
     .await
     {
         Ok(()) => {
-            // Fetch the saved endpoint to return it
+            // Fetch the saved endpoint and update tags if provided
             match db::openai::get_endpoint_by_api_base(&state.pool, payload.api_base.trim()).await {
                 Ok(endpoint) => {
+                    // Update tags if the request included them
+                    let endpoint = if !payload.tags.is_empty() {
+                        let update = crate::models::UpdateOpenAIEndpoint {
+                            name: None,
+                            api_base: None,
+                            api_key: None,
+                            has_responses_api: None,
+                            tags: Some(payload.tags),
+                            updated_at: None,
+                        };
+                        match db::openai::update_endpoint(&state.pool, endpoint.id, &update).await {
+                            Ok(ep) => ep,
+                            Err(e) => {
+                                warn!(error = %e, "Failed to update endpoint tags");
+                                endpoint
+                            }
+                        }
+                    } else {
+                        endpoint
+                    };
                     // Also fetch the models for this endpoint
                     let models =
                         match db::openai::list_models_by_endpoint(&state.pool, endpoint.id).await {
@@ -1467,6 +1430,6 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))
         .route("/credits", post(create_credit))
-        .route_layer(middleware::from_fn(auth_jwt))
+        .route_layer(middleware::from_fn(admin_auth::auth_jwt))
         .with_state(state)
 }

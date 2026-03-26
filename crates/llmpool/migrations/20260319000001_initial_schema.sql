@@ -5,10 +5,12 @@ CREATE TABLE IF NOT EXISTS openai_endpoints (
     api_base VARCHAR NOT NULL,
     api_key VARCHAR NOT NULL DEFAULT '',
     has_responses_api BOOLEAN NOT NULL DEFAULT FALSE,
+    tags TEXT[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_endpoints_api_base ON openai_endpoints (api_base);
+CREATE INDEX IF NOT EXISTS idx_openai_endpoints_tags ON openai_endpoints USING GIN (tags);
 
 -- Create openai_models table
 CREATE TABLE IF NOT EXISTS openai_models (

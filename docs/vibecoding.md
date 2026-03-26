@@ -74,3 +74,18 @@ BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕
 
 ========
 SessionEvent 增加一个session_index 字段，从OpenAIEventTask 中获取； initial_schema和migrations 文件可以修改，不用新增。
+
+========
+OpenAIEndpoint 添加一个字段tags: Vec<String>, 用于记录该endpoint的标签.
+
+========
+在文件 views/passthrough.rs 中，实现透传request 和 response 的逻辑。URL /passthrough/tag/:tag/:rest, 通过tag 找到对应的endpoint list, 随机选择一个endpoint, 使用reqwest, 透传request 和 response。url 重写为 /:rest.
+
+========
+实现 /passthrough/:endpoint_id/:rest, 根据endpoint_id 找到对应的endpoint, 透传request 和 response。url 重写为 /:rest.
+
+========
+admin rest api 使用"x-admin-token" header作为验证， header的内容是jwt token，取代以前的auth bearer token. passthrough 也使用x-admin-token header作为验证。并更新API.md.
+
+========
+middleware auth_jwt 的逻辑抽出来单独放在 middlewares/admin_auth.rs 中，并修改passthrough.rs 和admin_rest.rs 中使用middleware.
