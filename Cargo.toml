@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/llmpool",
+    "crates/llmpool", "crates/llmpool-ctl",
 ]
 
 [workspace.dependencies]

@@ -1,5 +1,5 @@
 use crate::db::DbPool;
-use crate::models::{NewUser, User};
+use crate::models::{NewUser, UpdateUser, User};
 
 /// Create a new user
 pub async fn create_user(pool: &DbPool, new_user: &NewUser) -> Result<User, sqlx::Error> {
@@ -48,4 +48,25 @@ pub async fn list_users_paginated(
         .bind(offset)
         .fetch_all(pool)
         .await
+}
+
+/// Update a user by ID. Only the provided fields will be updated.
+pub async fn update_user(
+    pool: &DbPool,
+    user_id: i32,
+    update: &UpdateUser,
+) -> Result<User, sqlx::Error> {
+    sqlx::query_as::<_, User>(
+        "UPDATE users SET
+            username = COALESCE($2, username),
+            is_active = COALESCE($3, is_active),
+            updated_at = NOW()
+         WHERE id = $1
+         RETURNING *",
+    )
+    .bind(user_id)
+    .bind(&update.username)
+    .bind(update.is_active)
+    .fetch_one(pool)
+    .await
 }

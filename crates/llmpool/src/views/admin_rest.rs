@@ -180,26 +180,28 @@ impl From<crate::models::Fund> for FundResponse {
     }
 }
 
-// --- AccessKey Response DTO ---
+// --- OpenAIAPIKey Response DTO ---
 
-/// Response DTO for an access key
+/// Response DTO for an API key
 #[derive(Serialize)]
-struct AccessKeyResponse {
+struct OpenAIAPIKeyResponse {
     id: i32,
     user_id: Option<i32>,
     apikey: String,
+    label: String,
     is_active: bool,
     expires_at: Option<String>,
     created_at: String,
     updated_at: String,
 }
 
-impl From<crate::models::AccessKey> for AccessKeyResponse {
-    fn from(ak: crate::models::AccessKey) -> Self {
+impl From<crate::models::OpenAIAPIKey> for OpenAIAPIKeyResponse {
+    fn from(ak: crate::models::OpenAIAPIKey) -> Self {
         Self {
             id: ak.id,
             user_id: ak.user_id,
             apikey: ak.apikey,
+            label: ak.label,
             is_active: ak.is_active,
             expires_at: ak
                 .expires_at
@@ -468,6 +470,69 @@ async fn get_user_by_id(State(state): State<Arc<AppState>>, Path(user_id): Path<
     }
 }
 
+/// Request body for updating a user
+#[derive(Deserialize)]
+struct UpdateUserRequest {
+    username: Option<String>,
+    is_active: Option<bool>,
+}
+
+/// PUT /api/v1/users/:user_id
+///
+/// Updates an existing user. Only the provided fields will be updated.
+///
+/// Request body (JSON):
+/// - `username` (optional): New username for the user
+/// - `is_active` (optional): Whether the user is active
+async fn update_user_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(user_id): Path<i32>,
+    Json(payload): Json<UpdateUserRequest>,
+) -> Response {
+    // Validate username if provided
+    if let Some(ref username) = payload.username {
+        if username.trim().is_empty() {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "Username cannot be empty",
+            );
+        }
+    }
+
+    let update = crate::models::UpdateUser {
+        username: payload.username.map(|u| u.trim().to_string()),
+        is_active: payload.is_active,
+    };
+
+    match db::user::update_user(&state.pool, user_id, &update).await {
+        Ok(user) => Json(UserResponse::from(user)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("User with id {} not found", user_id),
+        ),
+        Err(e) => {
+            // Check for unique constraint violation
+            if let sqlx::Error::Database(ref db_err) = e {
+                if db_err.constraint() == Some("idx_users_username") {
+                    return error_response(
+                        StatusCode::CONFLICT,
+                        "duplicate_error",
+                        "A user with this username already exists",
+                    );
+                }
+            }
+            warn!(error = %e, "Failed to update user");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to update user",
+            )
+        }
+    }
+}
+
 /// GET /api/v1/users_byname/:username
 ///
 /// Returns a single user by their username.
@@ -584,31 +649,31 @@ async fn list_user_apikeys(
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
     let offset = (page - 1) * page_size;
 
-    // Get total count of access keys for this user
-    let total = match db::api::count_access_keys_by_user(&state.pool, user_id).await {
+    // Get total count of API keys for this user
+    let total = match db::api::count_api_keys_by_user(&state.pool, user_id).await {
         Ok(count) => count,
         Err(e) => {
-            warn!(error = %e, "Failed to count access keys for user");
+            warn!(error = %e, "Failed to count API keys for user");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query access keys",
+                "Failed to query API keys",
             );
         }
     };
 
-    // Get paginated access keys
+    // Get paginated API keys
     let keys =
-        match db::api::list_access_keys_by_user_paginated(&state.pool, user_id, offset, page_size)
+        match db::api::list_api_keys_by_user_paginated(&state.pool, user_id, offset, page_size)
             .await
         {
             Ok(keys) => keys,
             Err(e) => {
-                warn!(error = %e, "Failed to list access keys for user");
+                warn!(error = %e, "Failed to list API keys for user");
                 return error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "database_error",
-                    "Failed to query access keys",
+                    "Failed to query API keys",
                 );
             }
         };
@@ -619,7 +684,7 @@ async fn list_user_apikeys(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<AccessKeyResponse> = keys.into_iter().map(AccessKeyResponse::from).collect();
+    let data: Vec<OpenAIAPIKeyResponse> = keys.into_iter().map(OpenAIAPIKeyResponse::from).collect();
 
     Json(PaginatedResponse {
         data,
@@ -633,12 +698,24 @@ async fn list_user_apikeys(
     .into_response()
 }
 
+/// Request body for creating a new API key
+#[derive(Deserialize)]
+struct CreateApiKeyRequest {
+    /// Optional label describing the purpose of this API key
+    #[serde(default)]
+    label: String,
+}
+
 /// POST /api/v1/users/:user_id/apikeys
 ///
 /// Creates a new API key for the specified user.
+///
+/// Request body (JSON):
+/// - `label` (optional): A label describing the purpose of this API key
 async fn create_user_apikey(
     State(state): State<Arc<AppState>>,
     Path(user_id): Path<i32>,
+    Json(payload): Json<CreateApiKeyRequest>,
 ) -> Response {
     // Verify the user exists
     match db::user::get_user_by_id(&state.pool, user_id).await {
@@ -660,14 +737,14 @@ async fn create_user_apikey(
         }
     }
 
-    match db::api::create_access_key_for_user(&state.pool, user_id).await {
-        Ok(key) => (StatusCode::CREATED, Json(AccessKeyResponse::from(key))).into_response(),
+    match db::api::create_api_key_for_user(&state.pool, user_id, &payload.label).await {
+        Ok(key) => (StatusCode::CREATED, Json(OpenAIAPIKeyResponse::from(key))).into_response(),
         Err(e) => {
-            warn!(error = %e, "Failed to create access key for user");
+            warn!(error = %e, "Failed to create API key for user");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to create access key",
+                "Failed to create API key",
             )
         }
     }
@@ -1625,7 +1702,10 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
             get(get_model_by_id).put(update_model_by_id),
         )
         .route("/users", get(list_users).post(create_user))
-        .route("/users/{user_id}", get(get_user_by_id))
+        .route(
+            "/users/{user_id}",
+            get(get_user_by_id).put(update_user_by_id),
+        )
         .route("/users/{user_id}/fund", get(get_user_fund))
         .route(
             "/users/{user_id}/apikeys",

@@ -43,18 +43,19 @@ CREATE TABLE IF NOT EXISTS users (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username);
 
--- Create access_keys table
-CREATE TABLE IF NOT EXISTS access_keys (
+-- Create openai_api_keys table
+CREATE TABLE IF NOT EXISTS openai_api_keys (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     apikey VARCHAR NOT NULL,
+    label VARCHAR NOT NULL DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     expires_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_access_keys_apikey ON access_keys (apikey);
-CREATE INDEX IF NOT EXISTS idx_access_keys_user_id ON access_keys (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_api_keys_apikey ON openai_api_keys (apikey);
+CREATE INDEX IF NOT EXISTS idx_openai_api_keys_user_id ON openai_api_keys (user_id);
 
 -- Create session_events table (unlogged for performance)
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (

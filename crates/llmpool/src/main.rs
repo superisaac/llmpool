@@ -67,9 +67,9 @@ enum AdminCommands {
         #[arg(long, default_value = "admin")]
         subject: String,
     },
-    /// Create a new access key for a user
+    /// Create a new API key for a user
     CreateApiKey {
-        /// The username to create the access key for
+        /// The username to create the API key for
         username: String,
     },
     /// Create a user interactively
@@ -254,17 +254,17 @@ async fn main() {
                     }
                 };
 
-                // Create the access key
-                match db::api::create_access_key_for_user(&pool, user.id).await {
-                    Ok(access_key) => {
+                // Create the API key
+                match db::api::create_api_key_for_user(&pool, user.id, "").await {
+                    Ok(api_key) => {
                         println!(
-                            "Access key created for user '{}' (id={})",
+                            "API key created for user '{}' (id={})",
                             user.username, user.id
                         );
-                        println!("Key: {}", access_key.apikey);
+                        println!("Key: {}", api_key.apikey);
                     }
                     Err(e) => {
-                        eprintln!("Error creating access key for user '{}': {}", username, e);
+                        eprintln!("Error creating API key for user '{}': {}", username, e);
                         std::process::exit(1);
                     }
                 }

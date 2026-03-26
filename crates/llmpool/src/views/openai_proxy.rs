@@ -30,12 +30,12 @@ use apalis_redis::RedisStorage;
 use crate::db::{self, DbPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
-use crate::models::{AccessKey, CapacityOption, User};
+use crate::models::{CapacityOption, OpenAIAPIKey, User};
 use crate::openai::session_tracer::SessionTracer;
 
 tokio::task_local! {
     pub static USER: User;
-    pub static ACCESS_KEY: AccessKey;
+    pub static OPENAI_API_KEY: OpenAIAPIKey;
 }
 
 // --- Server State ---
@@ -93,8 +93,8 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 1: Look up the access key by apikey
-    let access_key = match db::api::find_active_access_key_by_apikey(&state.pool, token).await {
+    // Step 1: Look up the API key by apikey
+    let access_key = match db::api::find_active_api_key_by_apikey(&state.pool, token).await {
         Ok(Some(key)) => key,
         Ok(None) => {
             return auth_error_response(
@@ -154,7 +154,7 @@ async fn auth_openai_api(
     }
 
     // Step 5: Set task-local variables and proceed
-    ACCESS_KEY
+    OPENAI_API_KEY
         .scope(access_key, USER.scope(user, next.run(request)))
         .await
 }

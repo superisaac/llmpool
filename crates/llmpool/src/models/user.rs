@@ -21,3 +21,10 @@ pub struct User {
 pub struct NewUser {
     pub username: String,
 }
+
+/// Used to update an existing user
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateUser {
+    pub username: Option<String>,
+    pub is_active: Option<bool>,
+}
