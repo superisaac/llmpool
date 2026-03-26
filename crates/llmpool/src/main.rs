@@ -80,6 +80,7 @@ enum AdminCommands {
 #[derive(Debug, Serialize)]
 struct AdminClaims {
     sub: String,
+    realm: String,
     iat: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     exp: Option<u64>,
@@ -217,6 +218,7 @@ async fn main() {
 
                 let claims = AdminClaims {
                     sub: subject,
+                    realm: "api".to_string(),
                     iat: now,
                     exp,
                 };

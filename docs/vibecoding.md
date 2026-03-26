@@ -141,3 +141,7 @@ ADMIN api 增加如下命令
 
 llmpool-ctl 添加以下命令
 1. llmpool-ctl user update --user <username_or_id> [--username <username>] [--is-active <is-active>]
+
+
+=========
+jwt token 需要添加realm=api, 在auth的时候要检查realm 是否等于"api"

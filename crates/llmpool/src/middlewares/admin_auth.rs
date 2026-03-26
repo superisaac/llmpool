@@ -18,6 +18,7 @@ struct Claims {
     sub: Option<String>,
     #[allow(dead_code)]
     exp: Option<usize>,
+    realm: Option<String>,
 }
 
 /// Build a JSON error response (used internally by the middleware)
@@ -73,7 +74,19 @@ pub async fn auth_jwt(request: Request, next: Next) -> Response {
     validation.validate_exp = false;
 
     match decode::<Claims>(token, &decoding_key, &validation) {
-        Ok(_) => next.run(request).await,
+        Ok(token_data) => {
+            // Check that the realm claim is "api"
+            match token_data.claims.realm.as_deref() {
+                Some("api") => next.run(request).await,
+                _ => {
+                    warn!("JWT token has invalid or missing realm claim");
+                    error_response(
+                        StatusCode::UNAUTHORIZED,
+                        "Invalid JWT token: realm must be 'api'",
+                    )
+                }
+            }
+        }
         Err(e) => {
             warn!(error = %e, "JWT validation failed");
             error_response(StatusCode::UNAUTHORIZED, "Invalid JWT token")
