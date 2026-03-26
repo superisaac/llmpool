@@ -129,8 +129,8 @@ llmpool-ctl 添加以下命令
 AccessKey增加一个字段 label，用于记录该key的用途。 直接修改migraion 文件，不用新建migration文件。
 
 llmpool-ctl 添加以下命令
-1. llmpool-ctl apikeys list --user <username_or_id>，显示用户的apikey列表
-1. llmpool-ctl apikeys add --user <username_or_id> --label <label>，新增一个apikey
+1. llmpool-ctl apikey list --user <username_or_id>，显示用户的apikey列表
+1. llmpool-ctl apikey add --user <username_or_id> --label <label>，新增一个apikey
 1. llmpool-ctl user show --user <username_or_id>, 显示用户信息
 
 =========
@@ -142,6 +142,26 @@ ADMIN api 增加如下命令
 llmpool-ctl 添加以下命令
 1. llmpool-ctl user update --user <username_or_id> [--username <username>] [--is-active <is-active>]
 
-
 =========
 jwt token 需要添加realm=api, 在auth的时候要检查realm 是否等于"api"
+
+=========
+实现 endpoint tags操作的 admin api
+1. GET /api/v1/endpoints/:endpoint_id/tags, 获得endpoint的tags列表
+1. POST /api/v1/endpoints/:endpoint_id/tags, 添加一个tag
+1. DELETE /api/v1/endpoints/:endpoint_id/tags/:tag, 删除一个tag
+
+实现 admin api GET /api/v1/endpoint_by_name/:name, 通过endpoint name 获得endpoint 信息
+
+llmpool-ctl 添加以下命令
+1. llmpool-ctl endpoint listtags --endpoint <endpoint_name_or_id>, 显示endpoint的tags列表
+1. llmpool-ctl endpoint addtag --endpoint <endpoint_name_or_id> --tag <tag>, 添加一个tag
+1. llmpool-ctl endpoint deltag --endpoint <endpoint_name_or_id> --tag <tag>, 删除一个tag
+
+<endpoint_name_or_id> 如果是名字，则通过/endpoint_by_name 查找endpoint_id, 命令 llmpool-ctl endpoint update 也修改成这种参数
+
+=========
+llmpool-ctl root 程序支持命令行参数 --format <format>, <format> 可以是"", 和"json", 如果是"json", 则输出json格式的响应。
+
+=========
+将一级子命令分拆到不同文件中，比如 endpoint xxx 命令可以放在 cmds/endpoint.rs 中, ...

@@ -6,7 +6,7 @@ use axum::{
     http::StatusCode,
     middleware,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use bigdecimal::BigDecimal;
 use serde::{Deserialize, Serialize};
@@ -1104,6 +1104,31 @@ async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
 /// Valid status values for an endpoint
 const VALID_ENDPOINT_STATUSES: &[&str] = &["online", "offline", "maintenance"];
 
+/// GET /api/v1/endpoint_by_name/:name
+///
+/// Returns a single endpoint by its name.
+async fn get_endpoint_by_name(
+    State(state): State<Arc<AppState>>,
+    Path(name): Path<String>,
+) -> Response {
+    match db::openai::get_endpoint_by_name(&state.pool, &name).await {
+        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with name '{}' not found", name),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get endpoint by name");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query endpoint",
+            )
+        }
+    }
+}
+
 /// GET /api/v1/endpoints/:endpoint_id
 ///
 /// Returns a single endpoint by its ID.
@@ -1683,6 +1708,121 @@ async fn create_credit(
         .into_response()
 }
 
+// --- Endpoint Tags Handlers ---
+
+/// Response DTO for endpoint tags
+#[derive(Serialize)]
+struct TagsResponse {
+    endpoint_id: i32,
+    tags: Vec<String>,
+}
+
+/// Request body for adding a tag to an endpoint
+#[derive(Deserialize)]
+struct AddTagRequest {
+    tag: String,
+}
+
+/// GET /api/v1/endpoints/:endpoint_id/tags
+///
+/// Returns the list of tags for a given endpoint.
+async fn list_endpoint_tags(
+    State(state): State<Arc<AppState>>,
+    Path(endpoint_id): Path<i32>,
+) -> Response {
+    match db::openai::get_endpoint_tags(&state.pool, endpoint_id).await {
+        Ok(tags) => Json(TagsResponse { endpoint_id, tags }).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with id {} not found", endpoint_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get endpoint tags");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query endpoint tags",
+            )
+        }
+    }
+}
+
+/// POST /api/v1/endpoints/:endpoint_id/tags
+///
+/// Adds a tag to the specified endpoint. If the tag already exists, it is not duplicated.
+///
+/// Request body (JSON):
+/// - `tag` (required): The tag string to add
+async fn add_endpoint_tag(
+    State(state): State<Arc<AppState>>,
+    Path(endpoint_id): Path<i32>,
+    Json(payload): Json<AddTagRequest>,
+) -> Response {
+    if payload.tag.trim().is_empty() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "Tag cannot be empty",
+        );
+    }
+
+    let tag = payload.tag.trim();
+
+    match db::openai::add_endpoint_tag(&state.pool, endpoint_id, tag).await {
+        Ok(endpoint) => (
+            StatusCode::OK,
+            Json(TagsResponse {
+                endpoint_id,
+                tags: endpoint.tags,
+            }),
+        )
+            .into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with id {} not found", endpoint_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to add tag to endpoint");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to add tag to endpoint",
+            )
+        }
+    }
+}
+
+/// DELETE /api/v1/endpoints/:endpoint_id/tags/:tag
+///
+/// Removes a tag from the specified endpoint.
+async fn remove_endpoint_tag(
+    State(state): State<Arc<AppState>>,
+    Path((endpoint_id, tag)): Path<(i32, String)>,
+) -> Response {
+    match db::openai::remove_endpoint_tag(&state.pool, endpoint_id, &tag).await {
+        Ok(endpoint) => Json(TagsResponse {
+            endpoint_id,
+            tags: endpoint.tags,
+        })
+        .into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Endpoint with id {} not found", endpoint_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to remove tag from endpoint");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to remove tag from endpoint",
+            )
+        }
+    }
+}
+
 // --- Router ---
 
 pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChangeTask>) -> Router {
@@ -1712,6 +1852,18 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
             get(list_user_apikeys).post(create_user_apikey),
         )
         .route("/users_by_name/{username}", get(get_user_by_username))
+        .route(
+            "/endpoint_by_name/{name}",
+            get(get_endpoint_by_name),
+        )
+        .route(
+            "/endpoints/{endpoint_id}/tags",
+            get(list_endpoint_tags).post(add_endpoint_tag),
+        )
+        .route(
+            "/endpoints/{endpoint_id}/tags/{tag}",
+            delete(remove_endpoint_tag),
+        )
         .route("/endpoint-tests", post(test_endpoint))
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))

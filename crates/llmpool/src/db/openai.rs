@@ -95,6 +95,19 @@ pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpo
     decrypt_endpoint(endpoint)
 }
 
+/// Get an OpenAI endpoint by name (with decrypted api_key)
+pub async fn get_endpoint_by_name(
+    pool: &DbPool,
+    name: &str,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    let endpoint =
+        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE name = $1")
+            .bind(name)
+            .fetch_one(pool)
+            .await?;
+    decrypt_endpoint(endpoint)
+}
+
 /// Get an OpenAI endpoint by api_base (with decrypted api_key)
 pub async fn get_endpoint_by_api_base(
     pool: &DbPool,
@@ -415,6 +428,63 @@ pub async fn get_endpoint_with_models(
     let endpoint = get_endpoint(pool, endpoint_id).await?;
     let models = list_models_by_endpoint(pool, endpoint_id).await?;
     Ok((endpoint, models))
+}
+
+/// Get the tags of an endpoint by its ID.
+pub async fn get_endpoint_tags(pool: &DbPool, endpoint_id: i32) -> Result<Vec<String>, sqlx::Error> {
+    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
+        "SELECT * FROM openai_endpoints WHERE id = $1",
+    )
+    .bind(endpoint_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(endpoint.tags)
+}
+
+/// Add a tag to an endpoint. Uses array_append and ensures no duplicates.
+/// Returns the updated endpoint.
+pub async fn add_endpoint_tag(
+    pool: &DbPool,
+    endpoint_id: i32,
+    tag: &str,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    // Use array_append only if the tag is not already present
+    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
+        "UPDATE openai_endpoints
+         SET tags = CASE
+             WHEN $2 = ANY(tags) THEN tags
+             ELSE array_append(tags, $2)
+         END,
+         updated_at = NOW()
+         WHERE id = $1
+         RETURNING *",
+    )
+    .bind(endpoint_id)
+    .bind(tag)
+    .fetch_one(pool)
+    .await?;
+    decrypt_endpoint(endpoint)
+}
+
+/// Remove a tag from an endpoint. Uses array_remove.
+/// Returns the updated endpoint.
+pub async fn remove_endpoint_tag(
+    pool: &DbPool,
+    endpoint_id: i32,
+    tag: &str,
+) -> Result<OpenAIEndpoint, sqlx::Error> {
+    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
+        "UPDATE openai_endpoints
+         SET tags = array_remove(tags, $2),
+         updated_at = NOW()
+         WHERE id = $1
+         RETURNING *",
+    )
+    .bind(endpoint_id)
+    .bind(tag)
+    .fetch_one(pool)
+    .await?;
+    decrypt_endpoint(endpoint)
 }
 
 /// Find all OpenAI endpoints that contain the given tag in their tags array.
