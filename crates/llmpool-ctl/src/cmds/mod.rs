@@ -3,6 +3,7 @@ pub mod consumer;
 pub mod endpoint;
 pub mod fund;
 pub mod model;
+pub mod session_event;
 
 use serde::Deserialize;
 
@@ -12,12 +13,14 @@ pub use consumer::ConsumerAction;
 pub use endpoint::EndpointAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
+pub use session_event::SessionEventAction;
 
 pub use apikey::handle_apikey;
 pub use consumer::handle_consumer;
 pub use endpoint::handle_endpoint;
 pub use fund::handle_fund;
 pub use model::handle_model;
+pub use session_event::handle_session_event;
 
 // ============================================================
 // Common API Response Types
@@ -230,10 +233,15 @@ pub async fn resolve_endpoint_id(
 }
 
 /// Resolve a consumer name or consumer ID string to a numeric consumer ID.
-pub async fn resolve_consumer_id(consumer: &str, client: &crate::client::ApiClient) -> Result<i32, String> {
+pub async fn resolve_consumer_id(
+    consumer: &str,
+    client: &crate::client::ApiClient,
+) -> Result<i32, String> {
     if let Ok(id) = consumer.parse::<i32>() {
         return Ok(id);
     }
-    let resp: ConsumerResponse = client.get(&format!("/consumers_by_name/{}", consumer)).await?;
+    let resp: ConsumerResponse = client
+        .get(&format!("/consumers_by_name/{}", consumer))
+        .await?;
     Ok(resp.id)
 }

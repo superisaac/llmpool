@@ -309,17 +309,18 @@ async fn list_consumers(
     };
 
     // Get paginated consumers
-    let consumers = match db::consumer::list_consumers_paginated(&state.pool, offset, page_size).await {
-        Ok(consumers) => consumers,
-        Err(e) => {
-            warn!(error = %e, "Failed to list consumers");
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database_error",
-                "Failed to query consumers",
-            );
-        }
-    };
+    let consumers =
+        match db::consumer::list_consumers_paginated(&state.pool, offset, page_size).await {
+            Ok(consumers) => consumers,
+            Err(e) => {
+                warn!(error = %e, "Failed to list consumers");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to query consumers",
+                );
+            }
+        };
 
     let total_pages = if total == 0 {
         0
@@ -413,7 +414,8 @@ async fn create_consumer(
                 Ok(change) => change,
                 Err(e) => {
                     warn!(error = %e, consumer_id = consumer.id, "Failed to serialize initial credit content");
-                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer))).into_response();
+                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer)))
+                        .into_response();
                 }
             };
 
@@ -426,7 +428,8 @@ async fn create_consumer(
                 Ok(bc) => bc,
                 Err(e) => {
                     warn!(error = %e, consumer_id = consumer.id, "Failed to create initial credit balance change record");
-                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer))).into_response();
+                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer)))
+                        .into_response();
                 }
             };
 
@@ -451,7 +454,10 @@ async fn create_consumer(
 /// GET /api/v1/consumers/:consumer_id
 ///
 /// Returns a single consumer by their ID.
-async fn get_consumer_by_id(State(state): State<Arc<AppState>>, Path(consumer_id): Path<i32>) -> Response {
+async fn get_consumer_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(consumer_id): Path<i32>,
+) -> Response {
     match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(consumer)) => Json(ConsumerResponse::from(consumer)).into_response(),
         Ok(None) => error_response(
@@ -564,7 +570,10 @@ async fn get_consumer_by_name(
 ///
 /// Returns the fund (asset) information for a given consumer.
 /// If the consumer has no fund record yet, returns a default fund with zero balances.
-async fn get_consumer_fund(State(state): State<Arc<AppState>>, Path(consumer_id): Path<i32>) -> Response {
+async fn get_consumer_fund(
+    State(state): State<Arc<AppState>>,
+    Path(consumer_id): Path<i32>,
+) -> Response {
     // Verify the consumer exists
     match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(_)) => {}
@@ -663,20 +672,24 @@ async fn list_consumer_apikeys(
     };
 
     // Get paginated API keys
-    let keys =
-        match db::api::list_api_keys_by_consumer_paginated(&state.pool, consumer_id, offset, page_size)
-            .await
-        {
-            Ok(keys) => keys,
-            Err(e) => {
-                warn!(error = %e, "Failed to list API keys for consumer");
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "database_error",
-                    "Failed to query API keys",
-                );
-            }
-        };
+    let keys = match db::api::list_api_keys_by_consumer_paginated(
+        &state.pool,
+        consumer_id,
+        offset,
+        page_size,
+    )
+    .await
+    {
+        Ok(keys) => keys,
+        Err(e) => {
+            warn!(error = %e, "Failed to list API keys for consumer");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query API keys",
+            );
+        }
+    };
 
     let total_pages = if total == 0 {
         0
@@ -1860,6 +1873,120 @@ async fn remove_endpoint_tag(
     }
 }
 
+// --- Session Event Response DTO ---
+
+/// Response DTO for a session event
+#[derive(Serialize)]
+struct SessionEventResponse {
+    id: i64,
+    session_id: String,
+    session_index: i32,
+    consumer_id: i32,
+    model_id: i32,
+    api_key_id: i32,
+    event_data: serde_json::Value,
+    created_at: String,
+}
+
+impl From<crate::models::SessionEvent> for SessionEventResponse {
+    fn from(e: crate::models::SessionEvent) -> Self {
+        Self {
+            id: e.id,
+            session_id: e.session_id,
+            session_index: e.session_index,
+            consumer_id: e.consumer_id,
+            model_id: e.model_id,
+            api_key_id: e.api_key_id,
+            event_data: e.event_data,
+            created_at: e.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+// --- Session Event Query Params ---
+
+#[derive(Debug, Deserialize)]
+struct ListSessionEventsParams {
+    /// Filter by session_id
+    session: Option<String>,
+    /// Page number (1-based), defaults to 1
+    #[serde(default = "default_page")]
+    page: i64,
+    /// Number of items per page, defaults to 20
+    #[serde(default = "default_page_size")]
+    page_size: i64,
+}
+
+// --- Session Event Handler ---
+
+/// GET /api/v1/sessionevents
+///
+/// Returns a paginated list of session events with optional session_id filter.
+///
+/// Query parameters:
+/// - `session` (optional): Filter by session_id
+/// - `page` (optional, default: 1): Page number (1-based)
+/// - `page_size` (optional, default: 20, max: 100): Number of items per page
+async fn list_session_events(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<ListSessionEventsParams>,
+) -> Response {
+    let page = if params.page < 1 { 1 } else { params.page };
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
+    let offset = (page - 1) * page_size;
+
+    let session_ref = params.session.as_deref();
+
+    // Get total count
+    let total = match db::session_event::count_session_events(&state.pool, session_ref).await {
+        Ok(count) => count,
+        Err(e) => {
+            warn!(error = %e, "Failed to count session events");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query session events",
+            );
+        }
+    };
+
+    // Get paginated session events
+    let events =
+        match db::session_event::list_session_events(&state.pool, session_ref, offset, page_size)
+            .await
+        {
+            Ok(events) => events,
+            Err(e) => {
+                warn!(error = %e, "Failed to list session events");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to query session events",
+                );
+            }
+        };
+
+    let total_pages = if total == 0 {
+        0
+    } else {
+        (total + page_size - 1) / page_size
+    };
+
+    let data: Vec<SessionEventResponse> =
+        events.into_iter().map(SessionEventResponse::from).collect();
+
+    Json(PaginatedResponse {
+        data,
+        pagination: PaginationInfo {
+            page,
+            page_size,
+            total,
+            total_pages,
+        },
+    })
+    .into_response()
+}
+
 // --- Router ---
 
 pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChangeTask>) -> Router {
@@ -1899,6 +2026,7 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
             delete(remove_endpoint_tag),
         )
         .route("/endpoint-tests", post(test_endpoint))
+        .route("/sessionevents", get(list_session_events))
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))
         .route("/credits", post(create_credit))

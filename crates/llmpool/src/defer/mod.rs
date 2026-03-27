@@ -39,6 +39,7 @@ pub struct OpenAIEventTask {
     pub session_index: i32,
     pub consumer_id: i32,
     pub model_id: i32,
+    pub api_key_id: i32,
     pub event_data: OpenAIEventData,
 }
 

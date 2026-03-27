@@ -8,8 +8,8 @@ pub async fn create_session_event(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, event_data)
-         VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data
          RETURNING *",
     )
@@ -17,6 +17,7 @@ pub async fn create_session_event(
     .bind(new_event.session_index)
     .bind(new_event.consumer_id)
     .bind(new_event.model_id)
+    .bind(new_event.api_key_id)
     .bind(&new_event.event_data)
     .fetch_one(pool)
     .await
@@ -28,8 +29,8 @@ pub async fn create_session_event_with_tx(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, event_data)
-         VALUES ($1, $2, $3, $4, $5)
+        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data
          RETURNING *",
     )
@@ -37,9 +38,55 @@ pub async fn create_session_event_with_tx(
     .bind(new_event.session_index)
     .bind(new_event.consumer_id)
     .bind(new_event.model_id)
+    .bind(new_event.api_key_id)
     .bind(&new_event.event_data)
     .fetch_one(&mut **tx)
     .await
+}
+
+/// List session events with optional session_id filter, paginated
+pub async fn list_session_events(
+    pool: &DbPool,
+    session_id: Option<&str>,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<SessionEvent>, sqlx::Error> {
+    if let Some(sid) = session_id {
+        sqlx::query_as::<_, SessionEvent>(
+            "SELECT * FROM session_events WHERE session_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+        )
+        .bind(sid)
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query_as::<_, SessionEvent>(
+            "SELECT * FROM session_events ORDER BY id DESC LIMIT $1 OFFSET $2",
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(pool)
+        .await
+    }
+}
+
+/// Count session events with optional session_id filter
+pub async fn count_session_events(
+    pool: &DbPool,
+    session_id: Option<&str>,
+) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = if let Some(sid) = session_id {
+        sqlx::query_as("SELECT COUNT(*) FROM session_events WHERE session_id = $1")
+            .bind(sid)
+            .fetch_one(pool)
+            .await?
+    } else {
+        sqlx::query_as("SELECT COUNT(*) FROM session_events")
+            .fetch_one(pool)
+            .await?
+    };
+    Ok(row.0)
 }
 
 /// Find a balance change by its ID

@@ -132,7 +132,9 @@ pub async fn handle_consumer(
                 let resp: ConsumerResponse = if let Ok(id) = consumer.parse::<i32>() {
                     client.get(&format!("/consumers/{}", id)).await?
                 } else {
-                    client.get(&format!("/consumers_by_name/{}", consumer)).await?
+                    client
+                        .get(&format!("/consumers_by_name/{}", consumer))
+                        .await?
                 };
                 print_consumer_info(&resp);
             }
@@ -153,17 +155,16 @@ pub async fn handle_consumer(
             is_active,
         } => {
             let consumer_id = resolve_consumer_id(&consumer, client).await?;
-            let body = UpdateConsumerRequestBody {
-                name,
-                is_active,
-            };
+            let body = UpdateConsumerRequestBody { name, is_active };
             if json_output {
                 let raw = client
                     .put_raw(&format!("/consumers/{}", consumer_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: ConsumerResponse = client.put(&format!("/consumers/{}", consumer_id), &body).await?;
+                let resp: ConsumerResponse = client
+                    .put(&format!("/consumers/{}", consumer_id), &body)
+                    .await?;
                 println!("Consumer updated successfully!");
                 println!();
                 print_consumer_info(&resp);

@@ -1,7 +1,9 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate};
+use super::{
+    OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate,
+};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -95,8 +97,9 @@ pub async fn handle_apikey(
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<OpenAIAPIKeyResponse> =
-                    client.get(&format!("/consumers/{}/apikeys", consumer_id)).await?;
+                let resp: PaginatedResponse<OpenAIAPIKeyResponse> = client
+                    .get(&format!("/consumers/{}/apikeys", consumer_id))
+                    .await?;
                 print_apikeys(&resp.data);
                 print_pagination(&resp.pagination);
             }

@@ -81,6 +81,7 @@ pub async fn handle_openai_event(
         session_index: event.session_index,
         consumer_id,
         model_id,
+        api_key_id: event.api_key_id,
         event_data: event_data_json,
     };
 
@@ -140,18 +141,18 @@ pub async fn handle_openai_event(
 
         let content = BalanceChangeContent::SpendToken(spend_token);
         let unique_request_id = format!("spendtoken-{}-{}", event.session_id, event.session_index);
-        let new_change = match NewBalanceChange::from_content(consumer_id, unique_request_id, &content)
-        {
-            Ok(change) => change,
-            Err(e) => {
-                warn!(
-                    error = %e,
-                    session_id = %session_id,
-                    "Failed to serialize balance change content"
-                );
-                return;
-            }
-        };
+        let new_change =
+            match NewBalanceChange::from_content(consumer_id, unique_request_id, &content) {
+                Ok(change) => change,
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        session_id = %session_id,
+                        "Failed to serialize balance change content"
+                    );
+                    return;
+                }
+            };
 
         // 3. Create the balance change record
         let balance_change =

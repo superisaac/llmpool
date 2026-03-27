@@ -282,9 +282,7 @@ async fn main() {
                 }
 
                 // Create the consumer
-                let new_consumer = models::NewConsumer {
-                    name: name.clone(),
-                };
+                let new_consumer = models::NewConsumer { name: name.clone() };
 
                 match db::consumer::create_consumer(&pool, &new_consumer).await {
                     Ok(consumer) => {

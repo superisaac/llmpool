@@ -51,11 +51,10 @@ pub async fn count_api_keys_by_consumer(
     pool: &DbPool,
     consumer_id: i32,
 ) -> Result<i64, sqlx::Error> {
-    let row: (i64,) =
-        sqlx::query_as("SELECT COUNT(*) FROM openai_api_keys WHERE consumer_id = $1")
-            .bind(consumer_id)
-            .fetch_one(pool)
-            .await?;
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_api_keys WHERE consumer_id = $1")
+        .bind(consumer_id)
+        .fetch_one(pool)
+        .await?;
     Ok(row.0)
 }
 

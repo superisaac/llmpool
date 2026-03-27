@@ -96,7 +96,11 @@ pub async fn apply_balance_change_with_tx(
                 let remaining_after_cash = &consumer_fund.cash - &remainder;
                 if remaining_after_cash >= zero {
                     // Cash covers the remainder
-                    (remaining_after_cash, zero.clone(), consumer_fund.debt.clone())
+                    (
+                        remaining_after_cash,
+                        zero.clone(),
+                        consumer_fund.debt.clone(),
+                    )
                 } else {
                     // Cash is also exhausted, add deficit to debt
                     let deficit = zero.clone() - &remaining_after_cash;
@@ -119,11 +123,19 @@ pub async fn apply_balance_change_with_tx(
                 } else {
                     // Deposit covers all debt, remainder goes to cash
                     let surplus = zero.clone() - &remaining_debt;
-                    (&consumer_fund.cash + &surplus, consumer_fund.credit.clone(), zero)
+                    (
+                        &consumer_fund.cash + &surplus,
+                        consumer_fund.credit.clone(),
+                        zero,
+                    )
                 }
             } else {
                 let new_bal = &consumer_fund.cash + amount;
-                (new_bal, consumer_fund.credit.clone(), consumer_fund.debt.clone())
+                (
+                    new_bal,
+                    consumer_fund.credit.clone(),
+                    consumer_fund.debt.clone(),
+                )
             }
         }
         BalanceChangeContent::Withdraw { amount } => {
@@ -131,9 +143,17 @@ pub async fn apply_balance_change_with_tx(
             let remaining = &consumer_fund.cash - amount;
             if remaining < zero {
                 let deficit = zero.clone() - &remaining;
-                (zero, consumer_fund.credit.clone(), &consumer_fund.debt + &deficit)
+                (
+                    zero,
+                    consumer_fund.credit.clone(),
+                    &consumer_fund.debt + &deficit,
+                )
             } else {
-                (remaining, consumer_fund.credit.clone(), consumer_fund.debt.clone())
+                (
+                    remaining,
+                    consumer_fund.credit.clone(),
+                    consumer_fund.debt.clone(),
+                )
             }
         }
         BalanceChangeContent::Credit { amount } => {
@@ -150,11 +170,19 @@ pub async fn apply_balance_change_with_tx(
                 } else {
                     // Credit covers all debt, remainder goes to credit field
                     let surplus = zero.clone() - &remaining_debt;
-                    (consumer_fund.cash.clone(), &consumer_fund.credit + &surplus, zero)
+                    (
+                        consumer_fund.cash.clone(),
+                        &consumer_fund.credit + &surplus,
+                        zero,
+                    )
                 }
             } else {
                 let new_credit = &consumer_fund.credit + amount;
-                (consumer_fund.cash.clone(), new_credit, consumer_fund.debt.clone())
+                (
+                    consumer_fund.cash.clone(),
+                    new_credit,
+                    consumer_fund.debt.clone(),
+                )
             }
         }
     };

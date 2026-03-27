@@ -122,10 +122,14 @@ pub async fn handle_fund(
         FundAction::Show { consumer } => {
             let consumer_id = resolve_consumer_id(&consumer, client).await?;
             if json_output {
-                let raw = client.get_raw(&format!("/consumers/{}/fund", consumer_id)).await?;
+                let raw = client
+                    .get_raw(&format!("/consumers/{}/fund", consumer_id))
+                    .await?;
                 println!("{}", raw);
             } else {
-                let resp: FundResponse = client.get(&format!("/consumers/{}/fund", consumer_id)).await?;
+                let resp: FundResponse = client
+                    .get(&format!("/consumers/{}/fund", consumer_id))
+                    .await?;
                 print_fund_detail(&resp);
             }
         }

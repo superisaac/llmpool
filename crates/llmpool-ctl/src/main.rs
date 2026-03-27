@@ -5,8 +5,9 @@ mod client;
 mod cmds;
 
 use cmds::{
-    ApiKeyAction, ConsumerAction, EndpointAction, FundAction, ModelAction, handle_apikey,
-    handle_consumer, handle_endpoint, handle_fund, handle_model,
+    ApiKeyAction, ConsumerAction, EndpointAction, FundAction, ModelAction, SessionEventAction,
+    handle_apikey, handle_consumer, handle_endpoint, handle_fund, handle_model,
+    handle_session_event,
 };
 
 // ============================================================
@@ -54,6 +55,11 @@ enum Commands {
         #[command(subcommand)]
         action: FundAction,
     },
+    /// Manage session events
+    Sessionevents {
+        #[command(subcommand)]
+        action: SessionEventAction,
+    },
 }
 
 // ============================================================
@@ -94,6 +100,9 @@ async fn main() {
         Commands::Consumer { action } => handle_consumer(action, &api_client, json_output).await,
         Commands::Apikey { action } => handle_apikey(action, &api_client, json_output).await,
         Commands::Fund { action } => handle_fund(action, &api_client, json_output).await,
+        Commands::Sessionevents { action } => {
+            handle_session_event(action, &api_client, json_output).await
+        }
     };
 
     if let Err(e) = result {

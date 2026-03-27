@@ -11,12 +11,18 @@ pub struct SessionTracer {
     pub session_index: i32,
     pub consumer_id: i32,
     pub model_id: i32,
+    pub api_key_id: i32,
     pub storage: RedisStorage<OpenAIEventTask>,
 }
 
 impl SessionTracer {
     /// Create a new SessionTracer with a UUIDv7-based session_id
-    pub fn new(storage: RedisStorage<OpenAIEventTask>, consumer_id: i32, model_id: i32) -> Self {
+    pub fn new(
+        storage: RedisStorage<OpenAIEventTask>,
+        consumer_id: i32,
+        model_id: i32,
+        api_key_id: i32,
+    ) -> Self {
         let session_id = Uuid::now_v7().to_string();
         let session_index = 0;
         Self {
@@ -24,6 +30,7 @@ impl SessionTracer {
             session_index,
             consumer_id,
             model_id,
+            api_key_id,
             storage,
         }
     }
@@ -40,6 +47,7 @@ impl SessionTracer {
             session_index,
             consumer_id: self.consumer_id,
             model_id: self.model_id,
+            api_key_id: self.api_key_id,
             event_data: data,
         };
 

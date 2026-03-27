@@ -339,8 +339,15 @@ async fn chat_completions(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
+        let mut tracer = SessionTracer::new(
+            state.event_storage.clone(),
+            consumer_id,
+            *model_db_id,
+            api_key_id,
+        );
         match chat_completions_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {
@@ -429,8 +436,15 @@ async fn generate_images(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
+        let mut tracer = SessionTracer::new(
+            state.event_storage.clone(),
+            consumer_id,
+            *model_db_id,
+            api_key_id,
+        );
         match generate_images_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {
@@ -569,8 +583,15 @@ async fn create_embeddings(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
+        let mut tracer = SessionTracer::new(
+            state.event_storage.clone(),
+            consumer_id,
+            *model_db_id,
+            api_key_id,
+        );
         match create_embeddings_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {

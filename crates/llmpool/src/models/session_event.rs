@@ -11,6 +11,7 @@ pub struct SessionEvent {
     pub session_index: i32,
     pub consumer_id: i32,
     pub model_id: i32,
+    pub api_key_id: i32,
     pub event_data: serde_json::Value,
     pub created_at: NaiveDateTime,
 }
@@ -22,5 +23,6 @@ pub struct NewSessionEvent {
     pub session_index: i32,
     pub consumer_id: i32,
     pub model_id: i32,
+    pub api_key_id: i32,
     pub event_data: serde_json::Value,
 }
