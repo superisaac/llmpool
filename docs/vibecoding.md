@@ -176,3 +176,6 @@ db model User 全局换成Consumer
 SessionEvent 增加一个字段 api_key_id，用于记录该session使用的api_key_id. task_local 对象OPENAI_API_KEY中获得， 可以在session_tracer.rs中加入SessionTracer结构中。
 增加 admin api: GET /api/v1/sessionevents/, 支持session=<session_id>参数 获得SessionEvent列表
 llmpool-ctl sessionevents list [--session <session_id>] 显示SessionEvent列表
+
+========
+给数据库相关操作生成一些test cases

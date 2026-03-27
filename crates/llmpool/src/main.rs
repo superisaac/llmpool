@@ -1,14 +1,9 @@
-mod config;
-mod crypto;
-mod db;
-mod defer;
-mod middlewares;
-mod models;
-
-mod openai;
-mod server;
-mod telemetry;
-mod views;
+use llmpool::config;
+use llmpool::db;
+use llmpool::defer;
+use llmpool::models;
+use llmpool::openai;
+use llmpool::server;
 
 use clap::{Parser, Subcommand};
 use jsonwebtoken::{EncodingKey, Header, encode};

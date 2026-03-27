@@ -209,6 +209,11 @@ cp llmpool.toml.example llmpool.toml
 ./target/release/llmpool serve --bind 0.0.0.0:19324
 ```
 
+## RUN tests
+```
+DATABASE_URL="postgres://localhost/llmpool_test" cargo test --test db_tests -- --list
+```
+
 ## Environment Variables
 
 | Variable | Description | Priority |
