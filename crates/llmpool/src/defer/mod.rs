@@ -37,7 +37,7 @@ pub enum OpenAIEventData {
 pub struct OpenAIEventTask {
     pub session_id: String,
     pub session_index: i32,
-    pub user_id: i32,
+    pub consumer_id: i32,
     pub model_id: i32,
     pub event_data: OpenAIEventData,
 }

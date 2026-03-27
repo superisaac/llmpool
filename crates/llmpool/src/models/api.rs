@@ -10,7 +10,7 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct OpenAIAPIKey {
     pub id: i32,
-    pub user_id: Option<i32>,
+    pub consumer_id: Option<i32>,
     pub apikey: String,
     pub label: String,
     pub is_active: bool,
@@ -22,7 +22,7 @@ pub struct OpenAIAPIKey {
 /// Used to insert a new API key
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewOpenAIAPIKey {
-    pub user_id: Option<i32>,
+    pub consumer_id: Option<i32>,
     pub apikey: String,
     pub label: String,
     pub expires_at: Option<NaiveDateTime>,

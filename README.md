@@ -149,7 +149,7 @@ llmpool openai add --name "OpenAI" --api-key sk-xxx --api-base https://api.opena
 llmpool admin create-user
 
 # Create an API key for a user
-llmpool admin create-api-key <username>
+llmpool admin create-api-key <name>
 
 # Generate a non-expiring admin JWT token
 llmpool admin create-jwt-token
@@ -164,6 +164,8 @@ llmpool admin create-jwt-token --subject admin --expire 86400
 ## API Usage
 
 For detailed API documentation with examples, see the **[API Reference](docs/api.md)**.
+
+For the `llmpool-ctl` CLI management tool documentation, see the **[llmpool-ctl Reference](docs/controls.md)**.
 
 LLMPool provides two sets of APIs:
 
@@ -195,7 +197,7 @@ cp llmpool.toml.example llmpool.toml
 ./target/release/llmpool admin create-user
 
 # 6. Create an API key for the user
-./target/release/llmpool admin create-api-key <username>
+./target/release/llmpool admin create-api-key <name>
 
 # 7. Generate an admin JWT token
 ./target/release/llmpool admin create-jwt-token

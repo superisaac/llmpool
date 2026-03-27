@@ -17,6 +17,7 @@ use crate::db::{self, DbPool};
 use crate::defer::BalanceChangeTask;
 use crate::middlewares::admin_auth;
 use crate::models::{BalanceChangeContent, NewBalanceChange};
+use crate::models::{Consumer, NewConsumer, UpdateConsumer};
 
 // --- Server State ---
 
@@ -119,23 +120,23 @@ impl From<crate::models::OpenAIEndpoint> for EndpointResponse {
     }
 }
 
-// --- User Response DTO ---
+// --- Consumer Response DTO ---
 
-/// Response DTO for a user
+/// Response DTO for a consumer
 #[derive(Serialize)]
-struct UserResponse {
+struct ConsumerResponse {
     id: i32,
-    username: String,
+    name: String,
     is_active: bool,
     created_at: String,
     updated_at: String,
 }
 
-impl From<crate::models::User> for UserResponse {
-    fn from(u: crate::models::User) -> Self {
+impl From<Consumer> for ConsumerResponse {
+    fn from(u: Consumer) -> Self {
         Self {
             id: u.id,
-            username: u.username,
+            name: u.name,
             is_active: u.is_active,
             created_at: u.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: u.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -143,22 +144,22 @@ impl From<crate::models::User> for UserResponse {
     }
 }
 
-/// Request body for creating a new user
+/// Request body for creating a new consumer
 #[derive(Deserialize)]
-struct CreateUserRequest {
-    username: String,
-    /// Optional initial credit amount to add to the user's fund after creation.
+struct CreateConsumerRequest {
+    name: String,
+    /// Optional initial credit amount to add to the consumer's fund after creation.
     /// If greater than zero, a credit balance change will be created and enqueued.
     initial_credit: Option<BigDecimal>,
 }
 
 // --- Fund Response DTO ---
 
-/// Response DTO for a user's fund
+/// Response DTO for a consumer's fund
 #[derive(Serialize)]
 struct FundResponse {
     id: i32,
-    user_id: i32,
+    consumer_id: i32,
     cash: String,
     credit: String,
     debt: String,
@@ -170,7 +171,7 @@ impl From<crate::models::Fund> for FundResponse {
     fn from(f: crate::models::Fund) -> Self {
         Self {
             id: f.id,
-            user_id: f.user_id,
+            consumer_id: f.consumer_id,
             cash: f.cash.to_string(),
             credit: f.credit.to_string(),
             debt: f.debt.to_string(),
@@ -186,7 +187,7 @@ impl From<crate::models::Fund> for FundResponse {
 #[derive(Serialize)]
 struct OpenAIAPIKeyResponse {
     id: i32,
-    user_id: Option<i32>,
+    consumer_id: Option<i32>,
     apikey: String,
     label: String,
     is_active: bool,
@@ -199,7 +200,7 @@ impl From<crate::models::OpenAIAPIKey> for OpenAIAPIKeyResponse {
     fn from(ak: crate::models::OpenAIAPIKey) -> Self {
         Self {
             id: ak.id,
-            user_id: ak.user_id,
+            consumer_id: ak.consumer_id,
             apikey: ak.apikey,
             label: ak.label,
             is_active: ak.is_active,
@@ -279,14 +280,14 @@ async fn list_endpoints(
 
 // --- User Handlers ---
 
-/// GET /api/v1/users
+/// GET /api/v1/consumers
 ///
-/// Returns a paginated list of users.
+/// Returns a paginated list of consumers.
 ///
 /// Query parameters:
 /// - `page` (optional, default: 1): Page number (1-based)
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
-async fn list_users(
+async fn list_consumers(
     State(state): State<Arc<AppState>>,
     Query(params): Query<PaginationParams>,
 ) -> Response {
@@ -295,27 +296,27 @@ async fn list_users(
     let offset = (page - 1) * page_size;
 
     // Get total count
-    let total = match db::user::count_users(&state.pool).await {
+    let total = match db::consumer::count_consumers(&state.pool).await {
         Ok(count) => count,
         Err(e) => {
-            warn!(error = %e, "Failed to count users");
+            warn!(error = %e, "Failed to count consumers");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query users",
+                "Failed to query consumers",
             );
         }
     };
 
-    // Get paginated users
-    let users = match db::user::list_users_paginated(&state.pool, offset, page_size).await {
-        Ok(users) => users,
+    // Get paginated consumers
+    let consumers = match db::consumer::list_consumers_paginated(&state.pool, offset, page_size).await {
+        Ok(consumers) => consumers,
         Err(e) => {
-            warn!(error = %e, "Failed to list users");
+            warn!(error = %e, "Failed to list consumers");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query users",
+                "Failed to query consumers",
             );
         }
     };
@@ -326,7 +327,7 @@ async fn list_users(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<UserResponse> = users.into_iter().map(UserResponse::from).collect();
+    let data: Vec<ConsumerResponse> = consumers.into_iter().map(ConsumerResponse::from).collect();
 
     Json(PaginatedResponse {
         data,
@@ -340,23 +341,23 @@ async fn list_users(
     .into_response()
 }
 
-/// POST /api/v1/users
+/// POST /api/v1/consumers
 ///
-/// Creates a new user.
+/// Creates a new consumer.
 ///
 /// Request body (JSON):
-/// - `username` (required): The username for the new user
-/// - `initial_credit` (optional): Initial credit amount to add to the user's fund.
+/// - `name` (required): The name for the new consumer
+/// - `initial_credit` (optional): Initial credit amount to add to the consumer's fund.
 ///   If greater than zero, a credit balance change will be created and applied asynchronously.
-async fn create_user(
+async fn create_consumer(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<CreateUserRequest>,
+    Json(payload): Json<CreateConsumerRequest>,
 ) -> Response {
-    if payload.username.trim().is_empty() {
+    if payload.name.trim().is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
             "validation_error",
-            "Username cannot be empty",
+            "Name cannot be empty",
         );
     }
 
@@ -371,28 +372,28 @@ async fn create_user(
         }
     }
 
-    let new_user = crate::models::NewUser {
-        username: payload.username.trim().to_string(),
+    let new_consumer = NewConsumer {
+        name: payload.name.trim().to_string(),
     };
 
-    let user = match db::user::create_user(&state.pool, &new_user).await {
-        Ok(user) => user,
+    let consumer = match db::consumer::create_consumer(&state.pool, &new_consumer).await {
+        Ok(consumer) => consumer,
         Err(e) => {
             // Check for unique constraint violation
             if let sqlx::Error::Database(ref db_err) = e {
-                if db_err.constraint() == Some("idx_users_username") {
+                if db_err.constraint() == Some("idx_consumers_name") {
                     return error_response(
                         StatusCode::CONFLICT,
                         "duplicate_error",
-                        "A user with this username already exists",
+                        "A consumer with this name already exists",
                     );
                 }
             }
-            warn!(error = %e, "Failed to create user");
+            warn!(error = %e, "Failed to create consumer");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to create user",
+                "Failed to create consumer",
             );
         }
     };
@@ -403,17 +404,16 @@ async fn create_user(
             let content = BalanceChangeContent::Credit {
                 amount: initial_credit.clone(),
             };
-            let unique_request_id = format!("initial-credit-{}", user.id);
+            let unique_request_id = format!("initial-credit-{}", consumer.id);
             let new_change = match NewBalanceChange::from_content(
-                user.id,
+                consumer.id,
                 unique_request_id,
                 &content,
             ) {
                 Ok(change) => change,
                 Err(e) => {
-                    warn!(error = %e, user_id = user.id, "Failed to serialize initial credit content");
-                    // User was created successfully, but credit failed — still return the user
-                    return (StatusCode::CREATED, Json(UserResponse::from(user))).into_response();
+                    warn!(error = %e, consumer_id = consumer.id, "Failed to serialize initial credit content");
+                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer))).into_response();
                 }
             };
 
@@ -425,8 +425,8 @@ async fn create_user(
             {
                 Ok(bc) => bc,
                 Err(e) => {
-                    warn!(error = %e, user_id = user.id, "Failed to create initial credit balance change record");
-                    return (StatusCode::CREATED, Json(UserResponse::from(user))).into_response();
+                    warn!(error = %e, consumer_id = consumer.id, "Failed to create initial credit balance change record");
+                    return (StatusCode::CREATED, Json(ConsumerResponse::from(consumer))).into_response();
                 }
             };
 
@@ -437,7 +437,7 @@ async fn create_user(
             if let Err(e) = storage.push(task).await {
                 warn!(
                     error = %e,
-                    user_id = user.id,
+                    consumer_id = consumer.id,
                     balance_change_id = balance_change.id,
                     "Failed to enqueue initial credit balance change task"
                 );
@@ -445,26 +445,26 @@ async fn create_user(
         }
     }
 
-    (StatusCode::CREATED, Json(UserResponse::from(user))).into_response()
+    (StatusCode::CREATED, Json(ConsumerResponse::from(consumer))).into_response()
 }
 
-/// GET /api/v1/users/:user_id
+/// GET /api/v1/consumers/:consumer_id
 ///
-/// Returns a single user by their ID.
-async fn get_user_by_id(State(state): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
-    match db::user::get_user_by_id(&state.pool, user_id).await {
-        Ok(Some(user)) => Json(UserResponse::from(user)).into_response(),
+/// Returns a single consumer by their ID.
+async fn get_consumer_by_id(State(state): State<Arc<AppState>>, Path(consumer_id): Path<i32>) -> Response {
+    match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
+        Ok(Some(consumer)) => Json(ConsumerResponse::from(consumer)).into_response(),
         Ok(None) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("User with id {} not found", user_id),
+            &format!("Consumer with id {} not found", consumer_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             )
         }
     }
@@ -472,87 +472,87 @@ async fn get_user_by_id(State(state): State<Arc<AppState>>, Path(user_id): Path<
 
 /// Request body for updating a user
 #[derive(Deserialize)]
-struct UpdateUserRequest {
-    username: Option<String>,
+struct UpdateConsumerRequest {
+    name: Option<String>,
     is_active: Option<bool>,
 }
 
-/// PUT /api/v1/users/:user_id
+/// PUT /api/v1/consumers/:consumer_id
 ///
-/// Updates an existing user. Only the provided fields will be updated.
+/// Updates an existing consumer. Only the provided fields will be updated.
 ///
 /// Request body (JSON):
-/// - `username` (optional): New username for the user
-/// - `is_active` (optional): Whether the user is active
-async fn update_user_by_id(
+/// - `name` (optional): New name for the consumer
+/// - `is_active` (optional): Whether the consumer is active
+async fn update_consumer_by_id(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
-    Json(payload): Json<UpdateUserRequest>,
+    Path(consumer_id): Path<i32>,
+    Json(payload): Json<UpdateConsumerRequest>,
 ) -> Response {
-    // Validate username if provided
-    if let Some(ref username) = payload.username {
-        if username.trim().is_empty() {
+    // Validate name if provided
+    if let Some(ref name) = payload.name {
+        if name.trim().is_empty() {
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "validation_error",
-                "Username cannot be empty",
+                "Name cannot be empty",
             );
         }
     }
 
-    let update = crate::models::UpdateUser {
-        username: payload.username.map(|u| u.trim().to_string()),
+    let update = UpdateConsumer {
+        name: payload.name.map(|u| u.trim().to_string()),
         is_active: payload.is_active,
     };
 
-    match db::user::update_user(&state.pool, user_id, &update).await {
-        Ok(user) => Json(UserResponse::from(user)).into_response(),
+    match db::consumer::update_consumer(&state.pool, consumer_id, &update).await {
+        Ok(consumer) => Json(ConsumerResponse::from(consumer)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("User with id {} not found", user_id),
+            &format!("Consumer with id {} not found", consumer_id),
         ),
         Err(e) => {
             // Check for unique constraint violation
             if let sqlx::Error::Database(ref db_err) = e {
-                if db_err.constraint() == Some("idx_users_username") {
+                if db_err.constraint() == Some("idx_consumers_name") {
                     return error_response(
                         StatusCode::CONFLICT,
                         "duplicate_error",
-                        "A user with this username already exists",
+                        "A consumer with this name already exists",
                     );
                 }
             }
-            warn!(error = %e, "Failed to update user");
+            warn!(error = %e, "Failed to update consumer");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to update user",
+                "Failed to update consumer",
             )
         }
     }
 }
 
-/// GET /api/v1/users_byname/:username
+/// GET /api/v1/consumers_by_name/:name
 ///
-/// Returns a single user by their username.
-async fn get_user_by_username(
+/// Returns a single consumer by their name.
+async fn get_consumer_by_name(
     State(state): State<Arc<AppState>>,
-    Path(username): Path<String>,
+    Path(name): Path<String>,
 ) -> Response {
-    match db::user::get_user_by_username(&state.pool, &username).await {
-        Ok(Some(user)) => Json(UserResponse::from(user)).into_response(),
+    match db::consumer::get_consumer_by_name(&state.pool, &name).await {
+        Ok(Some(consumer)) => Json(ConsumerResponse::from(consumer)).into_response(),
         Ok(None) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("User with username '{}' not found", username),
+            &format!("Consumer with name '{}' not found", name),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to get user by username");
+            warn!(error = %e, "Failed to get consumer by name");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             )
         }
     }
@@ -560,38 +560,38 @@ async fn get_user_by_username(
 
 // --- Fund Handlers ---
 
-/// GET /api/v1/users/:user_id/fund
+/// GET /api/v1/consumers/:consumer_id/fund
 ///
-/// Returns the fund (asset) information for a given user.
-/// If the user has no fund record yet, returns a default fund with zero balances.
-async fn get_user_fund(State(state): State<Arc<AppState>>, Path(user_id): Path<i32>) -> Response {
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, user_id).await {
+/// Returns the fund (asset) information for a given consumer.
+/// If the consumer has no fund record yet, returns a default fund with zero balances.
+async fn get_consumer_fund(State(state): State<Arc<AppState>>, Path(consumer_id): Path<i32>) -> Response {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", user_id),
+                &format!("Consumer with id {} not found", consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
 
-    match db::fund::find_user_fund(&state.pool, user_id).await {
+    match db::fund::find_consumer_fund(&state.pool, consumer_id).await {
         Ok(Some(fund)) => Json(FundResponse::from(fund)).into_response(),
         Ok(None) => {
-            // User exists but has no fund record yet, return default zero balances
+            // Consumer exists but has no fund record yet, return default zero balances
             Json(FundResponse {
                 id: 0,
-                user_id,
+                consumer_id: consumer_id,
                 cash: "0".to_string(),
                 credit: "0".to_string(),
                 debt: "0".to_string(),
@@ -601,11 +601,11 @@ async fn get_user_fund(State(state): State<Arc<AppState>>, Path(user_id): Path<i
             .into_response()
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get fund for user");
+            warn!(error = %e, "Failed to get fund for consumer");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user fund",
+                "Failed to query consumer fund",
             )
         }
     }
@@ -613,34 +613,34 @@ async fn get_user_fund(State(state): State<Arc<AppState>>, Path(user_id): Path<i
 
 // --- AccessKey Handlers ---
 
-/// GET /api/v1/users/:user_id/apikeys
+/// GET /api/v1/consumers/:consumer_id/apikeys
 ///
-/// Returns a paginated list of API keys for a given user.
+/// Returns a paginated list of API keys for a given consumer.
 ///
 /// Query parameters:
 /// - `page` (optional, default: 1): Page number (1-based)
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
-async fn list_user_apikeys(
+async fn list_consumer_apikeys(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
+    Path(consumer_id): Path<i32>,
     Query(params): Query<PaginationParams>,
 ) -> Response {
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, user_id).await {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", user_id),
+                &format!("Consumer with id {} not found", consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
@@ -649,11 +649,11 @@ async fn list_user_apikeys(
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
     let offset = (page - 1) * page_size;
 
-    // Get total count of API keys for this user
-    let total = match db::api::count_api_keys_by_user(&state.pool, user_id).await {
+    // Get total count of API keys for this consumer
+    let total = match db::api::count_api_keys_by_consumer(&state.pool, consumer_id).await {
         Ok(count) => count,
         Err(e) => {
-            warn!(error = %e, "Failed to count API keys for user");
+            warn!(error = %e, "Failed to count API keys for consumer");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
@@ -664,12 +664,12 @@ async fn list_user_apikeys(
 
     // Get paginated API keys
     let keys =
-        match db::api::list_api_keys_by_user_paginated(&state.pool, user_id, offset, page_size)
+        match db::api::list_api_keys_by_consumer_paginated(&state.pool, consumer_id, offset, page_size)
             .await
         {
             Ok(keys) => keys,
             Err(e) => {
-                warn!(error = %e, "Failed to list API keys for user");
+                warn!(error = %e, "Failed to list API keys for consumer");
                 return error_response(
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "database_error",
@@ -707,41 +707,41 @@ struct CreateApiKeyRequest {
     label: String,
 }
 
-/// POST /api/v1/users/:user_id/apikeys
+/// POST /api/v1/consumers/:consumer_id/apikeys
 ///
-/// Creates a new API key for the specified user.
+/// Creates a new API key for the specified consumer.
 ///
 /// Request body (JSON):
 /// - `label` (optional): A label describing the purpose of this API key
-async fn create_user_apikey(
+async fn create_consumer_apikey(
     State(state): State<Arc<AppState>>,
-    Path(user_id): Path<i32>,
+    Path(consumer_id): Path<i32>,
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> Response {
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, user_id).await {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", user_id),
+                &format!("Consumer with id {} not found", consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
 
-    match db::api::create_api_key_for_user(&state.pool, user_id, &payload.label).await {
+    match db::api::create_api_key_for_consumer(&state.pool, consumer_id, &payload.label).await {
         Ok(key) => (StatusCode::CREATED, Json(OpenAIAPIKeyResponse::from(key))).into_response(),
         Err(e) => {
-            warn!(error = %e, "Failed to create API key for user");
+            warn!(error = %e, "Failed to create API key for consumer");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
@@ -1351,7 +1351,7 @@ async fn update_model_by_id(
 /// Request body for creating a deposit
 #[derive(Deserialize)]
 struct CreateDepositRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1359,7 +1359,7 @@ struct CreateDepositRequest {
 /// Request body for creating a withdrawal
 #[derive(Deserialize)]
 struct CreateWithdrawRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1367,7 +1367,7 @@ struct CreateWithdrawRequest {
 /// Request body for creating a credit
 #[derive(Deserialize)]
 struct CreateCreditRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1376,7 +1376,7 @@ struct CreateCreditRequest {
 #[derive(Serialize)]
 struct BalanceChangeResponse {
     id: i32,
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     content: serde_json::Value,
     is_applied: bool,
@@ -1387,7 +1387,7 @@ impl From<crate::models::BalanceChange> for BalanceChangeResponse {
     fn from(bc: crate::models::BalanceChange) -> Self {
         Self {
             id: bc.id,
-            user_id: bc.user_id,
+            consumer_id: bc.consumer_id,
             unique_request_id: bc.unique_request_id,
             content: bc.content,
             is_applied: bc.is_applied,
@@ -1404,7 +1404,7 @@ impl From<crate::models::BalanceChange> for BalanceChangeResponse {
 /// a BalanceChangeTask to apply it asynchronously.
 ///
 /// Request body (JSON):
-/// - `user_id` (required): The ID of the user to deposit to
+/// - `consumer_id` (required): The ID of the consumer to deposit to
 /// - `amount` (required): The deposit amount (must be positive)
 ///
 /// Returns the balance_change_id of the created deposit.
@@ -1421,22 +1421,22 @@ async fn create_deposit(
         );
     }
 
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, payload.consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", payload.user_id),
+                &format!("Consumer with id {} not found", payload.consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
@@ -1446,7 +1446,7 @@ async fn create_deposit(
         amount: payload.amount.clone(),
     };
     let new_change = match NewBalanceChange::from_content(
-        payload.user_id,
+        payload.consumer_id,
         payload.unique_request_id,
         &content,
     ) {
@@ -1509,7 +1509,7 @@ async fn create_deposit(
 /// a BalanceChange record and enqueues a BalanceChangeTask to apply it asynchronously.
 ///
 /// Request body (JSON):
-/// - `user_id` (required): The ID of the user to withdraw from
+/// - `consumer_id` (required): The ID of the consumer to withdraw from
 /// - `amount` (required): The withdrawal amount (must be positive)
 ///
 /// Returns the created BalanceChange record.
@@ -1526,28 +1526,28 @@ async fn create_withdraw(
         );
     }
 
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, payload.consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", payload.user_id),
+                &format!("Consumer with id {} not found", payload.consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
 
-    // Check that the user's fund has sufficient cash
-    match db::fund::find_user_fund(&state.pool, payload.user_id).await {
+    // Check that the consumer's fund has sufficient cash
+    match db::fund::find_consumer_fund(&state.pool, payload.consumer_id).await {
         Ok(Some(fund)) => {
             if fund.cash < payload.amount {
                 return error_response(
@@ -1586,7 +1586,7 @@ async fn create_withdraw(
         amount: payload.amount.clone(),
     };
     let new_change = match NewBalanceChange::from_content(
-        payload.user_id,
+        payload.consumer_id,
         payload.unique_request_id,
         &content,
     ) {
@@ -1649,7 +1649,7 @@ async fn create_withdraw(
 /// the cash field, credits add to the credit field of the user's fund.
 ///
 /// Request body (JSON):
-/// - `user_id` (required): The ID of the user to credit
+/// - `consumer_id` (required): The ID of the consumer to credit
 /// - `amount` (required): The credit amount (must be positive)
 ///
 /// Returns the created BalanceChange record.
@@ -1666,22 +1666,22 @@ async fn create_credit(
         );
     }
 
-    // Verify the user exists
-    match db::user::get_user_by_id(&state.pool, payload.user_id).await {
+    // Verify the consumer exists
+    match db::consumer::get_consumer_by_id(&state.pool, payload.consumer_id).await {
         Ok(Some(_)) => {}
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
                 "not_found",
-                &format!("User with id {} not found", payload.user_id),
+                &format!("Consumer with id {} not found", payload.consumer_id),
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get user by id");
+            warn!(error = %e, "Failed to get consumer by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query user",
+                "Failed to query consumer",
             );
         }
     }
@@ -1691,7 +1691,7 @@ async fn create_credit(
         amount: payload.amount.clone(),
     };
     let new_change = match NewBalanceChange::from_content(
-        payload.user_id,
+        payload.consumer_id,
         payload.unique_request_id,
         &content,
     ) {
@@ -1878,17 +1878,17 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
             "/models/{model_id}",
             get(get_model_by_id).put(update_model_by_id),
         )
-        .route("/users", get(list_users).post(create_user))
+        .route("/consumers", get(list_consumers).post(create_consumer))
         .route(
-            "/users/{user_id}",
-            get(get_user_by_id).put(update_user_by_id),
+            "/consumers/{consumer_id}",
+            get(get_consumer_by_id).put(update_consumer_by_id),
         )
-        .route("/users/{user_id}/fund", get(get_user_fund))
+        .route("/consumers/{consumer_id}/fund", get(get_consumer_fund))
         .route(
-            "/users/{user_id}/apikeys",
-            get(list_user_apikeys).post(create_user_apikey),
+            "/consumers/{consumer_id}/apikeys",
+            get(list_consumer_apikeys).post(create_consumer_apikey),
         )
-        .route("/users_by_name/{username}", get(get_user_by_username))
+        .route("/consumers_by_name/{name}", get(get_consumer_by_name))
         .route("/endpoint_by_name/{name}", get(get_endpoint_by_name))
         .route(
             "/endpoints/{endpoint_id}/tags",

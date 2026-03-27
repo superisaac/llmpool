@@ -5,8 +5,8 @@ mod client;
 mod cmds;
 
 use cmds::{
-    ApiKeyAction, EndpointAction, FundAction, ModelAction, UserAction, handle_apikey,
-    handle_endpoint, handle_fund, handle_model, handle_user,
+    ApiKeyAction, ConsumerAction, EndpointAction, FundAction, ModelAction, handle_apikey,
+    handle_consumer, handle_endpoint, handle_fund, handle_model,
 };
 
 // ============================================================
@@ -39,17 +39,17 @@ enum Commands {
         #[command(subcommand)]
         action: ModelAction,
     },
-    /// Manage users
-    User {
+    /// Manage consumers
+    Consumer {
         #[command(subcommand)]
-        action: UserAction,
+        action: ConsumerAction,
     },
     /// Manage API keys
     Apikey {
         #[command(subcommand)]
         action: ApiKeyAction,
     },
-    /// Manage user funds (balance, deposit, withdraw, credit)
+    /// Manage consumer funds (balance, deposit, withdraw, credit)
     Fund {
         #[command(subcommand)]
         action: FundAction,
@@ -91,7 +91,7 @@ async fn main() {
     let result = match cli.command {
         Commands::Endpoint { action } => handle_endpoint(action, &api_client, json_output).await,
         Commands::Model { action } => handle_model(action, &api_client, json_output).await,
-        Commands::User { action } => handle_user(action, &api_client, json_output).await,
+        Commands::Consumer { action } => handle_consumer(action, &api_client, json_output).await,
         Commands::Apikey { action } => handle_apikey(action, &api_client, json_output).await,
         Commands::Fund { action } => handle_fund(action, &api_client, json_output).await,
     };

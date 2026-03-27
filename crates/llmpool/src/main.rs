@@ -69,8 +69,8 @@ enum AdminCommands {
     },
     /// Create a new API key for a user
     CreateApiKey {
-        /// The username to create the API key for
-        username: String,
+        /// The name to create the API key for
+        name: String,
     },
     /// Create a user interactively
     CreateUser,
@@ -240,33 +240,33 @@ async fn main() {
                     eprintln!("Token does not expire");
                 }
             }
-            AdminCommands::CreateApiKey { username } => {
+            AdminCommands::CreateApiKey { name } => {
                 let pool = db::create_pool_from_config().await;
 
-                // Find the user by username
-                let user = match db::api::find_user_by_username(&pool, &username).await {
-                    Ok(Some(user)) => user,
+                // Find the consumer by name
+                let consumer = match db::api::find_consumer_by_name(&pool, &name).await {
+                    Ok(Some(consumer)) => consumer,
                     Ok(None) => {
-                        eprintln!("Error: user '{}' not found", username);
+                        eprintln!("Error: user '{}' not found", name);
                         std::process::exit(1);
                     }
                     Err(e) => {
-                        eprintln!("Error looking up user '{}': {}", username, e);
+                        eprintln!("Error looking up user '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 };
 
                 // Create the API key
-                match db::api::create_api_key_for_user(&pool, user.id, "").await {
+                match db::api::create_api_key_for_consumer(&pool, consumer.id, "").await {
                     Ok(api_key) => {
                         println!(
                             "API key created for user '{}' (id={})",
-                            user.username, user.id
+                            consumer.name, consumer.id
                         );
                         println!("Key: {}", api_key.apikey);
                     }
                     Err(e) => {
-                        eprintln!("Error creating API key for user '{}': {}", username, e);
+                        eprintln!("Error creating API key for user '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 }
@@ -274,27 +274,27 @@ async fn main() {
             AdminCommands::CreateUser => {
                 let pool = db::create_pool_from_config().await;
 
-                // Prompt for username
-                let username = prompt_input("Username: ");
-                if username.is_empty() {
-                    eprintln!("Error: username cannot be empty");
+                // Prompt for name
+                let name = prompt_input("Name: ");
+                if name.is_empty() {
+                    eprintln!("Error: name cannot be empty");
                     std::process::exit(1);
                 }
 
-                // Create the user
-                let new_user = models::NewUser {
-                    username: username.clone(),
+                // Create the consumer
+                let new_consumer = models::NewConsumer {
+                    name: name.clone(),
                 };
 
-                match db::user::create_user(&pool, &new_user).await {
-                    Ok(user) => {
+                match db::consumer::create_consumer(&pool, &new_consumer).await {
+                    Ok(consumer) => {
                         println!(
                             "Successfully created user '{}' (id={})",
-                            user.username, user.id
+                            consumer.name, consumer.id
                         );
                     }
                     Err(e) => {
-                        eprintln!("Error creating user '{}': {}", username, e);
+                        eprintln!("Error creating user '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 }

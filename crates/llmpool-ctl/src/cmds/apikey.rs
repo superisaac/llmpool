@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_user_id, truncate};
+use super::{OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -10,17 +10,17 @@ use crate::client::ApiClient;
 
 #[derive(Subcommand)]
 pub enum ApiKeyAction {
-    /// List API keys for a user
+    /// List API keys for a consumer
     List {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
     },
-    /// Add a new API key for a user
+    /// Add a new API key for a consumer
     Add {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
         /// Label describing the purpose of this API key
         #[arg(long, default_value = "")]
         label: String,
@@ -87,31 +87,31 @@ pub async fn handle_apikey(
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        ApiKeyAction::List { user } => {
-            let user_id = resolve_user_id(&user, client).await?;
+        ApiKeyAction::List { consumer } => {
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             if json_output {
                 let raw = client
-                    .get_raw(&format!("/users/{}/apikeys", user_id))
+                    .get_raw(&format!("/consumers/{}/apikeys", consumer_id))
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: PaginatedResponse<OpenAIAPIKeyResponse> =
-                    client.get(&format!("/users/{}/apikeys", user_id)).await?;
+                    client.get(&format!("/consumers/{}/apikeys", consumer_id)).await?;
                 print_apikeys(&resp.data);
                 print_pagination(&resp.pagination);
             }
         }
-        ApiKeyAction::Add { user, label } => {
-            let user_id = resolve_user_id(&user, client).await?;
+        ApiKeyAction::Add { consumer, label } => {
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             let body = CreateApiKeyRequestBody { label };
             if json_output {
                 let raw = client
-                    .post_raw(&format!("/users/{}/apikeys", user_id), &body)
+                    .post_raw(&format!("/consumers/{}/apikeys", consumer_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: OpenAIAPIKeyResponse = client
-                    .post(&format!("/users/{}/apikeys", user_id), &body)
+                    .post(&format!("/consumers/{}/apikeys", consumer_id), &body)
                     .await?;
                 print_apikey_detail(&resp);
             }

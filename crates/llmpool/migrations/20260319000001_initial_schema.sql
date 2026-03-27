@@ -33,20 +33,20 @@ CREATE TABLE IF NOT EXISTS openai_models (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_models_endpoint_model ON openai_models (endpoint_id, model_id);
 CREATE INDEX IF NOT EXISTS idx_openai_models_endpoint_id ON openai_models (endpoint_id);
 
--- Create users table
-CREATE TABLE IF NOT EXISTS users (
+-- Create consumers table
+CREATE TABLE IF NOT EXISTS consumers (
     id SERIAL PRIMARY KEY,
-    username VARCHAR NOT NULL,
+    name VARCHAR NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_consumers_name ON consumers (name);
 
 -- Create openai_api_keys table
 CREATE TABLE IF NOT EXISTS openai_api_keys (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    consumer_id INTEGER REFERENCES consumers(id) ON DELETE CASCADE,
     apikey VARCHAR NOT NULL,
     label VARCHAR NOT NULL DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -55,14 +55,14 @@ CREATE TABLE IF NOT EXISTS openai_api_keys (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_api_keys_apikey ON openai_api_keys (apikey);
-CREATE INDEX IF NOT EXISTS idx_openai_api_keys_user_id ON openai_api_keys (user_id);
+CREATE INDEX IF NOT EXISTS idx_openai_api_keys_consumer_id ON openai_api_keys (consumer_id);
 
 -- Create session_events table (unlogged for performance)
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     id BIGSERIAL PRIMARY KEY,
     session_id VARCHAR NOT NULL,
     session_index INT NOT NULL DEFAULT 0,
-    user_id INT NOT NULL,
+    consumer_id INT NOT NULL,
     model_id INT NOT NULL,
     event_data JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -73,23 +73,23 @@ CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (sess
 -- Create funds table
 CREATE TABLE IF NOT EXISTS funds (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id),
+    consumer_id INT NOT NULL REFERENCES consumers(id),
     cash DECIMAL NOT NULL DEFAULT 0,
     credit DECIMAL NOT NULL DEFAULT 0,
     debt DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_user_id ON funds (user_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_consumer_id ON funds (consumer_id);
 
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id),
+    consumer_id INT NOT NULL REFERENCES consumers(id),
     unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_balance_changes_user_id ON balance_changes (user_id);
+CREATE INDEX IF NOT EXISTS idx_balance_changes_consumer_id ON balance_changes (consumer_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_changes_unique_request_id ON balance_changes (unique_request_id);

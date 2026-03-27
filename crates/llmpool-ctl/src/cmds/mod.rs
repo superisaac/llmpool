@@ -1,23 +1,23 @@
 pub mod apikey;
+pub mod consumer;
 pub mod endpoint;
 pub mod fund;
 pub mod model;
-pub mod user;
 
 use serde::Deserialize;
 
 // Re-export subcommand enums and handlers
 pub use apikey::ApiKeyAction;
+pub use consumer::ConsumerAction;
 pub use endpoint::EndpointAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
-pub use user::UserAction;
 
 pub use apikey::handle_apikey;
+pub use consumer::handle_consumer;
 pub use endpoint::handle_endpoint;
 pub use fund::handle_fund;
 pub use model::handle_model;
-pub use user::handle_user;
 
 // ============================================================
 // Common API Response Types
@@ -68,9 +68,9 @@ pub struct ModelResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct UserResponse {
+pub struct ConsumerResponse {
     pub id: i32,
-    pub username: String,
+    pub name: String,
     pub is_active: bool,
     pub created_at: String,
     pub updated_at: String,
@@ -80,7 +80,7 @@ pub struct UserResponse {
 #[allow(dead_code)]
 pub struct FundResponse {
     pub id: i32,
-    pub user_id: i32,
+    pub consumer_id: i32,
     pub cash: String,
     pub credit: String,
     pub debt: String,
@@ -91,7 +91,7 @@ pub struct FundResponse {
 #[derive(Debug, Deserialize)]
 pub struct BalanceChangeResponse {
     pub id: i32,
-    pub user_id: i32,
+    pub consumer_id: i32,
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
@@ -131,7 +131,7 @@ pub struct TagsResponse {
 #[allow(dead_code)]
 pub struct OpenAIAPIKeyResponse {
     pub id: i32,
-    pub user_id: Option<i32>,
+    pub consumer_id: Option<i32>,
     pub apikey: String,
     pub label: String,
     pub is_active: bool,
@@ -229,11 +229,11 @@ pub async fn resolve_endpoint_id(
     Ok(resp.id)
 }
 
-/// Resolve a username or user ID string to a numeric user ID.
-pub async fn resolve_user_id(user: &str, client: &crate::client::ApiClient) -> Result<i32, String> {
-    if let Ok(id) = user.parse::<i32>() {
+/// Resolve a consumer name or consumer ID string to a numeric consumer ID.
+pub async fn resolve_consumer_id(consumer: &str, client: &crate::client::ApiClient) -> Result<i32, String> {
+    if let Ok(id) = consumer.parse::<i32>() {
         return Ok(id);
     }
-    let resp: UserResponse = client.get(&format!("/users_by_name/{}", user)).await?;
+    let resp: ConsumerResponse = client.get(&format!("/consumers_by_name/{}", consumer)).await?;
     Ok(resp.id)
 }

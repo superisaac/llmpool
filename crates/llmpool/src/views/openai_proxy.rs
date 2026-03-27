@@ -30,11 +30,11 @@ use apalis_redis::RedisStorage;
 use crate::db::{self, DbPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
-use crate::models::{CapacityOption, OpenAIAPIKey, User};
+use crate::models::{CapacityOption, Consumer, OpenAIAPIKey};
 use crate::openai::session_tracer::SessionTracer;
 
 tokio::task_local! {
-    pub static USER: User;
+    pub static CONSUMER: Consumer;
     pub static OPENAI_API_KEY: OpenAIAPIKey;
 }
 
@@ -113,29 +113,29 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 2: Find the user by ACCESS_KEY.user_id (if present)
-    let user_id = match access_key.user_id {
+    // Step 2: Find the consumer by ACCESS_KEY.consumer_id (if present)
+    let consumer_id = match access_key.consumer_id {
         Some(uid) => uid,
         None => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
-                "API key is not associated with a user.",
+                "API key is not associated with a consumer.",
                 "invalid_api_key",
             );
         }
     };
 
-    let user = match db::api::find_user_by_id(&state.pool, user_id).await {
+    let consumer = match db::api::find_consumer_by_id(&state.pool, consumer_id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
-                "User not found for this API key.",
+                "Consumer not found for this API key.",
                 "invalid_api_key",
             );
         }
         Err(e) => {
-            warn!(error = %e, "Database error during user lookup");
+            warn!(error = %e, "Database error during consumer lookup");
             return auth_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error during authentication.",
@@ -144,18 +144,18 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 4: Check if the user is active
-    if !user.is_active {
+    // Step 4: Check if the consumer is active
+    if !consumer.is_active {
         return auth_error_response(
             StatusCode::UNAUTHORIZED,
-            "User account is inactive.",
+            "Consumer account is inactive.",
             "invalid_api_key",
         );
     }
 
     // Step 5: Set task-local variables and proceed
     OPENAI_API_KEY
-        .scope(access_key, USER.scope(user, next.run(request)))
+        .scope(access_key, CONSUMER.scope(consumer, next.run(request)))
         .await
 }
 
@@ -163,9 +163,9 @@ async fn auth_openai_api(
 
 /// Check if the user has sufficient funds (available > 0).
 /// Returns Ok(()) if funds are sufficient, or Err(Response) with an error response.
-async fn check_fund_available(pool: &DbPool, user_id: i32) -> Result<(), Response> {
+async fn check_fund_available(pool: &DbPool, consumer_id: i32) -> Result<(), Response> {
     let zero = BigDecimal::from(0);
-    match db::fund::find_user_fund(pool, user_id).await {
+    match db::fund::find_consumer_fund(pool, consumer_id).await {
         Ok(Some(fund)) if fund.available() > zero => Ok(()),
         Ok(Some(_fund)) => Err(insufficient_funds_response()),
         Ok(None) => {
@@ -322,10 +322,10 @@ async fn chat_completions(
     Json(payload): Json<CreateChatCompletionRequest>,
 ) -> Response {
     let model_name = &payload.model;
-    let user_id = USER.with(|u| u.id);
+    let consumer_id = CONSUMER.with(|u| u.id);
 
-    // Check if the user has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+    // Check if the consumer has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
         return resp;
     }
 
@@ -340,7 +340,7 @@ async fn chat_completions(
     }
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), user_id, *model_db_id);
+        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
         match chat_completions_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {
@@ -412,10 +412,10 @@ async fn generate_images(
     Json(payload): Json<CreateImageRequest>,
 ) -> axum::response::Response {
     let model_name = image_model_to_string(&payload.model);
-    let user_id = USER.with(|u| u.id);
+    let consumer_id = CONSUMER.with(|u| u.id);
 
-    // Check if the user has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+    // Check if the consumer has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
         return resp;
     }
 
@@ -430,7 +430,7 @@ async fn generate_images(
     }
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), user_id, *model_db_id);
+        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
         match generate_images_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {
@@ -552,10 +552,10 @@ async fn create_embeddings(
     Json(payload): Json<CreateEmbeddingRequest>,
 ) -> Response {
     let model_name = &payload.model;
-    let user_id = USER.with(|u| u.id);
+    let consumer_id = CONSUMER.with(|u| u.id);
 
-    // Check if the user has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, user_id).await {
+    // Check if the consumer has sufficient funds
+    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
         return resp;
     }
 
@@ -570,7 +570,7 @@ async fn create_embeddings(
     }
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
-        let mut tracer = SessionTracer::new(state.event_storage.clone(), user_id, *model_db_id);
+        let mut tracer = SessionTracer::new(state.event_storage.clone(), consumer_id, *model_db_id);
         match create_embeddings_with_client(client, &mut tracer, payload.clone()).await {
             Ok(response) => return response,
             Err(e) => {

@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{BalanceChangeResponse, FundResponse, resolve_user_id};
+use super::{BalanceChangeResponse, FundResponse, resolve_consumer_id};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -10,17 +10,17 @@ use crate::client::ApiClient;
 
 #[derive(Subcommand)]
 pub enum FundAction {
-    /// Show user fund balance
+    /// Show consumer fund balance
     Show {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
     },
-    /// Deposit cash to a user's fund
+    /// Deposit cash to a consumer's fund
     Deposit {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
         /// Amount to deposit
         #[arg(long)]
         amount: String,
@@ -28,11 +28,11 @@ pub enum FundAction {
         #[arg(long)]
         request_id: String,
     },
-    /// Withdraw cash from a user's fund
+    /// Withdraw cash from a consumer's fund
     Withdraw {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
         /// Amount to withdraw
         #[arg(long)]
         amount: String,
@@ -40,11 +40,11 @@ pub enum FundAction {
         #[arg(long)]
         request_id: String,
     },
-    /// Add credit to a user's fund
+    /// Add credit to a consumer's fund
     Credit {
-        /// Username or user ID
+        /// Consumer name or consumer ID
         #[arg(long)]
-        user: String,
+        consumer: String,
         /// Amount of credit to add
         #[arg(long)]
         amount: String,
@@ -60,21 +60,21 @@ pub enum FundAction {
 
 #[derive(Serialize)]
 struct CreateDepositRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: String,
 }
 
 #[derive(Serialize)]
 struct CreateWithdrawRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: String,
 }
 
 #[derive(Serialize)]
 struct CreateCreditRequest {
-    user_id: i32,
+    consumer_id: i32,
     unique_request_id: String,
     amount: String,
 }
@@ -84,7 +84,7 @@ struct CreateCreditRequest {
 // ============================================================
 
 fn print_fund_detail(f: &FundResponse) {
-    println!("Fund for user ID {}:", f.user_id);
+    println!("Fund for consumer ID {}:", f.consumer_id);
     println!();
     println!("  Cash:       {}", f.cash);
     println!("  Credit:     {}", f.credit);
@@ -99,7 +99,7 @@ fn print_balance_change(bc: &BalanceChangeResponse, action: &str) {
     println!("{} created successfully!", action);
     println!();
     println!("  ID:                {}", bc.id);
-    println!("  User ID:           {}", bc.user_id);
+    println!("  Consumer ID:       {}", bc.consumer_id);
     println!("  Request ID:        {}", bc.unique_request_id);
     println!("  Content:           {}", bc.content);
     println!(
@@ -119,24 +119,24 @@ pub async fn handle_fund(
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        FundAction::Show { user } => {
-            let user_id = resolve_user_id(&user, client).await?;
+        FundAction::Show { consumer } => {
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             if json_output {
-                let raw = client.get_raw(&format!("/users/{}/fund", user_id)).await?;
+                let raw = client.get_raw(&format!("/consumers/{}/fund", consumer_id)).await?;
                 println!("{}", raw);
             } else {
-                let resp: FundResponse = client.get(&format!("/users/{}/fund", user_id)).await?;
+                let resp: FundResponse = client.get(&format!("/consumers/{}/fund", consumer_id)).await?;
                 print_fund_detail(&resp);
             }
         }
         FundAction::Deposit {
-            user,
+            consumer,
             amount,
             request_id,
         } => {
-            let user_id = resolve_user_id(&user, client).await?;
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             let body = CreateDepositRequest {
-                user_id,
+                consumer_id,
                 unique_request_id: request_id,
                 amount,
             };
@@ -149,13 +149,13 @@ pub async fn handle_fund(
             }
         }
         FundAction::Withdraw {
-            user,
+            consumer,
             amount,
             request_id,
         } => {
-            let user_id = resolve_user_id(&user, client).await?;
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             let body = CreateWithdrawRequest {
-                user_id,
+                consumer_id,
                 unique_request_id: request_id,
                 amount,
             };
@@ -168,13 +168,13 @@ pub async fn handle_fund(
             }
         }
         FundAction::Credit {
-            user,
+            consumer,
             amount,
             request_id,
         } => {
-            let user_id = resolve_user_id(&user, client).await?;
+            let consumer_id = resolve_consumer_id(&consumer, client).await?;
             let body = CreateCreditRequest {
-                user_id,
+                consumer_id,
                 unique_request_id: request_id,
                 amount,
             };

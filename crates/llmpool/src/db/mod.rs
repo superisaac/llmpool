@@ -4,6 +4,6 @@ pub mod fund;
 #[allow(dead_code)]
 pub mod openai;
 pub mod session_event;
-pub mod user;
+pub mod consumer;
 
 pub use core::*;

@@ -8,14 +8,14 @@ pub async fn create_session_event(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, session_index, user_id, model_id, event_data)
+        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, event_data)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data
          RETURNING *",
     )
     .bind(&new_event.session_id)
     .bind(new_event.session_index)
-    .bind(new_event.user_id)
+    .bind(new_event.consumer_id)
     .bind(new_event.model_id)
     .bind(&new_event.event_data)
     .fetch_one(pool)
@@ -28,14 +28,14 @@ pub async fn create_session_event_with_tx(
     new_event: &NewSessionEvent,
 ) -> Result<SessionEvent, sqlx::Error> {
     sqlx::query_as::<_, SessionEvent>(
-        "INSERT INTO session_events (session_id, session_index, user_id, model_id, event_data)
+        "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, event_data)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data
          RETURNING *",
     )
     .bind(&new_event.session_id)
     .bind(new_event.session_index)
-    .bind(new_event.user_id)
+    .bind(new_event.consumer_id)
     .bind(new_event.model_id)
     .bind(&new_event.event_data)
     .fetch_one(&mut **tx)
@@ -84,9 +84,9 @@ pub async fn create_balance_change(
     new_change: &NewBalanceChange,
 ) -> Result<BalanceChange, sqlx::Error> {
     sqlx::query_as::<_, BalanceChange>(
-        "INSERT INTO balance_changes (user_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+        "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
     )
-    .bind(new_change.user_id)
+    .bind(new_change.consumer_id)
     .bind(&new_change.unique_request_id)
     .bind(&new_change.content)
     .fetch_one(pool)
@@ -99,9 +99,9 @@ pub async fn create_balance_change_with_tx(
     new_change: &NewBalanceChange,
 ) -> Result<BalanceChange, sqlx::Error> {
     sqlx::query_as::<_, BalanceChange>(
-        "INSERT INTO balance_changes (user_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+        "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
     )
-    .bind(new_change.user_id)
+    .bind(new_change.consumer_id)
     .bind(&new_change.unique_request_id)
     .bind(&new_change.content)
     .fetch_one(&mut **tx)

@@ -158,51 +158,51 @@ curl -X PUT http://localhost:19324/api/v1/models/1 \
   -d '{"description": "GPT-4o model for general chat"}'
 ```
 
-### Users
+### Consumers
 
 ```bash
-# List all users (paginated)
-curl http://localhost:19324/api/v1/users \
+# List all consumers (paginated)
+curl http://localhost:19324/api/v1/consumers \
   -H "x-admin-token: <jwt-token>"
 
-# Create a user
-curl -X POST http://localhost:19324/api/v1/users \
+# Create a consumer
+curl -X POST http://localhost:19324/api/v1/consumers \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
-  -d '{"username": "alice"}'
+  -d '{"name": "alice"}'
 
-# Create a user with initial credit
-curl -X POST http://localhost:19324/api/v1/users \
+# Create a consumer with initial credit
+curl -X POST http://localhost:19324/api/v1/consumers \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
-  -d '{"username": "alice", "initial_credit": "100.00"}'
+  -d '{"name": "alice", "initial_credit": "100.00"}'
 
-# Get a user by ID
-curl http://localhost:19324/api/v1/users/1 \
+# Get a consumer by ID
+curl http://localhost:19324/api/v1/consumers/1 \
   -H "x-admin-token: <jwt-token>"
 
-# Get a user by username
-curl http://localhost:19324/api/v1/users_by_name/alice \
+# Get a consumer by name
+curl http://localhost:19324/api/v1/consumers_by_name/alice \
   -H "x-admin-token: <jwt-token>"
 ```
 
 ### Funds
 
 ```bash
-# Get a user's fund (balance information)
-curl http://localhost:19324/api/v1/users/1/fund \
+# Get a consumer's fund (balance information)
+curl http://localhost:19324/api/v1/consumers/1/fund \
   -H "x-admin-token: <jwt-token>"
 ```
 
 ### API Keys
 
 ```bash
-# List API keys for a user (paginated)
-curl http://localhost:19324/api/v1/users/1/apikeys \
+# List API keys for a consumer (paginated)
+curl http://localhost:19324/api/v1/consumers/1/apikeys \
   -H "x-admin-token: <jwt-token>"
 
-# Create an API key for a user
-curl -X POST http://localhost:19324/api/v1/users/1/apikeys \
+# Create an API key for a consumer
+curl -X POST http://localhost:19324/api/v1/consumers/1/apikeys \
   -H "x-admin-token: <jwt-token>"
 ```
 
@@ -211,32 +211,32 @@ curl -X POST http://localhost:19324/api/v1/users/1/apikeys \
 The `unique_request_id` field is a client-provided idempotency key for each balance change operation. It ensures that the same request is not processed more than once.
 
 ```bash
-# Create a deposit (adds to user's cash balance)
+# Create a deposit (adds to consumer's cash balance)
 curl -X POST http://localhost:19324/api/v1/deposits \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": 1,
+    "consumer_id": 1,
     "unique_request_id": "deposit-20260326-001",
     "amount": "100.00"
   }'
 
-# Create a withdrawal (deducts from user's cash balance)
+# Create a withdrawal (deducts from consumer's cash balance)
 curl -X POST http://localhost:19324/api/v1/withdrawals \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": 1,
+    "consumer_id": 1,
     "unique_request_id": "withdraw-20260326-001",
     "amount": "50.00"
   }'
 
-# Create a credit (adds to user's credit balance)
+# Create a credit (adds to consumer's credit balance)
 curl -X POST http://localhost:19324/api/v1/credits \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "user_id": 1,
+    "consumer_id": 1,
     "unique_request_id": "credit-20260326-001",
     "amount": "200.00"
   }'
@@ -252,16 +252,17 @@ curl -X POST http://localhost:19324/api/v1/credits \
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
 | `GET` | `/api/v1/models/:model_id` | Get a model by ID |
 | `PUT` | `/api/v1/models/:model_id` | Update a model (description) |
-| `GET` | `/api/v1/users` | List all users (paginated) |
-| `POST` | `/api/v1/users` | Create a new user (with optional `initial_credit`) |
-| `GET` | `/api/v1/users/:user_id` | Get a user by ID |
-| `GET` | `/api/v1/users_by_name/:username` | Get a user by username |
-| `GET` | `/api/v1/users/:user_id/fund` | Get a user's fund (cash, credit, debt) |
-| `GET` | `/api/v1/users/:user_id/apikeys` | List API keys for a user (paginated) |
-| `POST` | `/api/v1/users/:user_id/apikeys` | Create an API key for a user |
-| `POST` | `/api/v1/deposits` | Create a deposit for a user |
-| `POST` | `/api/v1/withdrawals` | Create a withdrawal for a user |
-| `POST` | `/api/v1/credits` | Create a credit for a user |
+| `GET` | `/api/v1/consumers` | List all consumers (paginated) |
+| `POST` | `/api/v1/consumers` | Create a new consumer (with optional `initial_credit`) |
+| `GET` | `/api/v1/consumers/:consumer_id` | Get a consumer by ID |
+| `PUT` | `/api/v1/consumers/:consumer_id` | Update a consumer |
+| `GET` | `/api/v1/consumers_by_name/:name` | Get a consumer by name |
+| `GET` | `/api/v1/consumers/:consumer_id/fund` | Get a consumer's fund (cash, credit, debt) |
+| `GET` | `/api/v1/consumers/:consumer_id/apikeys` | List API keys for a consumer (paginated) |
+| `POST` | `/api/v1/consumers/:consumer_id/apikeys` | Create an API key for a consumer |
+| `POST` | `/api/v1/deposits` | Create a deposit for a consumer |
+| `POST` | `/api/v1/withdrawals` | Create a withdrawal for a consumer |
+| `POST` | `/api/v1/credits` | Create a credit for a consumer |
 
 All paginated endpoints accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)
