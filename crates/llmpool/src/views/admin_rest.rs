@@ -1884,6 +1884,10 @@ struct SessionEventResponse {
     consumer_id: i32,
     model_id: i32,
     api_key_id: i32,
+    input_token_price: String,
+    input_tokens: i64,
+    output_token_price: String,
+    output_tokens: i64,
     event_data: serde_json::Value,
     created_at: String,
 }
@@ -1897,6 +1901,10 @@ impl From<crate::models::SessionEvent> for SessionEventResponse {
             consumer_id: e.consumer_id,
             model_id: e.model_id,
             api_key_id: e.api_key_id,
+            input_token_price: e.input_token_price.to_string(),
+            input_tokens: e.input_tokens,
+            output_token_price: e.output_token_price.to_string(),
+            output_tokens: e.output_tokens,
             event_data: e.event_data,
             created_at: e.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }

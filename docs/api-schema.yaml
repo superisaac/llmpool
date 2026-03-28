@@ -564,7 +564,7 @@ components:
     # --- Session Event ---
     SessionEventResponse:
       type: object
-      required: [id, session_id, session_index, consumer_id, model_id, api_key_id, event_data, created_at]
+      required: [id, session_id, session_index, consumer_id, model_id, api_key_id, input_token_price, input_tokens, output_token_price, output_tokens, event_data, created_at]
       properties:
         id:
           type: integer
@@ -589,6 +589,24 @@ components:
           type: integer
           format: int32
           example: 1
+        input_token_price:
+          type: string
+          description: Price per input token at the time of the event (decimal string)
+          example: "0.000005"
+        input_tokens:
+          type: integer
+          format: int64
+          description: Number of input tokens consumed
+          example: 150
+        output_token_price:
+          type: string
+          description: Price per output token at the time of the event (decimal string)
+          example: "0.000015"
+        output_tokens:
+          type: integer
+          format: int64
+          description: Number of output tokens used
+          example: 200
         event_data:
           type: object
           description: JSON object containing the session event data

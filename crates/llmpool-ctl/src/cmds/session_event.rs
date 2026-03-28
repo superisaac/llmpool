@@ -31,6 +31,10 @@ pub struct SessionEventResponse {
     pub consumer_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
+    pub input_token_price: String,
+    pub input_tokens: i64,
+    pub output_token_price: String,
+    pub output_tokens: i64,
     pub event_data: serde_json::Value,
     pub created_at: String,
 }
@@ -46,19 +50,21 @@ fn print_session_events(events: &[SessionEventResponse]) {
     }
 
     println!(
-        "{:<8} {:<38} {:<6} {:<10} {:<8} {:<8} {:<22}",
-        "ID", "Session ID", "Index", "Consumer", "Model", "APIKey", "Created At"
+        "{:<8} {:<38} {:<6} {:<10} {:<8} {:<8} {:<12} {:<12} {:<22}",
+        "ID", "Session ID", "Index", "Consumer", "Model", "APIKey", "InTokens", "OutTokens", "Created At"
     );
-    println!("{}", "-".repeat(100));
+    println!("{}", "-".repeat(124));
     for e in events {
         println!(
-            "{:<8} {:<38} {:<6} {:<10} {:<8} {:<8} {:<22}",
+            "{:<8} {:<38} {:<6} {:<10} {:<8} {:<8} {:<12} {:<12} {:<22}",
             e.id,
             truncate(&e.session_id, 36),
             e.session_index,
             e.consumer_id,
             e.model_id,
             e.api_key_id,
+            e.input_tokens,
+            e.output_tokens,
             e.created_at,
         );
     }

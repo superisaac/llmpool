@@ -65,6 +65,10 @@ CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     consumer_id INT NOT NULL,
     model_id INT NOT NULL,
     api_key_id INT NOT NULL DEFAULT 0,
+    input_token_price NUMERIC NOT NULL DEFAULT 0,
+    input_tokens BIGINT NOT NULL DEFAULT 0,
+    output_token_price NUMERIC NOT NULL DEFAULT 0,
+    output_tokens BIGINT NOT NULL DEFAULT 0,
     event_data JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

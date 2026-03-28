@@ -5,7 +5,7 @@ use tracing::{info, warn};
 
 use crate::db::{self, DbPool};
 use crate::defer::{BalanceChangeTask, OpenAIEventData, OpenAIEventTask};
-use crate::models::{BalanceChangeContent, NewBalanceChange, NewSessionEvent, SpendToken};
+use crate::models::{BalanceChangeContent, NewBalanceChange, NewSessionEvent, OpenAIModel, SpendToken};
 
 /// Represents extracted usage information from a response
 struct UsageInfo {
@@ -76,14 +76,6 @@ pub async fn handle_openai_event(
 
     let event_data_json =
         serde_json::to_value(&event.event_data).unwrap_or(serde_json::Value::Null);
-    let new_event = NewSessionEvent {
-        session_id: session_id.clone(),
-        session_index: event.session_index,
-        consumer_id,
-        model_id,
-        api_key_id: event.api_key_id,
-        event_data: event_data_json,
-    };
 
     let mut tx = match pool.begin().await {
         Ok(tx) => tx,
@@ -95,6 +87,42 @@ pub async fn handle_openai_event(
             );
             return;
         }
+    };
+
+    // Look up the model to get token prices (needed for both session event and balance change)
+    let model: Option<OpenAIModel> = match db::openai::get_model_with_tx(&mut tx, model_id).await {
+        Ok(model) => Some(model),
+        Err(e) => {
+            warn!(
+                error = %e,
+                session_id = %session_id,
+                "Failed to look up model, using default token prices"
+            );
+            None
+        }
+    };
+
+    // Build the new session event with token price and usage info
+    let (input_token_price, output_token_price) = match &model {
+        Some(m) => (m.input_token_price.clone(), m.output_token_price.clone()),
+        None => (BigDecimal::from(0), BigDecimal::from(0)),
+    };
+    let (input_tokens, output_tokens) = match &usage {
+        Some(u) => (u.input_tokens, u.output_tokens),
+        None => (0, 0),
+    };
+
+    let new_event = NewSessionEvent {
+        session_id: session_id.clone(),
+        session_index: event.session_index,
+        consumer_id,
+        model_id,
+        api_key_id: event.api_key_id,
+        input_token_price: input_token_price.clone(),
+        input_tokens,
+        output_token_price: output_token_price.clone(),
+        output_tokens,
+        event_data: event_data_json,
     };
 
     // 1. Create the session event
@@ -110,21 +138,8 @@ pub async fn handle_openai_event(
         }
     };
 
-    // 2. If there's usage info, look up model token prices and create a balance change
-    if let Some(usage) = usage {
-        // Look up the model to get token prices
-        let model = match db::openai::get_model_with_tx(&mut tx, model_id).await {
-            Ok(model) => model,
-            Err(e) => {
-                warn!(
-                    error = %e,
-                    session_id = %session_id,
-                    "Failed to look up model"
-                );
-                return;
-            }
-        };
-
+    // 2. If there's usage info and model is available, create a balance change
+    if let (Some(usage), Some(model)) = (usage, model) {
         let input_spend_amount = &model.input_token_price * BigDecimal::from(usage.input_tokens);
         let output_spend_amount = &model.output_token_price * BigDecimal::from(usage.output_tokens);
 

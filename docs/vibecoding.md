@@ -177,5 +177,8 @@ SessionEvent 增加一个字段 api_key_id，用于记录该session使用的api_
 增加 admin api: GET /api/v1/sessionevents/, 支持session=<session_id>参数 获得SessionEvent列表
 llmpool-ctl sessionevents list [--session <session_id>] 显示SessionEvent列表
 
-========
+=========
 给数据库相关操作生成一些test cases
+
+=========
+SessionEvent 增加以下字段: input_token_price, input_tokens, output_token_price, output_tokens。admin api也的response也相应增加。直接修改migraions 文件，不用新建migration文件。

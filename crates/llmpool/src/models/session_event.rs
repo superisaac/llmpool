@@ -1,3 +1,4 @@
+use bigdecimal::BigDecimal;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -12,6 +13,10 @@ pub struct SessionEvent {
     pub consumer_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
+    pub input_token_price: BigDecimal,
+    pub input_tokens: i64,
+    pub output_token_price: BigDecimal,
+    pub output_tokens: i64,
     pub event_data: serde_json::Value,
     pub created_at: NaiveDateTime,
 }
@@ -24,5 +29,9 @@ pub struct NewSessionEvent {
     pub consumer_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
+    pub input_token_price: BigDecimal,
+    pub input_tokens: i64,
+    pub output_token_price: BigDecimal,
+    pub output_tokens: i64,
     pub event_data: serde_json::Value,
 }
