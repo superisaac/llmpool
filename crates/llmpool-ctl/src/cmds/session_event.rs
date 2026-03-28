@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use serde::Deserialize;
 
-use super::{PaginatedResponse, print_pagination, truncate};
+use super::{CursorResponse, truncate};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -15,6 +15,12 @@ pub enum SessionEventAction {
         /// Filter by session ID
         #[arg(long)]
         session: Option<String>,
+        /// Start cursor (event ID to start after, exclusive)
+        #[arg(long, default_value = "0")]
+        start: i64,
+        /// Number of items to return
+        #[arg(long, default_value = "20")]
+        count: i64,
     },
 }
 
@@ -51,7 +57,15 @@ fn print_session_events(events: &[SessionEventResponse]) {
 
     println!(
         "{:<8} {:<38} {:<6} {:<10} {:<8} {:<8} {:<12} {:<12} {:<22}",
-        "ID", "Session ID", "Index", "Consumer", "Model", "APIKey", "InTokens", "OutTokens", "Created At"
+        "ID",
+        "Session ID",
+        "Index",
+        "Consumer",
+        "Model",
+        "APIKey",
+        "InTokens",
+        "OutTokens",
+        "Created At"
     );
     println!("{}", "-".repeat(124));
     for e in events {
@@ -80,20 +94,25 @@ pub async fn handle_session_event(
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        SessionEventAction::List { session } => {
-            let path = if let Some(ref sid) = session {
-                format!("/sessionevents?session={}", sid)
-            } else {
-                "/sessionevents".to_string()
-            };
+        SessionEventAction::List {
+            session,
+            start,
+            count,
+        } => {
+            let mut path = format!("/sessionevents?start={}&count={}", start, count);
+            if let Some(ref sid) = session {
+                path = format!("{}&session={}", path, sid);
+            }
 
             if json_output {
                 let raw = client.get_raw(&path).await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<SessionEventResponse> = client.get(&path).await?;
+                let resp: CursorResponse<SessionEventResponse> = client.get(&path).await?;
                 print_session_events(&resp.data);
-                print_pagination(&resp.pagination);
+                if resp.has_more {
+                    println!("\nhas_more: true, next_id: {}", resp.next_id);
+                }
             }
         }
     }

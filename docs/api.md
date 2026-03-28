@@ -242,6 +242,31 @@ curl -X POST http://localhost:19324/api/v1/credits \
   }'
 ```
 
+### Session Events
+
+```bash
+# List session events (cursor-based pagination)
+curl "http://localhost:19324/api/v1/sessionevents" \
+  -H "x-admin-token: <jwt-token>"
+
+# List with cursor parameters
+curl "http://localhost:19324/api/v1/sessionevents?start=0&count=50" \
+  -H "x-admin-token: <jwt-token>"
+
+# Filter by session ID
+curl "http://localhost:19324/api/v1/sessionevents?session=sess-abc123" \
+  -H "x-admin-token: <jwt-token>"
+
+# Paginate using next_id from previous response
+curl "http://localhost:19324/api/v1/sessionevents?start=42&count=20" \
+  -H "x-admin-token: <jwt-token>"
+```
+
+The session events endpoint uses cursor-based pagination. The response includes:
+- `data`: Array of session event objects
+- `next_id`: The ID of the last event in the current page (use as `start` for the next request)
+- `has_more`: Whether there are more events after this page
+
 ### Admin REST API Reference
 
 | Method | Endpoint | Description |
@@ -263,10 +288,16 @@ curl -X POST http://localhost:19324/api/v1/credits \
 | `POST` | `/api/v1/deposits` | Create a deposit for a consumer |
 | `POST` | `/api/v1/withdrawals` | Create a withdrawal for a consumer |
 | `POST` | `/api/v1/credits` | Create a credit for a consumer |
+| `GET` | `/api/v1/sessionevents` | List session events (cursor-based pagination) |
 
-All paginated endpoints accept the following query parameters:
+Most paginated endpoints accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)
 - `page_size` (default: 20, max: 100) — Number of items per page
+
+The `/api/v1/sessionevents` endpoint uses cursor-based pagination:
+- `start` (default: 0) — Event ID to start after (exclusive)
+- `count` (default: 20, max: 100) — Number of items to return
+- `session` (optional) — Filter by session_id
 
 ---
 

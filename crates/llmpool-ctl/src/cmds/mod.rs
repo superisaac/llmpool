@@ -41,6 +41,13 @@ pub struct PaginationInfo {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct CursorResponse<T> {
+    pub data: Vec<T>,
+    pub next_id: i64,
+    pub has_more: bool,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EndpointResponse {
     pub id: i32,
     pub name: String,

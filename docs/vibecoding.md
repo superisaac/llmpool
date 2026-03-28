@@ -182,3 +182,13 @@ llmpool-ctl sessionevents list [--session <session_id>] 显示SessionEvent列表
 
 =========
 SessionEvent 增加以下字段: input_token_price, input_tokens, output_token_price, output_tokens。admin api也的response也相应增加。直接修改migraions 文件，不用新建migration文件。
+
+=========
+admin API /api/v1/sessionevents/ 的参数不要page size, page, 改成 start=<event_id>, count=<count>, 返回值改成
+```json
+{
+    "data": ...
+    "next_id": <next_id>,
+    "has_more": true/false
+}
+```

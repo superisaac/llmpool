@@ -1913,54 +1913,57 @@ impl From<crate::models::SessionEvent> for SessionEventResponse {
 
 // --- Session Event Query Params ---
 
+/// Default count for cursor-based pagination
+const DEFAULT_CURSOR_COUNT: i64 = 20;
+/// Maximum count for cursor-based pagination
+const MAX_CURSOR_COUNT: i64 = 100;
+
 #[derive(Debug, Deserialize)]
 struct ListSessionEventsParams {
     /// Filter by session_id
     session: Option<String>,
-    /// Page number (1-based), defaults to 1
-    #[serde(default = "default_page")]
-    page: i64,
-    /// Number of items per page, defaults to 20
-    #[serde(default = "default_page_size")]
-    page_size: i64,
+    /// Cursor: start from this event ID (exclusive), defaults to 0 (from beginning)
+    #[serde(default)]
+    start: i64,
+    /// Number of items to return, defaults to 20, max 100
+    #[serde(default = "default_cursor_count")]
+    count: i64,
+}
+
+fn default_cursor_count() -> i64 {
+    DEFAULT_CURSOR_COUNT
+}
+
+/// Cursor-based response wrapper for session events
+#[derive(Serialize)]
+struct CursorResponse<T: Serialize> {
+    data: Vec<T>,
+    next_id: i64,
+    has_more: bool,
 }
 
 // --- Session Event Handler ---
 
 /// GET /api/v1/sessionevents
 ///
-/// Returns a paginated list of session events with optional session_id filter.
+/// Returns a cursor-paginated list of session events with optional session_id filter.
 ///
 /// Query parameters:
 /// - `session` (optional): Filter by session_id
-/// - `page` (optional, default: 1): Page number (1-based)
-/// - `page_size` (optional, default: 20, max: 100): Number of items per page
+/// - `start` (optional, default: 0): Cursor event ID to start after (exclusive)
+/// - `count` (optional, default: 20, max: 100): Number of items to return
 async fn list_session_events(
     State(state): State<Arc<AppState>>,
     Query(params): Query<ListSessionEventsParams>,
 ) -> Response {
-    let page = if params.page < 1 { 1 } else { params.page };
-    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
-    let offset = (page - 1) * page_size;
+    let start = if params.start < 0 { 0 } else { params.start };
+    let count = params.count.clamp(1, MAX_CURSOR_COUNT);
 
     let session_ref = params.session.as_deref();
 
-    // Get total count
-    let total = match db::session_event::count_session_events(&state.pool, session_ref).await {
-        Ok(count) => count,
-        Err(e) => {
-            warn!(error = %e, "Failed to count session events");
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database_error",
-                "Failed to query session events",
-            );
-        }
-    };
-
-    // Get paginated session events
-    let events =
-        match db::session_event::list_session_events(&state.pool, session_ref, offset, page_size)
+    // Fetch count+1 rows to determine has_more
+    let mut events =
+        match db::session_event::list_session_events_cursor(&state.pool, session_ref, start, count)
             .await
         {
             Ok(events) => events,
@@ -1974,23 +1977,20 @@ async fn list_session_events(
             }
         };
 
-    let total_pages = if total == 0 {
-        0
-    } else {
-        (total + page_size - 1) / page_size
-    };
+    let has_more = events.len() as i64 > count;
+    if has_more {
+        events.truncate(count as usize);
+    }
+
+    let next_id = events.last().map(|e| e.id).unwrap_or(start);
 
     let data: Vec<SessionEventResponse> =
         events.into_iter().map(SessionEventResponse::from).collect();
 
-    Json(PaginatedResponse {
+    Json(CursorResponse {
         data,
-        pagination: PaginationInfo {
-            page,
-            page_size,
-            total,
-            total_pages,
-        },
+        next_id,
+        has_more,
     })
     .into_response()
 }

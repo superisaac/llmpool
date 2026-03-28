@@ -52,49 +52,34 @@ pub async fn create_session_event_with_tx(
     .await
 }
 
-/// List session events with optional session_id filter, paginated
-pub async fn list_session_events(
+/// List session events with optional session_id filter, using cursor-based pagination.
+/// `start` is the event ID to start from (exclusive, i.e. returns events with id > start).
+/// If `start` is None or 0, starts from the beginning.
+/// Returns up to `count + 1` rows so the caller can determine if there are more results.
+pub async fn list_session_events_cursor(
     pool: &DbPool,
     session_id: Option<&str>,
-    offset: i64,
-    limit: i64,
+    start: i64,
+    count: i64,
 ) -> Result<Vec<SessionEvent>, sqlx::Error> {
     if let Some(sid) = session_id {
         sqlx::query_as::<_, SessionEvent>(
-            "SELECT * FROM session_events WHERE session_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+            "SELECT * FROM session_events WHERE session_id = $1 AND id > $2 ORDER BY id ASC LIMIT $3",
         )
         .bind(sid)
-        .bind(limit)
-        .bind(offset)
+        .bind(start)
+        .bind(count + 1)
         .fetch_all(pool)
         .await
     } else {
         sqlx::query_as::<_, SessionEvent>(
-            "SELECT * FROM session_events ORDER BY id DESC LIMIT $1 OFFSET $2",
+            "SELECT * FROM session_events WHERE id > $1 ORDER BY id ASC LIMIT $2",
         )
-        .bind(limit)
-        .bind(offset)
+        .bind(start)
+        .bind(count + 1)
         .fetch_all(pool)
         .await
     }
-}
-
-/// Count session events with optional session_id filter
-pub async fn count_session_events(
-    pool: &DbPool,
-    session_id: Option<&str>,
-) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = if let Some(sid) = session_id {
-        sqlx::query_as("SELECT COUNT(*) FROM session_events WHERE session_id = $1")
-            .bind(sid)
-            .fetch_one(pool)
-            .await?
-    } else {
-        sqlx::query_as("SELECT COUNT(*) FROM session_events")
-            .fetch_one(pool)
-            .await?
-    };
-    Ok(row.0)
 }
 
 /// Find a balance change by its ID

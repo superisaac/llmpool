@@ -5,7 +5,9 @@ use tracing::{info, warn};
 
 use crate::db::{self, DbPool};
 use crate::defer::{BalanceChangeTask, OpenAIEventData, OpenAIEventTask};
-use crate::models::{BalanceChangeContent, NewBalanceChange, NewSessionEvent, OpenAIModel, SpendToken};
+use crate::models::{
+    BalanceChangeContent, NewBalanceChange, NewSessionEvent, OpenAIModel, SpendToken,
+};
 
 /// Represents extracted usage information from a response
 struct UsageInfo {

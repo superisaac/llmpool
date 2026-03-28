@@ -905,11 +905,12 @@
           }
         }
       },
-      "PaginatedSessionEvents": {
+      "CursorSessionEvents": {
         "type": "object",
         "required": [
           "data",
-          "pagination"
+          "next_id",
+          "has_more"
         ],
         "properties": {
           "data": {
@@ -918,8 +919,16 @@
               "$ref": "#/components/schemas/SessionEventResponse"
             }
           },
-          "pagination": {
-            "$ref": "#/components/schemas/PaginationInfo"
+          "next_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The ID of the last event in the current page. Use as `start` for the next request.",
+            "example": 42
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "Whether there are more events after this page",
+            "example": true
           }
         }
       }
@@ -2309,7 +2318,7 @@
           "Session Events"
         ],
         "summary": "List session events",
-        "description": "Returns a paginated list of session events with optional session_id filter.",
+        "description": "Returns a cursor-paginated list of session events with optional session_id filter.\nUse `start` and `count` for cursor-based pagination instead of `page` and `page_size`.\n",
         "operationId": "listSessionEvents",
         "parameters": [
           {
@@ -2322,19 +2331,38 @@
             }
           },
           {
-            "$ref": "#/components/parameters/PageParam"
+            "name": "start",
+            "in": "query",
+            "description": "Cursor: event ID to start after (exclusive). Events with id > start are returned.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 0,
+              "minimum": 0
+            }
           },
           {
-            "$ref": "#/components/parameters/PageSizeParam"
+            "name": "count",
+            "in": "query",
+            "description": "Number of items to return",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of session events",
+            "description": "Cursor-paginated list of session events",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedSessionEvents"
+                  "$ref": "#/components/schemas/CursorSessionEvents"
                 }
               }
             }
