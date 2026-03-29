@@ -1,8 +1,11 @@
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use bigdecimal::BigDecimal;
+use chrono::Utc;
+use redis::AsyncCommands;
 use tracing::{info, warn};
 
+use crate::config;
 use crate::db::{self, DbPool};
 use crate::defer::{BalanceChangeTask, OpenAIEventData, OpenAIEventTask};
 use crate::models::{
@@ -48,6 +51,51 @@ fn extract_usage(data: &OpenAIEventData) -> Option<UsageInfo> {
     }
 }
 
+/// Increment the hourly token usage counters in Redis for the given model.
+///
+/// Keys follow the pattern:
+///   `tokenusage:<model_id>:<hour>.input`
+///   `tokenusage:<model_id>:<hour>.output`
+///
+/// where `<hour>` is formatted as `YYYYMMDDHH` (UTC).
+async fn increment_token_usage(model_id: i32, input_tokens: i64, output_tokens: i64) {
+    let redis_url = config::get_redis_url();
+    let client = match redis::Client::open(redis_url) {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, "Failed to create Redis client for token usage counter");
+            return;
+        }
+    };
+    let mut conn = match client.get_multiplexed_async_connection().await {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, "Failed to connect to Redis for token usage counter");
+            return;
+        }
+    };
+
+    // Format the current UTC hour as YYYYMMDDHH
+    let hour = Utc::now().format("%Y%m%d%H").to_string();
+    let input_key = format!("tokenusage:input:{}:{}", model_id, hour);
+    let output_key = format!("tokenusage:output:{}:{}", model_id, hour);
+
+    if input_tokens > 0 {
+        if let Err(e) = conn.incr::<_, i64, i64>(&input_key, input_tokens).await {
+            warn!(error = %e, key = %input_key, "Failed to increment input token usage in Redis");
+        } else if let Err(e) = conn.expire::<_, bool>(&input_key, 3600).await {
+            warn!(error = %e, key = %input_key, "Failed to set TTL on input token usage key in Redis");
+        }
+    }
+    if output_tokens > 0 {
+        if let Err(e) = conn.incr::<_, i64, i64>(&output_key, output_tokens).await {
+            warn!(error = %e, key = %output_key, "Failed to increment output token usage in Redis");
+        } else if let Err(e) = conn.expire::<_, bool>(&output_key, 3600).await {
+            warn!(error = %e, key = %output_key, "Failed to set TTL on output token usage key in Redis");
+        }
+    }
+}
+
 /// Handle an event entry from the async task queue.
 ///
 /// This performs the following:
@@ -75,6 +123,11 @@ pub async fn handle_openai_event(
 
     // Extract usage before serializing
     let usage = extract_usage(&event.event_data);
+
+    // Increment hourly token usage counters in Redis
+    if let Some(u) = &usage {
+        increment_token_usage(model_id, u.input_tokens, u.output_tokens).await;
+    }
 
     let event_data_json =
         serde_json::to_value(&event.event_data).unwrap_or(serde_json::Value::Null);

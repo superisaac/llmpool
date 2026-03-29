@@ -192,3 +192,6 @@ admin API /api/v1/sessionevents/ 的参数不要page size, page, 改成 start=<e
     "has_more": true/false
 }
 ```
+
+=========
+设计一个基于redis的按小时累积的usage counter, key 是 "tokenusage:input:<model.id>:<hour>" 和 "tokenusage:output:<model.id>:<hour>"。 在handle_openai_event 方法中获得usage以后，按照对应的key采用redis 的incr方法累加usage。
