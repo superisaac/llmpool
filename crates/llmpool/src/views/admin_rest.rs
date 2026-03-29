@@ -103,8 +103,8 @@ struct EndpointResponse {
     updated_at: String,
 }
 
-impl From<crate::models::OpenAIEndpoint> for EndpointResponse {
-    fn from(ep: crate::models::OpenAIEndpoint) -> Self {
+impl From<crate::models::LLMEndpoint> for EndpointResponse {
+    fn from(ep: crate::models::LLMEndpoint) -> Self {
         Self {
             id: ep.id,
             name: ep.name,
@@ -895,8 +895,8 @@ struct ModelResponse {
     updated_at: String,
 }
 
-impl From<crate::models::OpenAIModel> for ModelResponse {
-    fn from(m: crate::models::OpenAIModel) -> Self {
+impl From<crate::models::LLMModel> for ModelResponse {
+    fn from(m: crate::models::LLMModel) -> Self {
         Self {
             id: m.id,
             endpoint_id: m.endpoint_id,
@@ -991,7 +991,7 @@ async fn create_endpoint(
                 Ok(endpoint) => {
                     // Update tags and proxies if the request included them
                     let endpoint = if !payload.tags.is_empty() || !payload.proxies.is_empty() {
-                        let update = crate::models::UpdateOpenAIEndpoint {
+                        let update = crate::models::UpdateLLMEndpoint {
                             name: None,
                             api_base: None,
                             api_key: None,
@@ -1231,7 +1231,7 @@ async fn update_endpoint_by_id(
         }
     }
 
-    let update = crate::models::UpdateOpenAIEndpoint {
+    let update = crate::models::UpdateLLMEndpoint {
         name: payload.name,
         api_base: None,
         api_key: None,
@@ -1329,7 +1329,7 @@ async fn update_model_by_id(
         }
     }
 
-    let update = crate::models::UpdateOpenAIModel {
+    let update = crate::models::UpdateLLMModel {
         model_id: None,
         has_image_generation: None,
         has_speech: None,

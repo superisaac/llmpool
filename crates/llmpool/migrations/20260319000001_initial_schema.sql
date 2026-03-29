@@ -1,5 +1,5 @@
--- Create openai_endpoints table
-CREATE TABLE IF NOT EXISTS openai_endpoints (
+-- Create llm_endpoints table
+CREATE TABLE IF NOT EXISTS llm_endpoints (
     id SERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
     api_base VARCHAR NOT NULL,
@@ -12,13 +12,13 @@ CREATE TABLE IF NOT EXISTS openai_endpoints (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_endpoints_api_base ON openai_endpoints (api_base);
-CREATE INDEX IF NOT EXISTS idx_openai_endpoints_tags ON openai_endpoints USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_llm_endpoints_api_base ON llm_endpoints (api_base);
+CREATE INDEX IF NOT EXISTS idx_llm_endpoints_tags ON llm_endpoints USING GIN (tags);
 
--- Create openai_models table
-CREATE TABLE IF NOT EXISTS openai_models (
+-- Create llm_models table
+CREATE TABLE IF NOT EXISTS llm_models (
     id SERIAL PRIMARY KEY,
-    endpoint_id INTEGER NOT NULL REFERENCES openai_endpoints(id) ON DELETE CASCADE,
+    endpoint_id INTEGER NOT NULL REFERENCES llm_endpoints(id) ON DELETE CASCADE,
     model_id VARCHAR NOT NULL,
     has_image_generation BOOLEAN NOT NULL DEFAULT FALSE,
     has_speech BOOLEAN NOT NULL DEFAULT FALSE,
@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS openai_models (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_models_endpoint_model ON openai_models (endpoint_id, model_id);
-CREATE INDEX IF NOT EXISTS idx_openai_models_endpoint_id ON openai_models (endpoint_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_endpoint_model ON llm_models (endpoint_id, model_id);
+CREATE INDEX IF NOT EXISTS idx_llm_models_endpoint_id ON llm_models (endpoint_id);
 
 -- Create consumers table
 CREATE TABLE IF NOT EXISTS consumers (

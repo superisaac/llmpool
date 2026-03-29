@@ -509,7 +509,7 @@
           }
         }
       },
-      "OpenAIAPIKeyResponse": {
+      "LLMAPIKeyResponse": {
         "type": "object",
         "required": [
           "id",
@@ -582,7 +582,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/OpenAIAPIKeyResponse"
+              "$ref": "#/components/schemas/LLMAPIKeyResponse"
             }
           },
           "pagination": {
@@ -2098,7 +2098,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/OpenAIAPIKeyResponse"
+                  "$ref": "#/components/schemas/LLMAPIKeyResponse"
                 }
               }
             }

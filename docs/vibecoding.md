@@ -33,8 +33,8 @@ enum BalanceChangeContent {
 实现一个 clap admin jwt-token 命令，用于生成jwt token, 可选指定expire时间
 
 ========
-OpenAIModel 增加两个字段 input_token_price, output_token_price, 用于记录输入和输出的token价格, 类型都是decimal, 默认为0.000001
-将 SessionTracer 的 add 方法中的SessionEventData 提取出event_data的不同payload中，提取出里面的usage(如果有), 并根据usage 计算输入和输出的token数量，从OpenAIModel的input_token_price 和output_token_price字段中获取价格, 共同生成SpendToken对象以及存在BalanceChange中。
+LLMModel 增加两个字段 input_token_price, output_token_price, 用于记录输入和输出的token价格, 类型都是decimal, 默认为0.000001
+将 SessionTracer 的 add 方法中的SessionEventData 提取出event_data的不同payload中，提取出里面的usage(如果有), 并根据usage 计算输入和输出的token数量，从LLMModel的input_token_price 和output_token_price字段中获取价格, 共同生成SpendToken对象以及存在BalanceChange中。
 
 ========
 写一个数据库方法 apply_balance_change，并用在session_tracer 的 add 方法中，用于更新UserBalance信息
@@ -76,7 +76,7 @@ BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕
 SessionEvent 增加一个session_index 字段，从OpenAIEventTask 中获取； initial_schema和migrations 文件可以修改，不用新增。
 
 ========
-OpenAIEndpoint 添加一个字段tags: Vec<String>, 用于记录该endpoint的标签.
+LLMEndpoint 添加一个字段tags: Vec<String>, 用于记录该endpoint的标签.
 
 ========
 在文件 views/passthrough.rs 中，实现透传request 和 response 的逻辑。URL /passthrough/tag/:tag/:rest, 通过tag 找到对应的endpoint list, 随机选择一个endpoint, 使用reqwest, 透传request 和 response。url 重写为 /:rest.
@@ -91,12 +91,12 @@ admin rest api 使用"x-admin-token" header作为验证， header的内容是jwt
 middleware auth_jwt 的逻辑抽出来单独放在 middlewares/admin_auth.rs 中，并修改passthrough.rs 和admin_rest.rs 中使用middleware.
 
 ========
-给OpenAIEndpoint 增加一个字段 proxies: Vec<String>, 用于记录该endpoint的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。
+给LLMEndpoint 增加一个字段 proxies: Vec<String>, 用于记录该endpoint的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。
 
 ========
-OpenAIEndpoint 添加一个字段 status: String, 用于记录该endpoint的运行状态, 可选值为 online, offline, maintenance, 默认值为online.
-OpenAIEndpoint 添加一个字段 description: String, 用于记录该endpoint的描述信息, 缺省为空。
-OpenAIModel 添加一个字段 description: String, 用于记录该model的描述信息, 缺省为空。
+LLMEndpoint 添加一个字段 status: String, 用于记录该endpoint的运行状态, 可选值为 online, offline, maintenance, 默认值为online.
+LLMEndpoint 添加一个字段 description: String, 用于记录该endpoint的描述信息, 缺省为空。
+LLMModel 添加一个字段 description: String, 用于记录该model的描述信息, 缺省为空。
 可以直接修改migrations 文件，不用新建migration文件。
 
 增加 admin api: GET /api/v1/endpoints/:endpoint_id, 根据endpoint_id 获得endpoint信息
@@ -134,7 +134,7 @@ llmpool-ctl 添加以下命令
 1. llmpool-ctl user show --user <username_or_id>, 显示用户信息
 
 =========
-AccessKey 修改为 OpenAIAPIKey, 直接修改migraion 文件，不用新建migration文件。
+AccessKey 修改为 LLMAPIKey, 直接修改migraion 文件，不用新建migration文件。
 
 ADMIN api 增加如下命令
 1. PUT /api/v1/users/:user_id, 修改用户信息，可修改字段为 username, is_active
@@ -173,7 +173,7 @@ model 的admin api信息中应该有price, 也可以修改price 字段
 db model User 全局换成Consumer
 
 =========
-SessionEvent 增加一个字段 api_key_id，用于记录该session使用的api_key_id. task_local 对象OPENAI_API_KEY中获得， 可以在session_tracer.rs中加入SessionTracer结构中。
+SessionEvent 增加一个字段 api_key_id，用于记录该session使用的api_key_id. task_local 对象LLM_API_KEY中获得， 可以在session_tracer.rs中加入SessionTracer结构中。
 增加 admin api: GET /api/v1/sessionevents/, 支持session=<session_id>参数 获得SessionEvent列表
 llmpool-ctl sessionevents list [--session <session_id>] 显示SessionEvent列表
 

@@ -139,7 +139,7 @@ pub struct TagsResponse {
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-pub struct OpenAIAPIKeyResponse {
+pub struct LLMAPIKeyResponse {
     pub id: i32,
     pub consumer_id: Option<i32>,
     pub apikey: String,

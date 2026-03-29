@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // ============================================================
-// OpenAIAPIKey
+// LLMAPIKey
 // ============================================================
 
 /// Represents an API access key associated with a user

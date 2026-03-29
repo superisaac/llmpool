@@ -6,7 +6,7 @@ use tracing::{info, warn};
 use crate::db::{self, DbPool};
 use crate::defer::{BalanceChangeTask, OpenAIEventData, OpenAIEventTask};
 use crate::models::{
-    BalanceChangeContent, NewBalanceChange, NewSessionEvent, OpenAIModel, SpendToken,
+    BalanceChangeContent, NewBalanceChange, NewSessionEvent, LLMModel, SpendToken,
 };
 
 /// Represents extracted usage information from a response
@@ -92,7 +92,7 @@ pub async fn handle_openai_event(
     };
 
     // Look up the model to get token prices (needed for both session event and balance change)
-    let model: Option<OpenAIModel> = match db::openai::get_model_with_tx(&mut tx, model_id).await {
+    let model: Option<LLMModel> = match db::openai::get_model_with_tx(&mut tx, model_id).await {
         Ok(model) => Some(model),
         Err(e) => {
             warn!(

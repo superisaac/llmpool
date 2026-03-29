@@ -231,11 +231,11 @@ async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
     }
 }
 
-/// Build a Client from an (OpenAIModel, OpenAIEndpoint) pair.
+/// Build a Client from an (LLMModel, LLMEndpoint) pair.
 /// If the endpoint has proxies configured, a random one is selected and used.
 fn build_client_from_model_endpoint(
-    model: &crate::models::OpenAIModel,
-    endpoint: &crate::models::OpenAIEndpoint,
+    model: &crate::models::LLMModel,
+    endpoint: &crate::models::LLMEndpoint,
 ) -> (Client<OpenAIConfig>, i32) {
     let config = OpenAIConfig::new()
         .with_api_key(endpoint.api_key.clone())
@@ -294,7 +294,7 @@ async fn select_model_clients(
         };
 
     // Randomly select up to `count` distinct models/endpoints
-    let selected: Vec<&(crate::models::OpenAIModel, crate::models::OpenAIEndpoint)> = {
+    let selected: Vec<&(crate::models::LLMModel, crate::models::LLMEndpoint)> = {
         use rand::seq::SliceRandom;
         let mut rng = rand::rng();
         let mut shuffled: Vec<_> = models.iter().collect();

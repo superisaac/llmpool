@@ -5,7 +5,7 @@ use sqlx::FromRow;
 
 /// Represents an OpenAI-compatible API endpoint
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct OpenAIEndpoint {
+pub struct LLMEndpoint {
     pub id: i32,
     pub name: String,
     pub api_base: String,
@@ -21,7 +21,7 @@ pub struct OpenAIEndpoint {
 
 /// Used to insert a new OpenAI endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewOpenAIEndpoint {
+pub struct NewLLMEndpoint {
     pub name: String,
     pub api_base: String,
     pub api_key: String,
@@ -42,7 +42,7 @@ fn default_status() -> String {
 
 /// Used to update an existing OpenAI endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateOpenAIEndpoint {
+pub struct UpdateLLMEndpoint {
     pub name: Option<String>,
     pub api_base: Option<String>,
     pub api_key: Option<String>,
@@ -56,7 +56,7 @@ pub struct UpdateOpenAIEndpoint {
 
 /// Represents a model available on an OpenAI-compatible endpoint
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct OpenAIModel {
+pub struct LLMModel {
     pub id: i32,
     pub endpoint_id: i32,
     pub model_id: String,
@@ -73,7 +73,7 @@ pub struct OpenAIModel {
 
 /// Used to insert a new OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewOpenAIModel {
+pub struct NewLLMModel {
     pub endpoint_id: i32,
     pub model_id: String,
     pub has_image_generation: bool,
@@ -96,7 +96,7 @@ pub struct CapacityOption {
 
 /// Used to update an existing OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateOpenAIModel {
+pub struct UpdateLLMModel {
     pub model_id: Option<String>,
     pub has_image_generation: Option<bool>,
     pub has_speech: Option<bool>,

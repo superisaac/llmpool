@@ -45,9 +45,9 @@ async fn create_test_endpoint(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     name: &str,
     api_base: &str,
-) -> OpenAIEndpoint {
-    sqlx::query_as::<_, OpenAIEndpoint>(
-        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
+) -> LLMEndpoint {
+    sqlx::query_as::<_, LLMEndpoint>(
+        "INSERT INTO llm_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
          VALUES ($1, $2, 'test-key', false, '{}', '{}', 'online', '')
          RETURNING *",
     )
@@ -63,9 +63,9 @@ async fn create_test_model(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     endpoint_id: i32,
     model_id: &str,
-) -> OpenAIModel {
-    sqlx::query_as::<_, OpenAIModel>(
-        "INSERT INTO openai_models (endpoint_id, model_id, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
+) -> LLMModel {
+    sqlx::query_as::<_, LLMModel>(
+        "INSERT INTO llm_models (endpoint_id, model_id, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
          VALUES ($1, $2, true, false, false, false, 0.000001, 0.000001)
          RETURNING *",
     )
@@ -345,7 +345,7 @@ mod api_key_tests {
         let consumer = create_test_consumer(&mut tx, "test_apikey_consumer").await;
 
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
         )
         .bind(consumer.id)
         .bind("lpx-testapikey123")
@@ -372,7 +372,7 @@ mod api_key_tests {
         let consumer = create_test_consumer(&mut tx, "test_apikey_dup_consumer").await;
 
         // Create first key
-        sqlx::query("INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
             .bind(consumer.id)
             .bind("lpx-duplicate-key")
             .bind("first")
@@ -382,7 +382,7 @@ mod api_key_tests {
 
         // Attempt duplicate
         let result = sqlx::query(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
         )
         .bind(consumer.id)
         .bind("lpx-duplicate-key")
@@ -403,7 +403,7 @@ mod api_key_tests {
         let consumer = create_test_consumer(&mut tx, "test_find_active_key").await;
 
         sqlx::query(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
         .bind(consumer.id)
         .bind("lpx-active-key")
@@ -415,7 +415,7 @@ mod api_key_tests {
 
         // Find active key
         let found = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM openai_api_keys WHERE apikey = $1 AND is_active = true",
+            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-active-key")
         .fetch_optional(&mut *tx)
@@ -436,7 +436,7 @@ mod api_key_tests {
         let consumer = create_test_consumer(&mut tx, "test_find_inactive_key").await;
 
         sqlx::query(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
         .bind(consumer.id)
         .bind("lpx-inactive-key")
@@ -448,7 +448,7 @@ mod api_key_tests {
 
         // Should not find inactive key
         let found = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM openai_api_keys WHERE apikey = $1 AND is_active = true",
+            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-inactive-key")
         .fetch_optional(&mut *tx)
@@ -470,7 +470,7 @@ mod api_key_tests {
         // Create 3 keys
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
             )
             .bind(consumer.id)
             .bind(format!("lpx-count-key-{}", i))
@@ -481,7 +481,7 @@ mod api_key_tests {
         }
 
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM openai_api_keys WHERE consumer_id = $1")
+            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
                 .bind(consumer.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -502,7 +502,7 @@ mod api_key_tests {
         // Create 5 keys
         for i in 0..5 {
             sqlx::query(
-                "INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
             )
             .bind(consumer.id)
             .bind(format!("lpx-paged-key-{}", i))
@@ -514,7 +514,7 @@ mod api_key_tests {
 
         // Page 1
         let page1 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM openai_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+            "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
         .bind(consumer.id)
         .bind(2i64)
@@ -527,7 +527,7 @@ mod api_key_tests {
 
         // Page 3 (should have 1 item)
         let page3 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM openai_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+            "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
         .bind(consumer.id)
         .bind(2i64)
@@ -548,7 +548,7 @@ mod api_key_tests {
 
         let consumer = create_test_consumer(&mut tx, "test_cascade_delete").await;
 
-        sqlx::query("INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
             .bind(consumer.id)
             .bind("lpx-cascade-key")
             .bind("cascade")
@@ -565,7 +565,7 @@ mod api_key_tests {
 
         // API key should be gone (CASCADE)
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM openai_api_keys WHERE consumer_id = $1")
+            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
                 .bind(consumer.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -609,8 +609,8 @@ mod openai_tests {
 
         create_test_endpoint(&mut tx, "ep1", "https://api.dup.com/v1").await;
 
-        let result = sqlx::query_as::<_, OpenAIEndpoint>(
-            "INSERT INTO openai_endpoints (name, api_base, api_key) VALUES ($1, $2, $3) RETURNING *",
+        let result = sqlx::query_as::<_, LLMEndpoint>(
+            "INSERT INTO llm_endpoints (name, api_base, api_key) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind("ep2")
         .bind("https://api.dup.com/v1")
@@ -632,7 +632,7 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "test-get-ep", "https://api.getep.com/v1").await;
 
         let found =
-            sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
                 .bind(endpoint.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -651,7 +651,7 @@ mod openai_tests {
         create_test_endpoint(&mut tx, "test-name-ep", "https://api.nameep.com/v1").await;
 
         let found =
-            sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE name = $1")
+            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
                 .bind("test-name-ep")
                 .fetch_one(&mut *tx)
                 .await
@@ -670,8 +670,8 @@ mod openai_tests {
         let endpoint =
             create_test_endpoint(&mut tx, "test-update-ep", "https://api.updateep.com/v1").await;
 
-        let updated = sqlx::query_as::<_, OpenAIEndpoint>(
-            "UPDATE openai_endpoints SET name = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMEndpoint>(
+            "UPDATE llm_endpoints SET name = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
         )
         .bind("updated-ep-name")
         .bind("offline")
@@ -694,7 +694,7 @@ mod openai_tests {
         let endpoint =
             create_test_endpoint(&mut tx, "test-delete-ep", "https://api.deleteep.com/v1").await;
 
-        let result = sqlx::query("DELETE FROM openai_endpoints WHERE id = $1")
+        let result = sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
             .bind(endpoint.id)
             .execute(&mut *tx)
             .await
@@ -704,7 +704,7 @@ mod openai_tests {
 
         // Verify it's gone
         let found =
-            sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
                 .bind(endpoint.id)
                 .fetch_optional(&mut *tx)
                 .await
@@ -720,7 +720,7 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_endpoints")
+        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -728,7 +728,7 @@ mod openai_tests {
         create_test_endpoint(&mut tx, "count-ep-1", "https://api.count1.com/v1").await;
         create_test_endpoint(&mut tx, "count-ep-2", "https://api.count2.com/v1").await;
 
-        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_endpoints")
+        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -746,8 +746,8 @@ mod openai_tests {
         let endpoint = create_test_endpoint(&mut tx, "tag-ep", "https://api.tagep.com/v1").await;
 
         // Add a tag
-        let updated = sqlx::query_as::<_, OpenAIEndpoint>(
-            "UPDATE openai_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMEndpoint>(
+            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
         .bind(endpoint.id)
         .bind("production")
@@ -758,8 +758,8 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production"]);
 
         // Add another tag
-        let updated = sqlx::query_as::<_, OpenAIEndpoint>(
-            "UPDATE openai_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMEndpoint>(
+            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
         .bind(endpoint.id)
         .bind("fast")
@@ -770,8 +770,8 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production", "fast"]);
 
         // Adding duplicate tag should not change
-        let updated = sqlx::query_as::<_, OpenAIEndpoint>(
-            "UPDATE openai_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMEndpoint>(
+            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
         .bind(endpoint.id)
         .bind("production")
@@ -782,8 +782,8 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production", "fast"]);
 
         // Remove a tag
-        let updated = sqlx::query_as::<_, OpenAIEndpoint>(
-            "UPDATE openai_endpoints SET tags = array_remove(tags, $2), updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMEndpoint>(
+            "UPDATE llm_endpoints SET tags = array_remove(tags, $2), updated_at = NOW() WHERE id = $1 RETURNING *",
         )
         .bind(endpoint.id)
         .bind("production")
@@ -808,15 +808,15 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "tag-search-2", "https://api.tagsearch2.com/v1").await;
 
         // Add tag to ep1 only
-        sqlx::query("UPDATE openai_endpoints SET tags = array_append(tags, $2) WHERE id = $1")
+        sqlx::query("UPDATE llm_endpoints SET tags = array_append(tags, $2) WHERE id = $1")
             .bind(ep1.id)
             .bind("special")
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        let found = sqlx::query_as::<_, OpenAIEndpoint>(
-            "SELECT * FROM openai_endpoints WHERE $1 = ANY(tags)",
+        let found = sqlx::query_as::<_, LLMEndpoint>(
+            "SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)",
         )
         .bind("special")
         .fetch_all(&mut *tx)
@@ -858,8 +858,8 @@ mod openai_tests {
         create_test_model(&mut tx, endpoint.id, "gpt-4").await;
 
         // Duplicate (endpoint_id, model_id) should fail
-        let result = sqlx::query_as::<_, OpenAIModel>(
-            "INSERT INTO openai_models (endpoint_id, model_id) VALUES ($1, $2) RETURNING *",
+        let result = sqlx::query_as::<_, LLMModel>(
+            "INSERT INTO llm_models (endpoint_id, model_id) VALUES ($1, $2) RETURNING *",
         )
         .bind(endpoint.id)
         .bind("gpt-4")
@@ -885,7 +885,7 @@ mod openai_tests {
         create_test_model(&mut tx, endpoint.id, "gpt-3.5-turbo").await;
 
         let models =
-            sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE endpoint_id = $1")
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE endpoint_id = $1")
                 .bind(endpoint.id)
                 .fetch_all(&mut *tx)
                 .await
@@ -905,7 +905,7 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "get-model-ep", "https://api.getmodel.com/v1").await;
         let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
 
-        let found = sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE id = $1")
+        let found = sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
             .bind(model.id)
             .fetch_one(&mut *tx)
             .await
@@ -925,8 +925,8 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "find-model-ep", "https://api.findmodel.com/v1").await;
         create_test_model(&mut tx, endpoint.id, "claude-3").await;
 
-        let found = sqlx::query_as::<_, OpenAIModel>(
-            "SELECT * FROM openai_models WHERE endpoint_id = $1 AND model_id = $2",
+        let found = sqlx::query_as::<_, LLMModel>(
+            "SELECT * FROM llm_models WHERE endpoint_id = $1 AND model_id = $2",
         )
         .bind(endpoint.id)
         .bind("claude-3")
@@ -949,8 +949,8 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "upd-model-ep", "https://api.updmodel.com/v1").await;
         let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
 
-        let updated = sqlx::query_as::<_, OpenAIModel>(
-            "UPDATE openai_models SET has_embedding = true, has_image_generation = true, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMModel>(
+            "UPDATE llm_models SET has_embedding = true, has_image_generation = true, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
         .bind(model.id)
         .fetch_one(&mut *tx)
@@ -973,7 +973,7 @@ mod openai_tests {
             create_test_endpoint(&mut tx, "del-model-ep", "https://api.delmodel.com/v1").await;
         let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
 
-        let result = sqlx::query("DELETE FROM openai_models WHERE id = $1")
+        let result = sqlx::query("DELETE FROM llm_models WHERE id = $1")
             .bind(model.id)
             .execute(&mut *tx)
             .await
@@ -999,7 +999,7 @@ mod openai_tests {
         create_test_model(&mut tx, endpoint.id, "gpt-3.5").await;
 
         // Delete endpoint
-        sqlx::query("DELETE FROM openai_endpoints WHERE id = $1")
+        sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
             .bind(endpoint.id)
             .execute(&mut *tx)
             .await
@@ -1007,7 +1007,7 @@ mod openai_tests {
 
         // Models should be gone (CASCADE)
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM openai_models WHERE endpoint_id = $1")
+            sqlx::query_as("SELECT COUNT(*) FROM llm_models WHERE endpoint_id = $1")
                 .bind(endpoint.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -1033,8 +1033,8 @@ mod openai_tests {
         create_test_model(&mut tx, ep1.id, "shared-model").await;
         create_test_model(&mut tx, ep2.id, "shared-model").await;
 
-        let found = sqlx::query_as::<_, OpenAIModel>(
-            "SELECT * FROM openai_models WHERE model_id = $1 LIMIT 1",
+        let found = sqlx::query_as::<_, LLMModel>(
+            "SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1",
         )
         .bind("shared-model")
         .fetch_one(&mut *tx)
@@ -1060,8 +1060,8 @@ mod openai_tests {
             .await;
         }
 
-        let page = sqlx::query_as::<_, OpenAIEndpoint>(
-            "SELECT * FROM openai_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
+        let page = sqlx::query_as::<_, LLMEndpoint>(
+            "SELECT * FROM llm_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
         )
         .bind(3i64)
         .bind(0i64)
@@ -1082,8 +1082,8 @@ mod openai_tests {
         let endpoint =
             create_test_endpoint(&mut tx, "price-ep", "https://api.priceep.com/v1").await;
 
-        let model = sqlx::query_as::<_, OpenAIModel>(
-            "INSERT INTO openai_models (endpoint_id, model_id, input_token_price, output_token_price)
+        let model = sqlx::query_as::<_, LLMModel>(
+            "INSERT INTO llm_models (endpoint_id, model_id, input_token_price, output_token_price)
              VALUES ($1, $2, $3, $4) RETURNING *",
         )
         .bind(endpoint.id)
@@ -1871,7 +1871,7 @@ mod integration_tests {
 
         // Create API key for consumer
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind(consumer.id)
         .bind("lpx-integration-key")
@@ -1884,7 +1884,7 @@ mod integration_tests {
 
         // Verify consumer can be found by API key
         let found_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM openai_api_keys WHERE apikey = $1 AND is_active = true",
+            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-integration-key")
         .fetch_optional(&mut *tx)
@@ -1919,7 +1919,7 @@ mod integration_tests {
         // Create consumer and API key
         let consumer = create_test_consumer(&mut tx, "integration_ep_consumer").await;
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO openai_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind(consumer.id)
         .bind("lpx-integration-ep-key")

@@ -6,12 +6,12 @@ use crate::models::*;
 pub type DbPool = PgPool;
 
 // ============================================================
-// Helper: decrypt api_key in an OpenAIEndpoint after reading from DB
+// Helper: decrypt api_key in an LLMEndpoint after reading from DB
 // ============================================================
 
-/// Decrypt the `api_key` field of an `OpenAIEndpoint`.
+/// Decrypt the `api_key` field of an `LLMEndpoint`.
 /// If encryption is not configured, the value is returned as-is.
-fn decrypt_endpoint(mut endpoint: OpenAIEndpoint) -> Result<OpenAIEndpoint, sqlx::Error> {
+fn decrypt_endpoint(mut endpoint: LLMEndpoint) -> Result<LLMEndpoint, sqlx::Error> {
     endpoint.api_key = crypto::decrypt_if_configured(&endpoint.api_key)
         .map_err(|e| sqlx::Error::Protocol(format!("Failed to decrypt api_key: {}", e)))?;
     Ok(endpoint)
@@ -25,17 +25,17 @@ fn encrypt_api_key(api_key: &str) -> Result<String, sqlx::Error> {
 }
 
 // ============================================================
-// OpenAIEndpoint CRUD operations
+// LLMEndpoint CRUD operations
 // ============================================================
 
 /// Create a new OpenAI endpoint
 pub async fn create_endpoint(
     pool: &DbPool,
-    new_endpoint: &NewOpenAIEndpoint,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
+    new_endpoint: &NewLLMEndpoint,
+) -> Result<LLMEndpoint, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
-    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "INSERT INTO openai_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
+        "INSERT INTO llm_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *",
     )
@@ -53,8 +53,8 @@ pub async fn create_endpoint(
 }
 
 /// List all OpenAI endpoints (with decrypted api_keys)
-pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
-    let endpoints = sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints")
+pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
+    let endpoints = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints")
         .fetch_all(pool)
         .await?;
     endpoints.into_iter().map(decrypt_endpoint).collect()
@@ -62,7 +62,7 @@ pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<OpenAIEndpoint>, sqlx::
 
 /// Count total number of OpenAI endpoints
 pub async fn count_endpoints(pool: &DbPool) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_endpoints")
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
         .fetch_one(pool)
         .await?;
     Ok(row.0)
@@ -74,9 +74,9 @@ pub async fn list_endpoints_paginated(
     pool: &DbPool,
     offset: i64,
     limit: i64,
-) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
-    let endpoints = sqlx::query_as::<_, OpenAIEndpoint>(
-        "SELECT * FROM openai_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
+) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
+    let endpoints = sqlx::query_as::<_, LLMEndpoint>(
+        "SELECT * FROM llm_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
     )
     .bind(limit)
     .bind(offset)
@@ -86,9 +86,9 @@ pub async fn list_endpoints_paginated(
 }
 
 /// Get an OpenAI endpoint by ID (with decrypted api_key)
-pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpoint, sqlx::Error> {
+pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<LLMEndpoint, sqlx::Error> {
     let endpoint =
-        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
             .bind(endpoint_id)
             .fetch_one(pool)
             .await?;
@@ -99,9 +99,9 @@ pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<OpenAIEndpo
 pub async fn get_endpoint_by_name(
     pool: &DbPool,
     name: &str,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
+) -> Result<LLMEndpoint, sqlx::Error> {
     let endpoint =
-        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE name = $1")
+        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
             .bind(name)
             .fetch_one(pool)
             .await?;
@@ -112,9 +112,9 @@ pub async fn get_endpoint_by_name(
 pub async fn get_endpoint_by_api_base(
     pool: &DbPool,
     api_base: &str,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
+) -> Result<LLMEndpoint, sqlx::Error> {
     let endpoint =
-        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE api_base = $1")
+        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE api_base = $1")
             .bind(api_base)
             .fetch_one(pool)
             .await?;
@@ -125,8 +125,8 @@ pub async fn get_endpoint_by_api_base(
 pub async fn update_endpoint(
     pool: &DbPool,
     endpoint_id: i32,
-    update: &UpdateOpenAIEndpoint,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
+    update: &UpdateLLMEndpoint,
+) -> Result<LLMEndpoint, sqlx::Error> {
     // Fetch current values first (already decrypted by get_endpoint)
     let current = get_endpoint(pool, endpoint_id).await?;
 
@@ -147,8 +147,8 @@ pub async fn update_endpoint(
         .unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
-    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "UPDATE openai_endpoints
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
+        "UPDATE llm_endpoints
          SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, proxies = $6, status = $7, description = $8, updated_at = $9
          WHERE id = $10
          RETURNING *",
@@ -170,7 +170,7 @@ pub async fn update_endpoint(
 
 /// Delete an OpenAI endpoint
 pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM openai_endpoints WHERE id = $1")
+    let result = sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
         .bind(endpoint_id)
         .execute(pool)
         .await?;
@@ -178,16 +178,16 @@ pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sql
 }
 
 // ============================================================
-// OpenAIModel CRUD operations
+// LLMModel CRUD operations
 // ============================================================
 
 /// Create a new OpenAI model
 pub async fn create_model(
     pool: &DbPool,
-    new_model: &NewOpenAIModel,
-) -> Result<OpenAIModel, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>(
-        "INSERT INTO openai_models (endpoint_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
+    new_model: &NewLLMModel,
+) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>(
+        "INSERT INTO llm_models (endpoint_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *"
     )
@@ -204,8 +204,8 @@ pub async fn create_model(
 }
 
 /// List all OpenAI models
-pub async fn list_models(pool: &DbPool) -> Result<Vec<OpenAIModel>, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models")
+pub async fn list_models(pool: &DbPool) -> Result<Vec<LLMModel>, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models")
         .fetch_all(pool)
         .await
 }
@@ -214,16 +214,16 @@ pub async fn list_models(pool: &DbPool) -> Result<Vec<OpenAIModel>, sqlx::Error>
 pub async fn list_models_by_endpoint(
     pool: &DbPool,
     endpoint_id: i32,
-) -> Result<Vec<OpenAIModel>, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE endpoint_id = $1")
+) -> Result<Vec<LLMModel>, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE endpoint_id = $1")
         .bind(endpoint_id)
         .fetch_all(pool)
         .await
 }
 
 /// Get an OpenAI model by ID
-pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<OpenAIModel, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE id = $1")
+pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
         .bind(model_id)
         .fetch_one(pool)
         .await
@@ -233,8 +233,8 @@ pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<OpenAIModel, sqlx
 pub async fn get_model_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     model_id: i32,
-) -> Result<OpenAIModel, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE id = $1")
+) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
         .bind(model_id)
         .fetch_one(&mut **tx)
         .await
@@ -245,9 +245,9 @@ pub async fn find_model_by_endpoint_and_model_id(
     pool: &DbPool,
     endpoint_id: i32,
     model_id_str: &str,
-) -> Result<OpenAIModel, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>(
-        "SELECT * FROM openai_models WHERE endpoint_id = $1 AND model_id = $2",
+) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>(
+        "SELECT * FROM llm_models WHERE endpoint_id = $1 AND model_id = $2",
     )
     .bind(endpoint_id)
     .bind(model_id_str)
@@ -259,8 +259,8 @@ pub async fn find_model_by_endpoint_and_model_id(
 pub async fn update_model(
     pool: &DbPool,
     model_pk: i32,
-    update: &UpdateOpenAIModel,
-) -> Result<OpenAIModel, sqlx::Error> {
+    update: &UpdateLLMModel,
+) -> Result<LLMModel, sqlx::Error> {
     // Fetch current values first
     let current = get_model(pool, model_pk).await?;
 
@@ -287,8 +287,8 @@ pub async fn update_model(
         .unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
-    sqlx::query_as::<_, OpenAIModel>(
-        "UPDATE openai_models
+    sqlx::query_as::<_, LLMModel>(
+        "UPDATE llm_models
          SET model_id = $1, has_image_generation = $2, has_speech = $3, has_chat_completion = $4,
              has_embedding = $5, input_token_price = $6, output_token_price = $7,
              description = $8, updated_at = $9
@@ -313,8 +313,8 @@ pub async fn update_model(
 pub async fn find_first_model_by_name(
     pool: &DbPool,
     model_name: &str,
-) -> Result<OpenAIModel, sqlx::Error> {
-    sqlx::query_as::<_, OpenAIModel>("SELECT * FROM openai_models WHERE model_id = $1 LIMIT 1")
+) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1")
         .bind(model_name)
         .fetch_one(pool)
         .await
@@ -333,8 +333,8 @@ pub async fn count_models_filtered(
     filter: &ListModelsFilter,
 ) -> Result<i64, sqlx::Error> {
     let mut sql = String::from(
-        "SELECT COUNT(*) FROM openai_models m
-         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+        "SELECT COUNT(*) FROM llm_models m
+         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
          WHERE 1=1",
     );
     let mut param_idx = 0u32;
@@ -372,10 +372,10 @@ pub async fn list_models_filtered_paginated(
     filter: &ListModelsFilter,
     offset: i64,
     limit: i64,
-) -> Result<Vec<OpenAIModel>, sqlx::Error> {
+) -> Result<Vec<LLMModel>, sqlx::Error> {
     let mut sql = String::from(
-        "SELECT m.* FROM openai_models m
-         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+        "SELECT m.* FROM llm_models m
+         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
          WHERE 1=1",
     );
     let mut param_idx = 0u32;
@@ -400,7 +400,7 @@ pub async fn list_models_filtered_paginated(
         limit_idx, offset_idx
     ));
 
-    let mut query = sqlx::query_as::<_, OpenAIModel>(&sql);
+    let mut query = sqlx::query_as::<_, LLMModel>(&sql);
     if let Some(ref eid) = filter.endpoint_id {
         query = query.bind(eid);
     }
@@ -416,7 +416,7 @@ pub async fn list_models_filtered_paginated(
 
 /// Delete an OpenAI model
 pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM openai_models WHERE id = $1")
+    let result = sqlx::query("DELETE FROM llm_models WHERE id = $1")
         .bind(model_pk)
         .execute(pool)
         .await?;
@@ -427,7 +427,7 @@ pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Err
 pub async fn get_endpoint_with_models(
     pool: &DbPool,
     endpoint_id: i32,
-) -> Result<(OpenAIEndpoint, Vec<OpenAIModel>), sqlx::Error> {
+) -> Result<(LLMEndpoint, Vec<LLMModel>), sqlx::Error> {
     let endpoint = get_endpoint(pool, endpoint_id).await?;
     let models = list_models_by_endpoint(pool, endpoint_id).await?;
     Ok((endpoint, models))
@@ -439,7 +439,7 @@ pub async fn get_endpoint_tags(
     endpoint_id: i32,
 ) -> Result<Vec<String>, sqlx::Error> {
     let endpoint =
-        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE id = $1")
+        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
             .bind(endpoint_id)
             .fetch_one(pool)
             .await?;
@@ -452,10 +452,10 @@ pub async fn add_endpoint_tag(
     pool: &DbPool,
     endpoint_id: i32,
     tag: &str,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
+) -> Result<LLMEndpoint, sqlx::Error> {
     // Use array_append only if the tag is not already present
-    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "UPDATE openai_endpoints
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
+        "UPDATE llm_endpoints
          SET tags = CASE
              WHEN $2 = ANY(tags) THEN tags
              ELSE array_append(tags, $2)
@@ -477,9 +477,9 @@ pub async fn remove_endpoint_tag(
     pool: &DbPool,
     endpoint_id: i32,
     tag: &str,
-) -> Result<OpenAIEndpoint, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, OpenAIEndpoint>(
-        "UPDATE openai_endpoints
+) -> Result<LLMEndpoint, sqlx::Error> {
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
+        "UPDATE llm_endpoints
          SET tags = array_remove(tags, $2),
          updated_at = NOW()
          WHERE id = $1
@@ -497,19 +497,19 @@ pub async fn remove_endpoint_tag(
 pub async fn find_endpoints_by_tag(
     pool: &DbPool,
     tag: &str,
-) -> Result<Vec<OpenAIEndpoint>, sqlx::Error> {
+) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
     let endpoints =
-        sqlx::query_as::<_, OpenAIEndpoint>("SELECT * FROM openai_endpoints WHERE $1 = ANY(tags)")
+        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)")
             .bind(tag)
             .fetch_all(pool)
             .await?;
     endpoints.into_iter().map(decrypt_endpoint).collect()
 }
 
-/// A helper struct for the joined query result of OpenAIModel + OpenAIEndpoint
+/// A helper struct for the joined query result of LLMModel + LLMEndpoint
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct ModelEndpointRow {
-    // OpenAIModel fields
+    // LLMModel fields
     pub id: i32,
     pub endpoint_id: i32,
     pub model_id: String,
@@ -522,7 +522,7 @@ struct ModelEndpointRow {
     pub description: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
-    // OpenAIEndpoint fields (aliased)
+    // LLMEndpoint fields (aliased)
     pub ep_id: i32,
     pub ep_name: String,
     pub ep_api_base: String,
@@ -537,8 +537,8 @@ struct ModelEndpointRow {
 }
 
 impl ModelEndpointRow {
-    fn into_tuple(self) -> Result<(OpenAIModel, OpenAIEndpoint), sqlx::Error> {
-        let model = OpenAIModel {
+    fn into_tuple(self) -> Result<(LLMModel, LLMEndpoint), sqlx::Error> {
+        let model = LLMModel {
             id: self.id,
             endpoint_id: self.endpoint_id,
             model_id: self.model_id,
@@ -552,7 +552,7 @@ impl ModelEndpointRow {
             created_at: self.created_at,
             updated_at: self.updated_at,
         };
-        let endpoint = OpenAIEndpoint {
+        let endpoint = LLMEndpoint {
             id: self.ep_id,
             name: self.ep_name,
             api_base: self.ep_api_base,
@@ -579,7 +579,7 @@ pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
     capacity: &CapacityOption,
-) -> Result<Vec<(OpenAIModel, OpenAIEndpoint)>, sqlx::Error> {
+) -> Result<Vec<(LLMModel, LLMEndpoint)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
         "SELECT m.id, m.endpoint_id, m.model_id, m.has_image_generation, m.has_speech,
@@ -590,8 +590,8 @@ pub async fn find_models_by_name_and_capacity(
                 e.tags AS ep_tags, e.proxies AS ep_proxies,
                 e.status AS ep_status, e.description AS ep_description,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
-         FROM openai_models m
-         INNER JOIN openai_endpoints e ON m.endpoint_id = e.id
+         FROM llm_models m
+         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
          WHERE m.model_id = $1",
     );
 

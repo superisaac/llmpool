@@ -2,7 +2,7 @@ use clap::Subcommand;
 use serde::Serialize;
 
 use super::{
-    OpenAIAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate,
+    LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate,
 };
 use crate::client::ApiClient;
 
@@ -42,7 +42,7 @@ struct CreateApiKeyRequestBody {
 // Display Helpers
 // ============================================================
 
-fn print_apikeys(keys: &[OpenAIAPIKeyResponse]) {
+fn print_apikeys(keys: &[LLMAPIKeyResponse]) {
     if keys.is_empty() {
         println!("No API keys found.");
         return;
@@ -65,7 +65,7 @@ fn print_apikeys(keys: &[OpenAIAPIKeyResponse]) {
     }
 }
 
-fn print_apikey_detail(ak: &OpenAIAPIKeyResponse) {
+fn print_apikey_detail(ak: &LLMAPIKeyResponse) {
     println!("API key created successfully!");
     println!();
     println!("  ID:         {}", ak.id);
@@ -97,7 +97,7 @@ pub async fn handle_apikey(
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<OpenAIAPIKeyResponse> = client
+                let resp: PaginatedResponse<LLMAPIKeyResponse> = client
                     .get(&format!("/consumers/{}/apikeys", consumer_id))
                     .await?;
                 print_apikeys(&resp.data);
@@ -113,7 +113,7 @@ pub async fn handle_apikey(
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: OpenAIAPIKeyResponse = client
+                let resp: LLMAPIKeyResponse = client
                     .post(&format!("/consumers/{}/apikeys", consumer_id), &body)
                     .await?;
                 print_apikey_detail(&resp);

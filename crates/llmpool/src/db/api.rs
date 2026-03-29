@@ -9,7 +9,7 @@ pub async fn find_active_api_key_by_apikey(
     apikey: &str,
 ) -> Result<Option<OpenAIAPIKey>, sqlx::Error> {
     sqlx::query_as::<_, OpenAIAPIKey>(
-        "SELECT * FROM openai_api_keys WHERE apikey = $1 AND is_active = true",
+        "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
     )
     .bind(apikey)
     .fetch_optional(pool)
@@ -51,7 +51,7 @@ pub async fn count_api_keys_by_consumer(
     pool: &DbPool,
     consumer_id: i32,
 ) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM openai_api_keys WHERE consumer_id = $1")
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
         .bind(consumer_id)
         .fetch_one(pool)
         .await?;
@@ -67,7 +67,7 @@ pub async fn list_api_keys_by_consumer_paginated(
     limit: i64,
 ) -> Result<Vec<OpenAIAPIKey>, sqlx::Error> {
     sqlx::query_as::<_, OpenAIAPIKey>(
-        "SELECT * FROM openai_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+        "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
     )
     .bind(consumer_id)
     .bind(limit)
@@ -90,7 +90,7 @@ pub async fn create_api_key_for_consumer(
         expires_at: None,
     };
     sqlx::query_as::<_, OpenAIAPIKey>(
-        "INSERT INTO openai_api_keys (consumer_id, apikey, label, expires_at)
+        "INSERT INTO llm_api_keys (consumer_id, apikey, label, expires_at)
          VALUES ($1, $2, $3, $4)
          RETURNING *",
     )

@@ -19,7 +19,7 @@ use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
 use crate::db::{self, DbPool};
-use crate::models::{NewOpenAIEndpoint, NewOpenAIModel, UpdateOpenAIEndpoint, UpdateOpenAIModel};
+use crate::models::{NewLLMEndpoint, NewLLMModel, UpdateLLMEndpoint, UpdateLLMModel};
 
 pub struct ModelFeatures {
     pub model: Model,
@@ -192,11 +192,11 @@ pub async fn detect_and_save_features(
     // 1. Detect features from the remote API
     let api_features = detect_features(api_key, api_base).await?;
 
-    // 2. Upsert the OpenAIEndpoint
+    // 2. Upsert the LLMEndpoint
     let endpoint = match db::openai::get_endpoint_by_api_base(pool, api_base).await {
         Ok(existing) => {
             // Update existing endpoint
-            let update = UpdateOpenAIEndpoint {
+            let update = UpdateLLMEndpoint {
                 name: Some(name.to_string()),
                 api_base: None,
                 api_key: Some(api_key.to_string()),
@@ -211,7 +211,7 @@ pub async fn detect_and_save_features(
         }
         Err(sqlx::Error::RowNotFound) => {
             // Insert new endpoint
-            let new_endpoint = NewOpenAIEndpoint {
+            let new_endpoint = NewLLMEndpoint {
                 name: name.to_string(),
                 api_base: api_base.to_string(),
                 api_key: api_key.to_string(),
@@ -232,7 +232,7 @@ pub async fn detect_and_save_features(
         {
             Ok(existing_model) => {
                 // Update existing model
-                let update = UpdateOpenAIModel {
+                let update = UpdateLLMModel {
                     model_id: None,
                     has_image_generation: Some(mf.has_image_generation),
                     has_speech: Some(mf.has_speech),
@@ -248,7 +248,7 @@ pub async fn detect_and_save_features(
             Err(sqlx::Error::RowNotFound) => {
                 // Insert new model
                 let default_token_price = BigDecimal::from_str("0.000001").unwrap();
-                let new_model = NewOpenAIModel {
+                let new_model = NewLLMModel {
                     endpoint_id: endpoint.id,
                     model_id: mf.model.id.clone(),
                     has_image_generation: mf.has_image_generation,

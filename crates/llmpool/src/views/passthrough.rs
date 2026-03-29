@@ -61,7 +61,7 @@ fn is_hop_by_hop(name: &str) -> bool {
 
 /// Build a reqwest::Client with an optional random proxy from the endpoint's proxies list.
 fn build_http_client_for_endpoint(
-    endpoint: &crate::models::OpenAIEndpoint,
+    endpoint: &crate::models::LLMEndpoint,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder = reqwest::Client::builder();
     if !endpoint.proxies.is_empty() {
@@ -82,7 +82,7 @@ fn build_http_client_for_endpoint(
 /// Proxy the request to the given endpoint, rewriting the URL to /{rest}.
 async fn proxy_to_endpoint(
     _state: &PassthroughState,
-    endpoint: &crate::models::OpenAIEndpoint,
+    endpoint: &crate::models::LLMEndpoint,
     rest: &str,
     req: Request,
 ) -> Response {
