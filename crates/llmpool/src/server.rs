@@ -17,10 +17,11 @@ pub async fn serve(bind: &str) {
     let tracer_provider = telemetry::init_telemetry();
 
     let pool = crate::db::create_pool_from_config().await;
+    let redis_pool = crate::db::create_redis_pool_from_config().await;
     let event_storage = crate::defer::create_event_storage().await;
     let balance_change_storage = crate::defer::create_balance_change_storage().await;
 
-    let openai_router = openai_proxy::get_router(pool.clone(), event_storage);
+    let openai_router = openai_proxy::get_router(pool.clone(), redis_pool, event_storage);
     let admin_rest_router = admin_rest::get_router(pool.clone(), balance_change_storage);
     let passthrough_router = passthrough::get_router(pool);
     // Route configuration

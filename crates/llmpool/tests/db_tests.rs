@@ -631,12 +631,11 @@ mod openai_tests {
         let endpoint =
             create_test_endpoint(&mut tx, "test-get-ep", "https://api.getep.com/v1").await;
 
-        let found =
-            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-                .bind(endpoint.id)
-                .fetch_one(&mut *tx)
-                .await
-                .unwrap();
+        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
+            .bind(endpoint.id)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
 
         assert_eq!(found.name, "test-get-ep");
 
@@ -650,12 +649,11 @@ mod openai_tests {
 
         create_test_endpoint(&mut tx, "test-name-ep", "https://api.nameep.com/v1").await;
 
-        let found =
-            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
-                .bind("test-name-ep")
-                .fetch_one(&mut *tx)
-                .await
-                .unwrap();
+        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
+            .bind("test-name-ep")
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
 
         assert_eq!(found.api_base, "https://api.nameep.com/v1");
 
@@ -703,12 +701,11 @@ mod openai_tests {
         assert_eq!(result.rows_affected(), 1);
 
         // Verify it's gone
-        let found =
-            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-                .bind(endpoint.id)
-                .fetch_optional(&mut *tx)
-                .await
-                .unwrap();
+        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
+            .bind(endpoint.id)
+            .fetch_optional(&mut *tx)
+            .await
+            .unwrap();
 
         assert!(found.is_none());
 
@@ -815,13 +812,12 @@ mod openai_tests {
             .await
             .unwrap();
 
-        let found = sqlx::query_as::<_, LLMEndpoint>(
-            "SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)",
-        )
-        .bind("special")
-        .fetch_all(&mut *tx)
-        .await
-        .unwrap();
+        let found =
+            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)")
+                .bind("special")
+                .fetch_all(&mut *tx)
+                .await
+                .unwrap();
 
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].name, "tag-search-1");
@@ -1033,13 +1029,12 @@ mod openai_tests {
         create_test_model(&mut tx, ep1.id, "shared-model").await;
         create_test_model(&mut tx, ep2.id, "shared-model").await;
 
-        let found = sqlx::query_as::<_, LLMModel>(
-            "SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1",
-        )
-        .bind("shared-model")
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
+        let found =
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1")
+                .bind("shared-model")
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
 
         assert_eq!(found.model_id, "shared-model");
 

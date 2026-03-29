@@ -27,11 +27,12 @@ use tracing::{info, warn};
 
 use apalis_redis::RedisStorage;
 
-use crate::db::{self, DbPool};
+use crate::db::{self, DbPool, RedisPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
 use crate::models::{CapacityOption, Consumer, OpenAIAPIKey};
 use crate::openai::session_tracer::SessionTracer;
+use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
     pub static CONSUMER: Consumer;
@@ -42,6 +43,7 @@ tokio::task_local! {
 
 struct AppState {
     pool: DbPool,
+    redis_pool: RedisPool,
     event_storage: RedisStorage<OpenAIEventTask>,
 }
 
@@ -266,9 +268,11 @@ fn build_client_from_model_endpoint(
     (client, model.id)
 }
 
-/// Returns up to `count` randomly selected (Client, model_db_id) pairs, each from a different endpoint if possible.
+/// Returns up to `count` (Client, model_db_id) pairs selected by lowest current-hour output
+/// token usage from Redis. If a model has no Redis key, its usage defaults to 0.
 async fn select_model_clients(
     db_pool: &DbPool,
+    redis_pool: &RedisPool,
     model_name: &str,
     capacity: &CapacityOption,
     count: usize,
@@ -293,24 +297,26 @@ async fn select_model_clients(
             }
         };
 
-    // Randomly select up to `count` distinct models/endpoints
-    let selected: Vec<&(crate::models::LLMModel, crate::models::LLMEndpoint)> = {
-        use rand::seq::SliceRandom;
-        let mut rng = rand::rng();
-        let mut shuffled: Vec<_> = models.iter().collect();
-        shuffled.shuffle(&mut rng);
-        shuffled.truncate(count);
-        shuffled
-    };
+    // Fetch output token usage from Redis for all models in a single MGET, then sort ascending
+    // and take the `count` with the lowest usage.
+    let model_ids: Vec<i32> = models.iter().map(|(m, _)| m.id).collect();
+    let usages = get_output_token_usage_batch(redis_pool, &model_ids).await;
 
-    selected
+    let mut models_with_usage: Vec<(i64, &(crate::models::LLMModel, crate::models::LLMEndpoint))> =
+        usages.into_iter().zip(models.iter()).collect();
+
+    models_with_usage.sort_by_key(|(usage, _)| *usage);
+    models_with_usage.truncate(count);
+
+    models_with_usage
         .into_iter()
-        .map(|(model, endpoint)| {
+        .map(|(usage, (model, endpoint))| {
             info!(
                 model = model_name,
                 endpoint_name = endpoint.name,
                 api_base = endpoint.api_base,
-                "Selected endpoint candidate"
+                output_token_usage = usage,
+                "Selected endpoint candidate by lowest output token usage"
             );
             build_client_from_model_endpoint(model, endpoint)
         })
@@ -333,7 +339,8 @@ async fn chat_completions(
         has_chat_completion: Some(true),
         ..Default::default()
     };
-    let clients = select_model_clients(&state.pool, model_name, &capacity, 2).await;
+    let clients =
+        select_model_clients(&state.pool, &state.redis_pool, model_name, &capacity, 2).await;
     if clients.is_empty() {
         eprintln!("No client for model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -430,7 +437,8 @@ async fn generate_images(
         has_image_generation: Some(true),
         ..Default::default()
     };
-    let clients = select_model_clients(&state.pool, &model_name, &capacity, 2).await;
+    let clients =
+        select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 2).await;
     if clients.is_empty() {
         eprintln!("No client for image model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -522,7 +530,8 @@ async fn create_speech(
         has_speech: Some(true),
         ..Default::default()
     };
-    let clients = select_model_clients(&state.pool, &model_name, &capacity, 1).await;
+    let clients =
+        select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 1).await;
     if let Some((client, _model_db_id)) = clients.first() {
         return create_speech_with_client(client, payload).await;
     } else {
@@ -577,7 +586,8 @@ async fn create_embeddings(
         has_embedding: Some(true),
         ..Default::default()
     };
-    let clients = select_model_clients(&state.pool, model_name, &capacity, 2).await;
+    let clients =
+        select_model_clients(&state.pool, &state.redis_pool, model_name, &capacity, 2).await;
     if clients.is_empty() {
         eprintln!("No client for embedding model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -686,9 +696,14 @@ fn transform_stream_with_logging(
     }
 }
 
-pub fn get_router(pool: DbPool, event_storage: RedisStorage<OpenAIEventTask>) -> Router {
+pub fn get_router(
+    pool: DbPool,
+    redis_pool: RedisPool,
+    event_storage: RedisStorage<OpenAIEventTask>,
+) -> Router {
     let state = Arc::new(AppState {
         pool,
+        redis_pool,
         event_storage,
     });
     Router::new()

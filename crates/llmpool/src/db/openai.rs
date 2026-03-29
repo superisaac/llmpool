@@ -87,24 +87,19 @@ pub async fn list_endpoints_paginated(
 
 /// Get an OpenAI endpoint by ID (with decrypted api_key)
 pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint =
-        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint_id)
-            .fetch_one(pool)
-            .await?;
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
+        .bind(endpoint_id)
+        .fetch_one(pool)
+        .await?;
     decrypt_endpoint(endpoint)
 }
 
 /// Get an OpenAI endpoint by name (with decrypted api_key)
-pub async fn get_endpoint_by_name(
-    pool: &DbPool,
-    name: &str,
-) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint =
-        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
-            .bind(name)
-            .fetch_one(pool)
-            .await?;
+pub async fn get_endpoint_by_name(pool: &DbPool, name: &str) -> Result<LLMEndpoint, sqlx::Error> {
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
+        .bind(name)
+        .fetch_one(pool)
+        .await?;
     decrypt_endpoint(endpoint)
 }
 
@@ -182,10 +177,7 @@ pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sql
 // ============================================================
 
 /// Create a new OpenAI model
-pub async fn create_model(
-    pool: &DbPool,
-    new_model: &NewLLMModel,
-) -> Result<LLMModel, sqlx::Error> {
+pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
         "INSERT INTO llm_models (endpoint_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -438,11 +430,10 @@ pub async fn get_endpoint_tags(
     pool: &DbPool,
     endpoint_id: i32,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let endpoint =
-        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint_id)
-            .fetch_one(pool)
-            .await?;
+    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
+        .bind(endpoint_id)
+        .fetch_one(pool)
+        .await?;
     Ok(endpoint.tags)
 }
 

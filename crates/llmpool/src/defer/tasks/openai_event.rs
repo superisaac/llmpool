@@ -6,7 +6,7 @@ use tracing::{info, warn};
 use crate::db::{self, DbPool, RedisPool};
 use crate::defer::{BalanceChangeTask, OpenAIEventData, OpenAIEventTask};
 use crate::models::{
-    BalanceChangeContent, NewBalanceChange, NewSessionEvent, LLMModel, SpendToken,
+    BalanceChangeContent, LLMModel, NewBalanceChange, NewSessionEvent, SpendToken,
 };
 use crate::redis_utils::counters::increment_token_usage;
 

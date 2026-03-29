@@ -33,8 +33,8 @@ pub async fn create_pool_from_config() -> DbPool {
 /// Create a Redis connection pool using the configured Redis URL.
 pub async fn create_redis_pool_from_config() -> RedisPool {
     let redis_url = config::get_redis_url();
-    let manager = RedisConnectionManager::new(redis_url)
-        .expect("Failed to create Redis connection manager");
+    let manager =
+        RedisConnectionManager::new(redis_url).expect("Failed to create Redis connection manager");
     Pool::builder()
         .max_size(10)
         .build(manager)
