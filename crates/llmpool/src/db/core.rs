@@ -1,9 +1,12 @@
+use bb8::Pool;
+use bb8_redis::RedisConnectionManager;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::config;
 
 pub type DbPool = PgPool;
+pub type RedisPool = Pool<RedisConnectionManager>;
 
 /// Create a connection pool from a database URL
 pub async fn create_pool(database_url: &str) -> DbPool {
@@ -25,6 +28,18 @@ pub async fn create_pool_from_config() -> DbPool {
         cfg.database.url.clone()
     });
     create_pool(&database_url).await
+}
+
+/// Create a Redis connection pool using the configured Redis URL.
+pub async fn create_redis_pool_from_config() -> RedisPool {
+    let redis_url = config::get_redis_url();
+    let manager = RedisConnectionManager::new(redis_url)
+        .expect("Failed to create Redis connection manager");
+    Pool::builder()
+        .max_size(10)
+        .build(manager)
+        .await
+        .expect("Failed to create Redis connection pool")
 }
 
 /// Run database migrations

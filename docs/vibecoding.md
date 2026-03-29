@@ -195,3 +195,8 @@ admin API /api/v1/sessionevents/ 的参数不要page size, page, 改成 start=<e
 
 =========
 设计一个基于redis的按小时累积的usage counter, key 是 "tokenusage:input:<model.id>:<hour>" 和 "tokenusage:output:<model.id>:<hour>"。 在handle_openai_event 方法中获得usage以后，按照对应的key采用redis 的incr方法累加usage。
+
+=========
+redis 使用bb8_redis，建立连接池，在worker里和数据库连接池DbPool一样维护和传入，在increment_token_usage 方法中，使用redis_pool.get() 获得redis连接，使用redis_conn.incr() 累加usage。
+
+将increment_token_usage 方法转移到 src/redis_utils/counters.rs 中
