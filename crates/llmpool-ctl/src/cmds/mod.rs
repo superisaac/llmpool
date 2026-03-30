@@ -52,6 +52,7 @@ pub struct EndpointResponse {
     pub id: i32,
     pub name: String,
     pub api_base: String,
+    pub provider: String,
     pub has_responses_api: bool,
     pub tags: Vec<String>,
     pub proxies: Vec<String>,

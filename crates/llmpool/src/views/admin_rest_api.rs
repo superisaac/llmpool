@@ -97,6 +97,7 @@ struct EndpointResponse {
     id: i32,
     name: String,
     api_base: String,
+    provider: String,
     has_responses_api: bool,
     tags: Vec<String>,
     proxies: Vec<String>,
@@ -112,6 +113,7 @@ impl From<crate::models::LLMEndpoint> for EndpointResponse {
             id: ep.id,
             name: ep.name,
             api_base: ep.api_base,
+            provider: ep.provider,
             has_responses_api: ep.has_responses_api,
             tags: ep.tags,
             proxies: ep.proxies,
@@ -945,10 +947,16 @@ struct CreateEndpointRequest {
     name: String,
     api_key: String,
     api_base: String,
+    #[serde(default = "default_provider")]
+    provider: String,
     #[serde(default)]
     tags: Vec<String>,
     #[serde(default)]
     proxies: Vec<String>,
+}
+
+fn default_provider() -> String {
+    "openai".to_string()
 }
 
 /// Request body for testing an OpenAI endpoint
@@ -1069,12 +1077,16 @@ async fn create_endpoint(
             // Fetch the saved endpoint and update tags if provided
             match db::openai::get_endpoint_by_api_base(&state.pool, payload.api_base.trim()).await {
                 Ok(endpoint) => {
-                    // Update tags and proxies if the request included them
-                    let endpoint = if !payload.tags.is_empty() || !payload.proxies.is_empty() {
+                    // Update provider, tags and proxies if the request included them
+                    let endpoint = if payload.provider != "openai"
+                        || !payload.tags.is_empty()
+                        || !payload.proxies.is_empty()
+                    {
                         let update = crate::models::UpdateLLMEndpoint {
                             name: None,
                             api_base: None,
                             api_key: None,
+                            provider: Some(payload.provider),
                             has_responses_api: None,
                             tags: if payload.tags.is_empty() {
                                 None
@@ -1264,6 +1276,7 @@ async fn get_endpoint_by_id(
 #[derive(Deserialize)]
 struct UpdateEndpointRequest {
     name: Option<String>,
+    provider: Option<String>,
     tags: Option<Vec<String>>,
     proxies: Option<Vec<String>>,
     description: Option<String>,
@@ -1315,6 +1328,7 @@ async fn update_endpoint_by_id(
         name: payload.name,
         api_base: None,
         api_key: None,
+        provider: payload.provider,
         has_responses_api: None,
         tags: payload.tags,
         proxies: payload.proxies,

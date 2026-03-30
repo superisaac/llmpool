@@ -3,6 +3,13 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
+/// Valid provider values for an LLM endpoint
+pub const VALID_PROVIDERS: &[&str] = &["openai", "azure", "cohere", "anthropic", "vllm", "ollama"];
+
+fn default_provider() -> String {
+    "openai".to_string()
+}
+
 /// Represents an OpenAI-compatible API endpoint
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LLMEndpoint {
@@ -10,6 +17,7 @@ pub struct LLMEndpoint {
     pub name: String,
     pub api_base: String,
     pub api_key: String,
+    pub provider: String,
     pub has_responses_api: bool,
     pub tags: Vec<String>,
     pub proxies: Vec<String>,
@@ -25,6 +33,8 @@ pub struct NewLLMEndpoint {
     pub name: String,
     pub api_base: String,
     pub api_key: String,
+    #[serde(default = "default_provider")]
+    pub provider: String,
     pub has_responses_api: bool,
     #[serde(default)]
     pub tags: Vec<String>,
@@ -46,6 +56,7 @@ pub struct UpdateLLMEndpoint {
     pub name: Option<String>,
     pub api_base: Option<String>,
     pub api_key: Option<String>,
+    pub provider: Option<String>,
     pub has_responses_api: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub proxies: Option<Vec<String>>,

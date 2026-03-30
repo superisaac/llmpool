@@ -644,6 +644,13 @@ async fn create_speech(
     Json(payload): Json<CreateSpeechRequest>,
 ) -> Response {
     let model_name = speech_model_to_string(&payload.model);
+    let account_id = ACCOUNT.with(|u| u.id);
+
+    // Check if the account has sufficient funds
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
+        return resp;
+    }
+
     let capacity = CapacityOption {
         has_speech: Some(true),
         ..Default::default()

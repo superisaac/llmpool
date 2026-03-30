@@ -36,6 +36,9 @@ pub enum EndpointAction {
         /// Base URL of the endpoint
         #[arg(long)]
         api_base: String,
+        /// Provider type (openai, azure, cohere, anthropic, vllm, ollama)
+        #[arg(long, default_value = "openai")]
+        provider: String,
         /// Description of the endpoint
         #[arg(long)]
         description: Option<String>,
@@ -54,6 +57,9 @@ pub enum EndpointAction {
         /// New name for the endpoint
         #[arg(long)]
         name: Option<String>,
+        /// Provider type (openai, azure, cohere, anthropic, vllm, ollama)
+        #[arg(long)]
+        provider: Option<String>,
         /// New description
         #[arg(long)]
         description: Option<String>,
@@ -102,6 +108,7 @@ struct CreateEndpointRequest {
     name: String,
     api_key: String,
     api_base: String,
+    provider: String,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     tags: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -118,6 +125,8 @@ struct TestEndpointRequest {
 struct UpdateEndpointRequestBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    provider: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     tags: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -200,6 +209,7 @@ fn print_endpoint_with_models(resp: &EndpointWithModelsResponse) {
     println!("  ID:             {}", resp.endpoint.id);
     println!("  Name:           {}", resp.endpoint.name);
     println!("  API Base:       {}", resp.endpoint.api_base);
+    println!("  Provider:       {}", resp.endpoint.provider);
     println!("  Status:         {}", resp.endpoint.status);
     println!(
         "  Responses API:  {}",
@@ -225,6 +235,7 @@ fn print_endpoint_detail(ep: &EndpointResponse) {
     println!("  ID:             {}", ep.id);
     println!("  Name:           {}", ep.name);
     println!("  API Base:       {}", ep.api_base);
+    println!("  Provider:       {}", ep.provider);
     println!("  Status:         {}", ep.status);
     println!(
         "  Responses API:  {}",
@@ -276,6 +287,7 @@ pub async fn handle_endpoint(
             name,
             api_key,
             api_base,
+            provider,
             description: _description,
             tags,
             proxies,
@@ -284,6 +296,7 @@ pub async fn handle_endpoint(
                 name,
                 api_key,
                 api_base: api_base.clone(),
+                provider,
                 tags: tags.map(|t| parse_comma_list(&t)).unwrap_or_default(),
                 proxies: proxies.map(|p| parse_comma_list(&p)).unwrap_or_default(),
             };
@@ -300,6 +313,7 @@ pub async fn handle_endpoint(
         EndpointAction::Update {
             endpoint,
             name,
+            provider,
             description,
             tags,
             proxies,
@@ -308,6 +322,7 @@ pub async fn handle_endpoint(
             let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
             let body = UpdateEndpointRequestBody {
                 name,
+                provider,
                 tags: tags.map(|t| parse_comma_list(&t)),
                 proxies: proxies.map(|p| parse_comma_list(&p)),
                 description,

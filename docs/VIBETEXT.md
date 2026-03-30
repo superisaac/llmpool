@@ -232,3 +232,6 @@ DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ct
 在需要花费token的function，如chat_completions, create_embedding, generate_images中，检查 FUND.cash + FUND.credit > 0, 否则拒绝请求并报错账户余额不够.
 
 取消task_local变量 FUND, 在chat_completions, create_embedding, generate_images中，中调用一个 check_fund_balance(account_id) 的方法，在方法中实现 get_fund_info, 如果没拿到就从数据库中拿到， 检查 FUND.cash + FUND.credit > 0, 否则拒绝请求并报错账户余额不够.
+
+=========
+LLMEndpoint 增加一个字段： provider, 默认为 "openai", 可以是 "openai", "azure", "cohere", "anthropic", "vllm", "ollama", 在admin api中也显示此参数，在创建endpoint 时，可以带上这个参数。 可直接修改migrations 文件，不用新建migration文件。

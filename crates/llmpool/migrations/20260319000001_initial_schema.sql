@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS llm_endpoints (
     name VARCHAR NOT NULL,
     api_base VARCHAR NOT NULL,
     api_key VARCHAR NOT NULL DEFAULT '',
+    provider VARCHAR NOT NULL DEFAULT 'openai',
     has_responses_api BOOLEAN NOT NULL DEFAULT FALSE,
     tags TEXT[] NOT NULL DEFAULT '{}',
     proxies TEXT[] NOT NULL DEFAULT '{}',

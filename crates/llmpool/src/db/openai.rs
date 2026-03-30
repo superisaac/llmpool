@@ -35,13 +35,14 @@ pub async fn create_endpoint(
 ) -> Result<LLMEndpoint, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
     let endpoint = sqlx::query_as::<_, LLMEndpoint>(
-        "INSERT INTO llm_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        "INSERT INTO llm_endpoints (name, api_base, api_key, provider, has_responses_api, tags, proxies, status, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *",
     )
     .bind(&new_endpoint.name)
     .bind(&new_endpoint.api_base)
     .bind(&encrypted_key)
+    .bind(&new_endpoint.provider)
     .bind(new_endpoint.has_responses_api)
     .bind(&new_endpoint.tags)
     .bind(&new_endpoint.proxies)
@@ -130,6 +131,7 @@ pub async fn update_endpoint(
     // If a new api_key is provided, encrypt it; otherwise re-encrypt the current (decrypted) key
     let plaintext_key = update.api_key.as_deref().unwrap_or(&current.api_key);
     let encrypted_key = encrypt_api_key(plaintext_key)?;
+    let provider = update.provider.as_deref().unwrap_or(&current.provider);
     let has_responses_api = update
         .has_responses_api
         .unwrap_or(current.has_responses_api);
@@ -144,13 +146,14 @@ pub async fn update_endpoint(
 
     let endpoint = sqlx::query_as::<_, LLMEndpoint>(
         "UPDATE llm_endpoints
-         SET name = $1, api_base = $2, api_key = $3, has_responses_api = $4, tags = $5, proxies = $6, status = $7, description = $8, updated_at = $9
-         WHERE id = $10
+         SET name = $1, api_base = $2, api_key = $3, provider = $4, has_responses_api = $5, tags = $6, proxies = $7, status = $8, description = $9, updated_at = $10
+         WHERE id = $11
          RETURNING *",
     )
     .bind(name)
     .bind(api_base)
     .bind(&encrypted_key)
+    .bind(provider)
     .bind(has_responses_api)
     .bind(tags)
     .bind(proxies)
@@ -518,6 +521,7 @@ struct ModelEndpointRow {
     pub ep_name: String,
     pub ep_api_base: String,
     pub ep_api_key: String,
+    pub ep_provider: String,
     pub ep_has_responses_api: bool,
     pub ep_tags: Vec<String>,
     pub ep_proxies: Vec<String>,
@@ -548,6 +552,7 @@ impl ModelEndpointRow {
             name: self.ep_name,
             api_base: self.ep_api_base,
             api_key: self.ep_api_key,
+            provider: self.ep_provider,
             has_responses_api: self.ep_has_responses_api,
             tags: self.ep_tags,
             proxies: self.ep_proxies,
@@ -577,7 +582,8 @@ pub async fn find_models_by_name_and_capacity(
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
-                e.api_key AS ep_api_key, e.has_responses_api AS ep_has_responses_api,
+                e.api_key AS ep_api_key, e.provider AS ep_provider,
+                e.has_responses_api AS ep_has_responses_api,
                 e.tags AS ep_tags, e.proxies AS ep_proxies,
                 e.status AS ep_status, e.description AS ep_description,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
