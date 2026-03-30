@@ -205,3 +205,12 @@ redis 使用bb8_redis，建立连接池，在worker里和数据库连接池DbPoo
 
 =========
 DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ctl 命令中相应修改, 相关文档也需要修改。 migraions 文件可以直接修改，不需要新建。
+
+=========
+添加一个admin api: GET /api/v1/apikeys/:<apikey>, 获得对应apikey的信息
+添加一个admin api: DELETE /api/v1/apikeys/:<apikey>, 将对应apikey删除，在数据库不真实删除，而是将is_active字段设置为false
+在redis_utils/cache.rs 中添加如下方法
+* get_apikey_info(apikey: &str) -> Result<ApiKeyInfo>, 从cache中获得apikey的信息。
+* set_apikey_info(apikey: &str, info: ApiKeyInfo) -> Result<()> 设置apikey的信息到cache中。
+* delete_apikey(apikey: &str) -> Result<()> 删除apikey cache缓存。
+在openai_proxy.rs 中使用get_apikey_info, 在admin_rest_api.rs 中使用set_apikey_info.

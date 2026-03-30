@@ -1155,10 +1155,7 @@ mod fund_tests {
                 .execute(&mut *tx)
                 .await;
 
-        assert!(
-            result.is_err(),
-            "Duplicate account_id in funds should fail"
-        );
+        assert!(result.is_err(), "Duplicate account_id in funds should fail");
 
         tx.rollback().await.unwrap();
     }

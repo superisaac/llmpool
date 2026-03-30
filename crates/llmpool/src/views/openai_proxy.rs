@@ -30,8 +30,9 @@ use apalis_redis::RedisStorage;
 use crate::db::{self, DbPool, RedisPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
-use crate::models::{Account, CapacityOption, ApiCredential};
+use crate::models::{Account, ApiCredential, CapacityOption};
 use crate::openai::session_tracer::SessionTracer;
+use crate::redis_utils::cache::{self as redis_cache, ApiKeyInfo};
 use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
@@ -70,9 +71,9 @@ fn auth_error_response(status: StatusCode, message: &str, code: &str) -> Respons
 }
 
 /// Middleware that authenticates requests using Bearer token from the Authorization header.
-/// It looks up the ACCESS_KEY by apikey, checks that it is active, then finds the USER
-/// by ACCESS_KEY.user_id and checks that the user is active. Both ACCESS_KEY and USER
-/// are stored in task-local variables for downstream handlers.
+/// It looks up the ACCESS_KEY by apikey (checking Redis cache first, then DB on miss),
+/// checks that it is active, then finds the account and checks that it is active.
+/// Both ACCESS_KEY and ACCOUNT are stored in task-local variables for downstream handlers.
 async fn auth_openai_api(
     State(state): State<Arc<AppState>>,
     request: Request,
@@ -95,7 +96,90 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 1: Look up the API key by apikey
+    // Step 1: Try Redis cache first for apikey info
+    let cached_info = match redis_cache::get_apikey_info(&state.redis_pool, token).await {
+        Ok(info) => info,
+        Err(e) => {
+            // Cache error is non-fatal; fall through to DB lookup
+            warn!(error = %e, "Redis cache error during apikey lookup, falling back to DB");
+            None
+        }
+    };
+
+    if let Some(info) = cached_info {
+        // Validate cached info
+        if !info.is_active {
+            return auth_error_response(
+                StatusCode::UNAUTHORIZED,
+                "Invalid API key.",
+                "invalid_api_credential",
+            );
+        }
+        let account_id = match info.account_id {
+            Some(id) => id,
+            None => {
+                return auth_error_response(
+                    StatusCode::UNAUTHORIZED,
+                    "API key is not associated with an account.",
+                    "invalid_api_credential",
+                );
+            }
+        };
+        if !info.account_is_active {
+            return auth_error_response(
+                StatusCode::UNAUTHORIZED,
+                "Account is inactive.",
+                "invalid_api_credential",
+            );
+        }
+
+        // Reconstruct ApiCredential and Account from cached info for task-locals
+        let access_key =
+            match db::api::find_active_api_credential_by_apikey(&state.pool, token).await {
+                Ok(Some(key)) => key,
+                Ok(None) => {
+                    // Cache may be stale; invalidate and reject
+                    let _ = redis_cache::delete_apikey(&state.redis_pool, token).await;
+                    return auth_error_response(
+                        StatusCode::UNAUTHORIZED,
+                        "Invalid API key.",
+                        "invalid_api_credential",
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Database error during API key lookup");
+                    return auth_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Internal server error during authentication.",
+                        "internal_error",
+                    );
+                }
+            };
+        let account = match db::api::find_account_by_id(&state.pool, account_id).await {
+            Ok(Some(u)) => u,
+            Ok(None) => {
+                let _ = redis_cache::delete_apikey(&state.redis_pool, token).await;
+                return auth_error_response(
+                    StatusCode::UNAUTHORIZED,
+                    "Account not found for this API key.",
+                    "invalid_api_credential",
+                );
+            }
+            Err(e) => {
+                warn!(error = %e, "Database error during account lookup");
+                return auth_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error during authentication.",
+                    "internal_error",
+                );
+            }
+        };
+        return API_CREDENTIAL
+            .scope(access_key, ACCOUNT.scope(account, next.run(request)))
+            .await;
+    }
+
+    // Step 1 (cache miss): Look up the API key from DB
     let access_key = match db::api::find_active_api_credential_by_apikey(&state.pool, token).await {
         Ok(Some(key)) => key,
         Ok(None) => {
@@ -146,13 +230,26 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 4: Check if the account is active
+    // Step 3: Check if the account is active
     if !account.is_active {
         return auth_error_response(
             StatusCode::UNAUTHORIZED,
             "Account is inactive.",
             "invalid_api_credential",
         );
+    }
+
+    // Step 4: Populate Redis cache for future requests
+    let info = ApiKeyInfo {
+        id: access_key.id,
+        account_id: access_key.account_id,
+        apikey: access_key.apikey.clone(),
+        label: access_key.label.clone(),
+        is_active: access_key.is_active,
+        account_is_active: account.is_active,
+    };
+    if let Err(e) = redis_cache::set_apikey_info(&state.redis_pool, token, info).await {
+        warn!(error = %e, "Failed to cache apikey info in Redis");
     }
 
     // Step 5: Set task-local variables and proceed

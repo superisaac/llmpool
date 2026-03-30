@@ -8,7 +8,7 @@ use tokio::net::TcpListener;
 
 // use crate::openai;
 use crate::telemetry;
-use crate::views::admin_rest;
+use crate::views::admin_rest_api;
 use crate::views::openai_proxy;
 use crate::views::passthrough;
 
@@ -21,8 +21,9 @@ pub async fn serve(bind: &str) {
     let event_storage = crate::defer::create_event_storage().await;
     let balance_change_storage = crate::defer::create_balance_change_storage().await;
 
-    let openai_router = openai_proxy::get_router(pool.clone(), redis_pool, event_storage);
-    let admin_rest_router = admin_rest::get_router(pool.clone(), balance_change_storage);
+    let openai_router = openai_proxy::get_router(pool.clone(), redis_pool.clone(), event_storage);
+    let admin_rest_router =
+        admin_rest_api::get_router(pool.clone(), redis_pool, balance_change_storage);
     let passthrough_router = passthrough::get_router(pool);
     // Route configuration
     // Note: we can directly destructure async_openai types as Axum Json extractor inputs

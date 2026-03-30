@@ -1,9 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{
-    LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate,
-};
+use super::{LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate};
 use crate::client::ApiClient;
 
 // ============================================================

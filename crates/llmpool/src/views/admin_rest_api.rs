@@ -13,16 +13,18 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
 
-use crate::db::{self, DbPool};
+use crate::db::{self, DbPool, RedisPool};
 use crate::defer::BalanceChangeTask;
 use crate::middlewares::admin_auth;
-use crate::models::{BalanceChangeContent, NewBalanceChange};
 use crate::models::{Account, NewAccount, UpdateAccount};
+use crate::models::{BalanceChangeContent, NewBalanceChange};
+use crate::redis_utils::cache::{self as redis_cache, ApiKeyInfo};
 
 // --- Server State ---
 
 struct AppState {
     pool: DbPool,
+    redis_pool: RedisPool,
     balance_change_storage: RedisStorage<BalanceChangeTask>,
 }
 
@@ -309,18 +311,18 @@ async fn list_accounts(
     };
 
     // Get paginated accounts
-    let accounts =
-        match db::account::list_accounts_paginated(&state.pool, offset, page_size).await {
-            Ok(accounts) => accounts,
-            Err(e) => {
-                warn!(error = %e, "Failed to list accounts");
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "database_error",
-                    "Failed to query accounts",
-                );
-            }
-        };
+    let accounts = match db::account::list_accounts_paginated(&state.pool, offset, page_size).await
+    {
+        Ok(accounts) => accounts,
+        Err(e) => {
+            warn!(error = %e, "Failed to list accounts");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query accounts",
+            );
+        }
+    };
 
     let total_pages = if total == 0 {
         0
@@ -732,8 +734,8 @@ async fn create_account_apikey(
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> Response {
     // Verify the account exists
-    match db::account::get_account_by_id(&state.pool, account_id).await {
-        Ok(Some(_)) => {}
+    let account = match db::account::get_account_by_id(&state.pool, account_id).await {
+        Ok(Some(a)) => a,
         Ok(None) => {
             return error_response(
                 StatusCode::NOT_FOUND,
@@ -749,16 +751,85 @@ async fn create_account_apikey(
                 "Failed to query account",
             );
         }
-    }
+    };
 
-    match db::api::create_api_credential_for_account(&state.pool, account_id, &payload.label).await {
-        Ok(key) => (StatusCode::CREATED, Json(ApiCredentialResponse::from(key))).into_response(),
+    match db::api::create_api_credential_for_account(&state.pool, account_id, &payload.label).await
+    {
+        Ok(key) => {
+            // Cache the new apikey info in Redis
+            let info = ApiKeyInfo {
+                id: key.id,
+                account_id: key.account_id,
+                apikey: key.apikey.clone(),
+                label: key.label.clone(),
+                is_active: key.is_active,
+                account_is_active: account.is_active,
+            };
+            if let Err(e) = redis_cache::set_apikey_info(&state.redis_pool, &key.apikey, info).await
+            {
+                warn!(error = %e, apikey = %key.apikey, "Failed to cache new apikey info in Redis");
+            }
+            (StatusCode::CREATED, Json(ApiCredentialResponse::from(key))).into_response()
+        }
         Err(e) => {
             warn!(error = %e, "Failed to create API key for account");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
                 "Failed to create API key",
+            )
+        }
+    }
+}
+
+// --- ApiKey Handlers (by apikey string) ---
+
+/// GET /api/v1/apikeys/:apikey
+///
+/// Returns the API credential info for the given apikey string.
+async fn get_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<String>) -> Response {
+    match db::api::find_api_credential_by_apikey(&state.pool, &apikey).await {
+        Ok(Some(key)) => Json(ApiCredentialResponse::from(key)).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("API key '{}' not found", apikey),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get API key by apikey string");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query API key",
+            )
+        }
+    }
+}
+
+/// DELETE /api/v1/apikeys/:apikey
+///
+/// Soft-deletes the API credential by setting is_active = false.
+/// Also invalidates the Redis cache entry for this apikey.
+async fn delete_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<String>) -> Response {
+    match db::api::deactivate_api_credential(&state.pool, &apikey).await {
+        Ok(key) => {
+            // Invalidate the Redis cache for this apikey
+            if let Err(e) = redis_cache::delete_apikey(&state.redis_pool, &apikey).await {
+                warn!(error = %e, apikey = %apikey, "Failed to delete apikey cache from Redis");
+            }
+            Json(ApiCredentialResponse::from(key)).into_response()
+        }
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("API key '{}' not found", apikey),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to deactivate API key");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to delete API key",
             )
         }
     }
@@ -1997,9 +2068,14 @@ async fn list_session_events(
 
 // --- Router ---
 
-pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChangeTask>) -> Router {
+pub fn get_router(
+    pool: DbPool,
+    redis_pool: RedisPool,
+    balance_change_storage: RedisStorage<BalanceChangeTask>,
+) -> Router {
     let state = Arc::new(AppState {
         pool,
+        redis_pool,
         balance_change_storage,
     });
     Router::new()
@@ -2038,6 +2114,7 @@ pub fn get_router(pool: DbPool, balance_change_storage: RedisStorage<BalanceChan
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))
         .route("/credits", post(create_credit))
+        .route("/apikeys/{apikey}", get(get_apikey).delete(delete_apikey))
         .route_layer(middleware::from_fn(admin_auth::auth_jwt))
         .with_state(state)
 }

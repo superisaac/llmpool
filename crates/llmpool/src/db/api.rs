@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::db::DbPool;
-use crate::models::{Account, NewApiCredential, ApiCredential};
+use crate::models::{Account, ApiCredential, NewApiCredential};
 
 /// Find an API key by its apikey string (only active keys).
 pub async fn find_active_api_credential_by_apikey(
@@ -73,6 +73,31 @@ pub async fn list_api_credentials_by_account_paginated(
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
+    .await
+}
+
+/// Find an API credential by its apikey string (active or inactive).
+pub async fn find_api_credential_by_apikey(
+    pool: &DbPool,
+    apikey: &str,
+) -> Result<Option<ApiCredential>, sqlx::Error> {
+    sqlx::query_as::<_, ApiCredential>("SELECT * FROM api_credentials WHERE apikey = $1")
+        .bind(apikey)
+        .fetch_optional(pool)
+        .await
+}
+
+/// Deactivate an API credential by setting is_active = false (soft delete).
+/// Returns the updated credential, or RowNotFound if it doesn't exist.
+pub async fn deactivate_api_credential(
+    pool: &DbPool,
+    apikey: &str,
+) -> Result<ApiCredential, sqlx::Error> {
+    sqlx::query_as::<_, ApiCredential>(
+        "UPDATE api_credentials SET is_active = false, updated_at = NOW() WHERE apikey = $1 RETURNING *",
+    )
+    .bind(apikey)
+    .fetch_one(pool)
     .await
 }
 
