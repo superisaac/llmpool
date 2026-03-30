@@ -5,8 +5,8 @@ mod client;
 mod cmds;
 
 use cmds::{
-    ApiKeyAction, ConsumerAction, EndpointAction, FundAction, ModelAction, SessionEventAction,
-    handle_apikey, handle_consumer, handle_endpoint, handle_fund, handle_model,
+    AccountAction, ApiKeyAction, EndpointAction, FundAction, ModelAction, SessionEventAction,
+    handle_account, handle_apikey, handle_endpoint, handle_fund, handle_model,
     handle_session_event,
 };
 
@@ -40,17 +40,17 @@ enum Commands {
         #[command(subcommand)]
         action: ModelAction,
     },
-    /// Manage consumers
-    Consumer {
+    /// Manage accounts
+    Account {
         #[command(subcommand)]
-        action: ConsumerAction,
+        action: AccountAction,
     },
     /// Manage API keys
     Apikey {
         #[command(subcommand)]
         action: ApiKeyAction,
     },
-    /// Manage consumer funds (balance, deposit, withdraw, credit)
+    /// Manage account funds (balance, deposit, withdraw, credit)
     Fund {
         #[command(subcommand)]
         action: FundAction,
@@ -97,7 +97,7 @@ async fn main() {
     let result = match cli.command {
         Commands::Endpoint { action } => handle_endpoint(action, &api_client, json_output).await,
         Commands::Model { action } => handle_model(action, &api_client, json_output).await,
-        Commands::Consumer { action } => handle_consumer(action, &api_client, json_output).await,
+        Commands::Account { action } => handle_account(action, &api_client, json_output).await,
         Commands::Apikey { action } => handle_apikey(action, &api_client, json_output).await,
         Commands::Fund { action } => handle_fund(action, &api_client, json_output).await,
         Commands::Sessionevents { action } => {

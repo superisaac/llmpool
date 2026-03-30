@@ -2,7 +2,7 @@ use clap::Subcommand;
 use serde::Serialize;
 
 use super::{
-    LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate,
+    LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate,
 };
 use crate::client::ApiClient;
 
@@ -12,17 +12,17 @@ use crate::client::ApiClient;
 
 #[derive(Subcommand)]
 pub enum ApiKeyAction {
-    /// List API keys for a consumer
+    /// List API keys for an account
     List {
-        /// Consumer name or consumer ID
+        /// Account name or account ID
         #[arg(long)]
-        consumer: String,
+        account: String,
     },
-    /// Add a new API key for a consumer
+    /// Add a new API key for an account
     Add {
-        /// Consumer name or consumer ID
+        /// Account name or account ID
         #[arg(long)]
-        consumer: String,
+        account: String,
         /// Label describing the purpose of this API key
         #[arg(long, default_value = "")]
         label: String,
@@ -89,32 +89,32 @@ pub async fn handle_apikey(
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        ApiKeyAction::List { consumer } => {
-            let consumer_id = resolve_consumer_id(&consumer, client).await?;
+        ApiKeyAction::List { account } => {
+            let account_id = resolve_account_id(&account, client).await?;
             if json_output {
                 let raw = client
-                    .get_raw(&format!("/consumers/{}/apikeys", consumer_id))
+                    .get_raw(&format!("/accounts/{}/apikeys", account_id))
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: PaginatedResponse<LLMAPIKeyResponse> = client
-                    .get(&format!("/consumers/{}/apikeys", consumer_id))
+                    .get(&format!("/accounts/{}/apikeys", account_id))
                     .await?;
                 print_apikeys(&resp.data);
                 print_pagination(&resp.pagination);
             }
         }
-        ApiKeyAction::Add { consumer, label } => {
-            let consumer_id = resolve_consumer_id(&consumer, client).await?;
+        ApiKeyAction::Add { account, label } => {
+            let account_id = resolve_account_id(&account, client).await?;
             let body = CreateApiKeyRequestBody { label };
             if json_output {
                 let raw = client
-                    .post_raw(&format!("/consumers/{}/apikeys", consumer_id), &body)
+                    .post_raw(&format!("/accounts/{}/apikeys", account_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: LLMAPIKeyResponse = client
-                    .post(&format!("/consumers/{}/apikeys", consumer_id), &body)
+                    .post(&format!("/accounts/{}/apikeys", account_id), &body)
                     .await?;
                 print_apikey_detail(&resp);
             }

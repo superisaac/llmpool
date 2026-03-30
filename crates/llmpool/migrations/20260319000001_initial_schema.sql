@@ -33,20 +33,20 @@ CREATE TABLE IF NOT EXISTS llm_models (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_endpoint_model ON llm_models (endpoint_id, model_id);
 CREATE INDEX IF NOT EXISTS idx_llm_models_endpoint_id ON llm_models (endpoint_id);
 
--- Create consumers table
-CREATE TABLE IF NOT EXISTS consumers (
+-- Create accounts table
+CREATE TABLE IF NOT EXISTS accounts (
     id SERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_consumers_name ON consumers (name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_name ON accounts (name);
 
--- Create openai_api_keys table
-CREATE TABLE IF NOT EXISTS openai_api_keys (
+-- Create llm_api_keys table (formerly openai_api_keys)
+CREATE TABLE IF NOT EXISTS llm_api_keys (
     id SERIAL PRIMARY KEY,
-    consumer_id INTEGER REFERENCES consumers(id) ON DELETE CASCADE,
+    consumer_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
     apikey VARCHAR NOT NULL,
     label VARCHAR NOT NULL DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -54,8 +54,8 @@ CREATE TABLE IF NOT EXISTS openai_api_keys (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_api_keys_apikey ON openai_api_keys (apikey);
-CREATE INDEX IF NOT EXISTS idx_openai_api_keys_consumer_id ON openai_api_keys (consumer_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_api_keys_apikey ON llm_api_keys (apikey);
+CREATE INDEX IF NOT EXISTS idx_openai_api_keys_consumer_id ON llm_api_keys (consumer_id);
 
 -- Create session_events table (unlogged for performance)
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
@@ -78,7 +78,7 @@ CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (sess
 -- Create funds table
 CREATE TABLE IF NOT EXISTS funds (
     id SERIAL PRIMARY KEY,
-    consumer_id INT NOT NULL REFERENCES consumers(id),
+    consumer_id INT NOT NULL REFERENCES accounts(id),
     cash DECIMAL NOT NULL DEFAULT 0,
     credit DECIMAL NOT NULL DEFAULT 0,
     debt DECIMAL NOT NULL DEFAULT 0,
@@ -90,7 +90,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_consumer_id ON funds (consumer_id);
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,
-    consumer_id INT NOT NULL REFERENCES consumers(id),
+    consumer_id INT NOT NULL REFERENCES accounts(id),
     unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,

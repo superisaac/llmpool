@@ -83,7 +83,7 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
 
     // 4. Apply the balance change to the consumer's balance within the same transaction
     let updated_balance =
-        match db::fund::apply_balance_change_with_tx(&mut tx, balance_change.consumer_id, &content)
+        match db::fund::apply_balance_change_with_tx(&mut tx, balance_change.account_id, &content)
             .await
         {
             Ok(ub) => ub,
@@ -91,7 +91,7 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
                 warn!(
                     error = %e,
                     balance_change_id = balance_change_id,
-                    consumer_id = balance_change.consumer_id,
+                    account_id = balance_change.account_id,
                     "Failed to apply balance change"
                 );
                 return;
@@ -115,7 +115,7 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
         Ok(()) => {
             info!(
                 balance_change_id = balance_change_id,
-                consumer_id = balance_change.consumer_id,
+                account_id = balance_change.account_id,
                 cash = %updated_balance.cash,
                 credit = %updated_balance.credit,
                 debt = %updated_balance.debt,
@@ -126,7 +126,7 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
             warn!(
                 error = %e,
                 balance_change_id = balance_change_id,
-                consumer_id = balance_change.consumer_id,
+                account_id = balance_change.account_id,
                 "Failed to commit balance change transaction"
             );
         }

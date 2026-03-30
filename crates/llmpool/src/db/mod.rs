@@ -1,5 +1,5 @@
+pub mod account;
 pub mod api;
-pub mod consumer;
 pub mod core;
 pub mod fund;
 #[allow(dead_code)]

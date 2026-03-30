@@ -9,7 +9,7 @@ use crate::defer::{OpenAIEventData, OpenAIEventTask};
 pub struct SessionTracer {
     pub session_id: String,
     pub session_index: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
     pub storage: RedisStorage<OpenAIEventTask>,
@@ -19,7 +19,7 @@ impl SessionTracer {
     /// Create a new SessionTracer with a UUIDv7-based session_id
     pub fn new(
         storage: RedisStorage<OpenAIEventTask>,
-        consumer_id: i32,
+        account_id: i32,
         model_id: i32,
         api_key_id: i32,
     ) -> Self {
@@ -28,7 +28,7 @@ impl SessionTracer {
         Self {
             session_id,
             session_index,
-            consumer_id,
+            account_id,
             model_id,
             api_key_id,
             storage,
@@ -45,7 +45,7 @@ impl SessionTracer {
         let entry = OpenAIEventTask {
             session_id: self.session_id.clone(),
             session_index,
-            consumer_id: self.consumer_id,
+            account_id: self.account_id,
             model_id: self.model_id,
             api_key_id: self.api_key_id,
             event_data: data,

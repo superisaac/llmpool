@@ -10,7 +10,7 @@ pub struct SessionEvent {
     pub id: i64,
     pub session_id: String,
     pub session_index: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
     pub input_token_price: BigDecimal,
@@ -26,7 +26,7 @@ pub struct SessionEvent {
 pub struct NewSessionEvent {
     pub session_id: String,
     pub session_index: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub model_id: i32,
     pub api_key_id: i32,
     pub input_token_price: BigDecimal,

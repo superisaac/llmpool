@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 use crate::db::DbPool;
-use crate::models::{Consumer, NewOpenAIAPIKey, OpenAIAPIKey};
+use crate::models::{Account, NewOpenAIAPIKey, OpenAIAPIKey};
 
 /// Find an API key by its apikey string (only active keys).
 pub async fn find_active_api_key_by_apikey(
@@ -16,13 +16,13 @@ pub async fn find_active_api_key_by_apikey(
     .await
 }
 
-/// Find a consumer by their ID.
-pub async fn find_consumer_by_id(
+/// Find an account by their ID.
+pub async fn find_account_by_id(
     pool: &DbPool,
-    consumer_id: i32,
-) -> Result<Option<Consumer>, sqlx::Error> {
-    sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE id = $1")
-        .bind(consumer_id)
+    account_id: i32,
+) -> Result<Option<Account>, sqlx::Error> {
+    sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
+        .bind(account_id)
         .fetch_optional(pool)
         .await
 }
@@ -35,12 +35,12 @@ fn generate_api_key() -> String {
     format!("lpx-{}", hex_string)
 }
 
-/// Find a consumer by name
-pub async fn find_consumer_by_name(
+/// Find an account by name
+pub async fn find_account_by_name(
     pool: &DbPool,
     name: &str,
-) -> Result<Option<Consumer>, sqlx::Error> {
-    sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE name = $1")
+) -> Result<Option<Account>, sqlx::Error> {
+    sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE name = $1")
         .bind(name)
         .fetch_optional(pool)
         .await
@@ -49,10 +49,10 @@ pub async fn find_consumer_by_name(
 /// Count total number of API keys for a consumer
 pub async fn count_api_keys_by_consumer(
     pool: &DbPool,
-    consumer_id: i32,
+    account_id: i32,
 ) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
-        .bind(consumer_id)
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE account_id = $1")
+        .bind(account_id)
         .fetch_one(pool)
         .await?;
     Ok(row.0)
@@ -60,16 +60,16 @@ pub async fn count_api_keys_by_consumer(
 
 /// List API keys for a consumer with pagination.
 /// `offset` is the number of rows to skip, `limit` is the max number of rows to return.
-pub async fn list_api_keys_by_consumer_paginated(
+pub async fn list_api_keys_by_account_paginated(
     pool: &DbPool,
-    consumer_id: i32,
+    account_id: i32,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<OpenAIAPIKey>, sqlx::Error> {
     sqlx::query_as::<_, OpenAIAPIKey>(
-        "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+        "SELECT * FROM llm_api_keys WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
     )
-    .bind(consumer_id)
+    .bind(account_id)
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
@@ -79,22 +79,22 @@ pub async fn list_api_keys_by_consumer_paginated(
 /// Create a new API key for a consumer
 pub async fn create_api_key_for_consumer(
     pool: &DbPool,
-    consumer_id: i32,
+    account_id: i32,
     label: &str,
 ) -> Result<OpenAIAPIKey, sqlx::Error> {
     let apikey = generate_api_key();
     let new_key = NewOpenAIAPIKey {
-        consumer_id: Some(consumer_id),
+        account_id: Some(account_id),
         apikey,
         label: label.to_string(),
         expires_at: None,
     };
     sqlx::query_as::<_, OpenAIAPIKey>(
-        "INSERT INTO llm_api_keys (consumer_id, apikey, label, expires_at)
+        "INSERT INTO llm_api_keys (account_id, apikey, label, expires_at)
          VALUES ($1, $2, $3, $4)
          RETURNING *",
     )
-    .bind(new_key.consumer_id)
+    .bind(new_key.account_id)
     .bind(&new_key.apikey)
     .bind(&new_key.label)
     .bind(new_key.expires_at)

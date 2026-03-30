@@ -238,30 +238,30 @@ async fn main() {
             AdminCommands::CreateApiKey { name } => {
                 let pool = db::create_pool_from_config().await;
 
-                // Find the consumer by name
-                let consumer = match db::api::find_consumer_by_name(&pool, &name).await {
-                    Ok(Some(consumer)) => consumer,
+                // Find the account by name
+                let account = match db::account::get_account_by_name(&pool, &name).await {
+                    Ok(Some(account)) => account,
                     Ok(None) => {
-                        eprintln!("Error: user '{}' not found", name);
+                        eprintln!("Error: account '{}' not found", name);
                         std::process::exit(1);
                     }
                     Err(e) => {
-                        eprintln!("Error looking up user '{}': {}", name, e);
+                        eprintln!("Error looking up account '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 };
 
                 // Create the API key
-                match db::api::create_api_key_for_consumer(&pool, consumer.id, "").await {
+                match db::api::create_api_key_for_consumer(&pool, account.id, "").await {
                     Ok(api_key) => {
                         println!(
-                            "API key created for user '{}' (id={})",
-                            consumer.name, consumer.id
+                            "API key created for account '{}' (id={})",
+                            account.name, account.id
                         );
                         println!("Key: {}", api_key.apikey);
                     }
                     Err(e) => {
-                        eprintln!("Error creating API key for user '{}': {}", name, e);
+                        eprintln!("Error creating API key for account '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 }
@@ -276,18 +276,18 @@ async fn main() {
                     std::process::exit(1);
                 }
 
-                // Create the consumer
-                let new_consumer = models::NewConsumer { name: name.clone() };
+                // Create the account
+                let new_account = models::NewAccount { name: name.clone() };
 
-                match db::consumer::create_consumer(&pool, &new_consumer).await {
-                    Ok(consumer) => {
+                match db::account::create_account(&pool, &new_account).await {
+                    Ok(account) => {
                         println!(
-                            "Successfully created user '{}' (id={})",
-                            consumer.name, consumer.id
+                            "Successfully created account '{}' (id={})",
+                            account.name, account.id
                         );
                     }
                     Err(e) => {
-                        eprintln!("Error creating user '{}': {}", name, e);
+                        eprintln!("Error creating account '{}': {}", name, e);
                         std::process::exit(1);
                     }
                 }

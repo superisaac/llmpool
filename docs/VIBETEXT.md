@@ -202,3 +202,6 @@ redis 使用bb8_redis，建立连接池，在worker里和数据库连接池DbPoo
 将increment_token_usage 方法转移到 src/redis_utils/counters.rs 中
 
 将select_model_clients 中随机选取的逻辑，换成使用redis 获取tokenusage.output 的值(如没有相关key value, 则按默认为0算)，取其中最小的count个用于随后的请求。并将redis相关的逻辑也加入到redis_utils/counters.rs 中。
+
+=========
+DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ctl 命令中相应修改, 相关文档也需要修改。 migraions 文件可以直接修改，不需要新建。

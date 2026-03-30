@@ -28,16 +28,16 @@ async fn test_pool() -> PgPool {
         .expect("Failed to connect to test database")
 }
 
-/// Helper: create a consumer within a transaction and return its id
-async fn create_test_consumer(
+/// Helper: create a test account within a transaction and return it
+async fn create_test_account(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     name: &str,
-) -> Consumer {
-    sqlx::query_as::<_, Consumer>("INSERT INTO consumers (name) VALUES ($1) RETURNING *")
+) -> Account {
+    sqlx::query_as::<_, Account>("INSERT INTO accounts (name) VALUES ($1) RETURNING *")
         .bind(name)
         .fetch_one(&mut **tx)
         .await
-        .expect("Failed to create test consumer")
+        .expect("Failed to create test account")
 }
 
 /// Helper: create an endpoint within a transaction (no encryption)
@@ -77,64 +77,64 @@ async fn create_test_model(
 }
 
 // ============================================================
-// Consumer DB Tests
+// Account DB Tests
 // ============================================================
 
-mod consumer_tests {
+mod account_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_create_consumer() {
+    async fn test_create_account() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let new_consumer = NewConsumer {
-            name: "test_consumer_create".to_string(),
+        let new_account = NewAccount {
+            name: "test_account_create".to_string(),
         };
 
-        let consumer =
-            sqlx::query_as::<_, Consumer>("INSERT INTO consumers (name) VALUES ($1) RETURNING *")
-                .bind(&new_consumer.name)
+        let account =
+            sqlx::query_as::<_, Account>("INSERT INTO accounts (name) VALUES ($1) RETURNING *")
+                .bind(&new_account.name)
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();
 
-        assert_eq!(consumer.name, "test_consumer_create");
-        assert!(consumer.is_active);
-        assert!(consumer.id > 0);
+        assert_eq!(account.name, "test_account_create");
+        assert!(account.is_active);
+        assert!(account.id > 0);
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_create_consumer_duplicate_name() {
+    async fn test_create_account_duplicate_name() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let name = "test_consumer_dup";
-        create_test_consumer(&mut tx, name).await;
+        let name = "test_account_dup";
+        create_test_account(&mut tx, name).await;
 
-        // Attempt to create another consumer with the same name should fail (unique index)
+        // Attempt to create another account with the same name should fail (unique index)
         let result =
-            sqlx::query_as::<_, Consumer>("INSERT INTO consumers (name) VALUES ($1) RETURNING *")
+            sqlx::query_as::<_, Account>("INSERT INTO accounts (name) VALUES ($1) RETURNING *")
                 .bind(name)
                 .fetch_one(&mut *tx)
                 .await;
 
-        assert!(result.is_err(), "Duplicate consumer name should fail");
+        assert!(result.is_err(), "Duplicate account name should fail");
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_get_consumer_by_id() {
+    async fn test_get_account_by_id() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_get_by_id").await;
+        let account = create_test_account(&mut tx, "test_get_by_id").await;
 
-        let found = sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE id = $1")
-            .bind(consumer.id)
+        let found = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
+            .bind(account.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
@@ -146,11 +146,11 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_get_consumer_by_id_not_found() {
+    async fn test_get_account_by_id_not_found() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let found = sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE id = $1")
+        let found = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
             .bind(999999)
             .fetch_optional(&mut *tx)
             .await
@@ -162,13 +162,13 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_get_consumer_by_name() {
+    async fn test_get_account_by_name() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        create_test_consumer(&mut tx, "test_get_by_name").await;
+        create_test_account(&mut tx, "test_get_by_name").await;
 
-        let found = sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE name = $1")
+        let found = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE name = $1")
             .bind("test_get_by_name")
             .fetch_optional(&mut *tx)
             .await
@@ -181,12 +181,12 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_get_consumer_by_name_not_found() {
+    async fn test_get_account_by_name_not_found() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let found = sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE name = $1")
-            .bind("nonexistent_consumer")
+        let found = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE name = $1")
+            .bind("nonexistent_account")
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
@@ -197,19 +197,19 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_count_consumers() {
+    async fn test_count_accounts() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM consumers")
+        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
 
-        create_test_consumer(&mut tx, "test_count_1").await;
-        create_test_consumer(&mut tx, "test_count_2").await;
+        create_test_account(&mut tx, "test_count_1").await;
+        create_test_account(&mut tx, "test_count_2").await;
 
-        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM consumers")
+        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM accounts")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -220,18 +220,18 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_list_consumers_paginated() {
+    async fn test_list_accounts_paginated() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        // Create several consumers
+        // Create several accounts
         for i in 0..5 {
-            create_test_consumer(&mut tx, &format!("test_paginated_{}", i)).await;
+            create_test_account(&mut tx, &format!("test_paginated_{}", i)).await;
         }
 
         // Fetch page 1 (limit 2, offset 0)
-        let page1 = sqlx::query_as::<_, Consumer>(
-            "SELECT * FROM consumers ORDER BY id ASC LIMIT $1 OFFSET $2",
+        let page1 = sqlx::query_as::<_, Account>(
+            "SELECT * FROM accounts ORDER BY id ASC LIMIT $1 OFFSET $2",
         )
         .bind(2i64)
         .bind(0i64)
@@ -242,8 +242,8 @@ mod consumer_tests {
         assert_eq!(page1.len(), 2);
 
         // Fetch page 2 (limit 2, offset 2)
-        let page2 = sqlx::query_as::<_, Consumer>(
-            "SELECT * FROM consumers ORDER BY id ASC LIMIT $1 OFFSET $2",
+        let page2 = sqlx::query_as::<_, Account>(
+            "SELECT * FROM accounts ORDER BY id ASC LIMIT $1 OFFSET $2",
         )
         .bind(2i64)
         .bind(2i64)
@@ -260,16 +260,16 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_update_consumer_name() {
+    async fn test_update_account_name() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_update_name_old").await;
+        let account = create_test_account(&mut tx, "test_update_name_old").await;
 
-        let updated = sqlx::query_as::<_, Consumer>(
-            "UPDATE consumers SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, Account>(
+            "UPDATE accounts SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(Some("test_update_name_new"))
         .bind(None::<bool>)
         .fetch_one(&mut *tx)
@@ -283,17 +283,17 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_update_consumer_deactivate() {
+    async fn test_update_account_deactivate() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_deactivate").await;
-        assert!(consumer.is_active);
+        let account = create_test_account(&mut tx, "test_deactivate").await;
+        assert!(account.is_active);
 
-        let updated = sqlx::query_as::<_, Consumer>(
-            "UPDATE consumers SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, Account>(
+            "UPDATE accounts SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(None::<String>)
         .bind(Some(false))
         .fetch_one(&mut *tx)
@@ -307,16 +307,16 @@ mod consumer_tests {
     }
 
     #[tokio::test]
-    async fn test_update_consumer_both_fields() {
+    async fn test_update_account_both_fields() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_update_both").await;
+        let account = create_test_account(&mut tx, "test_update_both").await;
 
-        let updated = sqlx::query_as::<_, Consumer>(
-            "UPDATE consumers SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, Account>(
+            "UPDATE accounts SET name = COALESCE($2, name), is_active = COALESCE($3, is_active), updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(Some("test_update_both_new"))
         .bind(Some(false))
         .fetch_one(&mut *tx)
@@ -342,12 +342,12 @@ mod api_key_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_apikey_consumer").await;
+        let account = create_test_account(&mut tx, "test_apikey_account").await;
 
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO llm_api_keys (account_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-testapikey123")
         .bind("test label")
         .bind(None::<chrono::NaiveDateTime>)
@@ -355,7 +355,7 @@ mod api_key_tests {
         .await
         .unwrap();
 
-        assert_eq!(api_key.consumer_id, Some(consumer.id));
+        assert_eq!(api_key.account_id, Some(account.id));
         assert_eq!(api_key.apikey, "lpx-testapikey123");
         assert_eq!(api_key.label, "test label");
         assert!(api_key.is_active);
@@ -369,11 +369,11 @@ mod api_key_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_apikey_dup_consumer").await;
+        let account = create_test_account(&mut tx, "test_apikey_dup_account").await;
 
         // Create first key
-        sqlx::query("INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)")
+            .bind(account.id)
             .bind("lpx-duplicate-key")
             .bind("first")
             .execute(&mut *tx)
@@ -382,9 +382,9 @@ mod api_key_tests {
 
         // Attempt duplicate
         let result = sqlx::query(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-duplicate-key")
         .bind("second")
         .execute(&mut *tx)
@@ -400,12 +400,12 @@ mod api_key_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_find_active_key").await;
+        let account = create_test_account(&mut tx, "test_find_active_key").await;
 
         sqlx::query(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO llm_api_keys (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-active-key")
         .bind("active")
         .bind(true)
@@ -433,12 +433,12 @@ mod api_key_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_find_inactive_key").await;
+        let account = create_test_account(&mut tx, "test_find_inactive_key").await;
 
         sqlx::query(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO llm_api_keys (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-inactive-key")
         .bind("inactive")
         .bind(false)
@@ -461,18 +461,18 @@ mod api_key_tests {
     }
 
     #[tokio::test]
-    async fn test_count_api_keys_by_consumer() {
+    async fn test_count_api_keys_by_account() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_count_keys").await;
+        let account = create_test_account(&mut tx, "test_count_keys").await;
 
         // Create 3 keys
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
             )
-            .bind(consumer.id)
+            .bind(account.id)
             .bind(format!("lpx-count-key-{}", i))
             .bind(format!("key {}", i))
             .execute(&mut *tx)
@@ -481,8 +481,8 @@ mod api_key_tests {
         }
 
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
-                .bind(consumer.id)
+            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE account_id = $1")
+                .bind(account.id)
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();
@@ -497,14 +497,14 @@ mod api_key_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_list_keys_paged").await;
+        let account = create_test_account(&mut tx, "test_list_keys_paged").await;
 
         // Create 5 keys
         for i in 0..5 {
             sqlx::query(
-                "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
             )
-            .bind(consumer.id)
+            .bind(account.id)
             .bind(format!("lpx-paged-key-{}", i))
             .bind(format!("key {}", i))
             .execute(&mut *tx)
@@ -514,9 +514,9 @@ mod api_key_tests {
 
         // Page 1
         let page1 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+            "SELECT * FROM llm_api_keys WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(2i64)
         .bind(0i64)
         .fetch_all(&mut *tx)
@@ -527,9 +527,9 @@ mod api_key_tests {
 
         // Page 3 (should have 1 item)
         let page3 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE consumer_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+            "SELECT * FROM llm_api_keys WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(2i64)
         .bind(4i64)
         .fetch_all(&mut *tx)
@@ -542,31 +542,31 @@ mod api_key_tests {
     }
 
     #[tokio::test]
-    async fn test_api_key_cascade_delete_on_consumer() {
+    async fn test_api_key_cascade_delete_on_account() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "test_cascade_delete").await;
+        let account = create_test_account(&mut tx, "test_cascade_delete").await;
 
-        sqlx::query("INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)")
+            .bind(account.id)
             .bind("lpx-cascade-key")
             .bind("cascade")
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        // Delete consumer
-        sqlx::query("DELETE FROM consumers WHERE id = $1")
-            .bind(consumer.id)
+        // Delete account
+        sqlx::query("DELETE FROM accounts WHERE id = $1")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
         // API key should be gone (CASCADE)
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE consumer_id = $1")
-                .bind(consumer.id)
+            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE account_id = $1")
+                .bind(account.id)
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();
@@ -1114,12 +1114,12 @@ mod fund_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "fund_consumer").await;
+        let account = create_test_account(&mut tx, "fund_account").await;
 
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, $2, $3, $4) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(BigDecimal::from(100))
         .bind(BigDecimal::from(50))
         .bind(BigDecimal::from(0))
@@ -1127,7 +1127,7 @@ mod fund_tests {
         .await
         .unwrap();
 
-        assert_eq!(fund.consumer_id, consumer.id);
+        assert_eq!(fund.account_id, account.id);
         assert_eq!(fund.cash, BigDecimal::from(100));
         assert_eq!(fund.credit, BigDecimal::from(50));
         assert_eq!(fund.debt, BigDecimal::from(0));
@@ -1136,48 +1136,48 @@ mod fund_tests {
     }
 
     #[tokio::test]
-    async fn test_create_fund_duplicate_consumer() {
+    async fn test_create_fund_duplicate_account() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "fund_dup_consumer").await;
+        let account = create_test_account(&mut tx, "fund_dup_account").await;
 
-        sqlx::query("INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        // Duplicate consumer_id should fail (unique index)
+        // Duplicate account_id should fail (unique index)
         let result =
-            sqlx::query("INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
-                .bind(consumer.id)
+            sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
+                .bind(account.id)
                 .execute(&mut *tx)
                 .await;
 
         assert!(
             result.is_err(),
-            "Duplicate consumer_id in funds should fail"
+            "Duplicate account_id in funds should fail"
         );
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_find_consumer_fund() {
+    async fn test_find_account_fund() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "find_fund_consumer").await;
+        let account = create_test_account(&mut tx, "find_fund_account").await;
 
-        sqlx::query("INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 200, 100, 0)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 200, 100, 0)")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
-            .bind(consumer.id)
+        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+            .bind(account.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
@@ -1191,11 +1191,11 @@ mod fund_tests {
     }
 
     #[tokio::test]
-    async fn test_find_consumer_fund_not_found() {
+    async fn test_find_account_fund_not_found() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
+        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
             .bind(999999)
             .fetch_optional(&mut *tx)
             .await
@@ -1211,12 +1211,12 @@ mod fund_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "update_fund_consumer").await;
+        let account = create_test_account(&mut tx, "update_fund_account").await;
 
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 100, 50, 0) RETURNING *",
+            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 100, 50, 0) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -1243,7 +1243,7 @@ mod fund_tests {
     async fn test_fund_available() {
         let fund = Fund {
             id: 1,
-            consumer_id: 1,
+            account_id: 1,
             cash: BigDecimal::from(100),
             credit: BigDecimal::from(50),
             debt: BigDecimal::from(20),
@@ -1259,7 +1259,7 @@ mod fund_tests {
     async fn test_fund_available_zero() {
         let fund = Fund {
             id: 1,
-            consumer_id: 1,
+            account_id: 1,
             cash: BigDecimal::from(0),
             credit: BigDecimal::from(0),
             debt: BigDecimal::from(100),
@@ -1290,7 +1290,7 @@ mod session_event_tests {
         });
 
         let event = sqlx::query_as::<_, SessionEvent>(
-            "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
         .bind("sess-001")
@@ -1305,7 +1305,7 @@ mod session_event_tests {
 
         assert_eq!(event.session_id, "sess-001");
         assert_eq!(event.session_index, 0);
-        assert_eq!(event.consumer_id, 1);
+        assert_eq!(event.account_id, 1);
         assert_eq!(event.event_data["type"], "chat_completion");
 
         tx.rollback().await.unwrap();
@@ -1321,7 +1321,7 @@ mod session_event_tests {
 
         // Insert first
         sqlx::query(
-            "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data",
         )
@@ -1337,7 +1337,7 @@ mod session_event_tests {
 
         // Upsert with same (session_id, session_index)
         let event = sqlx::query_as::<_, SessionEvent>(
-            "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6)
              ON CONFLICT (session_id, session_index) DO UPDATE SET event_data = EXCLUDED.event_data
              RETURNING *",
@@ -1366,7 +1366,7 @@ mod session_event_tests {
 
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+                "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
                  VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind(format!("sess-list-{}", i))
@@ -1404,7 +1404,7 @@ mod session_event_tests {
         // Create events for two different sessions
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+                "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
                  VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind("sess-filter-target")
@@ -1419,7 +1419,7 @@ mod session_event_tests {
         }
 
         sqlx::query(
-            "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind("sess-filter-other")
@@ -1465,7 +1465,7 @@ mod session_event_tests {
 
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+                "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
                  VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind(format!("sess-count-{}", i))
@@ -1498,7 +1498,7 @@ mod session_event_tests {
 
         for i in 0..2 {
             sqlx::query(
-                "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+                "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
                  VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind("sess-count-filter")
@@ -1534,7 +1534,7 @@ mod session_event_tests {
         // Create events with different session_index values
         for i in 0..5 {
             sqlx::query(
-                "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+                "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
                  VALUES ($1, $2, $3, $4, $5, $6)",
             )
             .bind("sess-multi-idx")
@@ -1577,7 +1577,7 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_consumer").await;
+        let account = create_test_account(&mut tx, "bc_account").await;
 
         let content = serde_json::json!({
             "type": "Deposit",
@@ -1585,16 +1585,16 @@ mod balance_change_tests {
         });
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-001")
         .bind(&content)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        assert_eq!(bc.consumer_id, consumer.id);
+        assert_eq!(bc.account_id, account.id);
         assert_eq!(bc.unique_request_id, "req-001");
         assert!(!bc.is_applied);
         assert_eq!(bc.content["type"], "Deposit");
@@ -1607,14 +1607,14 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_dup_consumer").await;
+        let account = create_test_account(&mut tx, "bc_dup_account").await;
 
         let content = serde_json::json!({"type": "Deposit", "amount": "50"});
 
         sqlx::query(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3)",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3)",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-dup")
         .bind(&content)
         .execute(&mut *tx)
@@ -1623,9 +1623,9 @@ mod balance_change_tests {
 
         // Duplicate unique_request_id should fail
         let result = sqlx::query(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3)",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3)",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-dup")
         .bind(&content)
         .execute(&mut *tx)
@@ -1641,14 +1641,14 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_find_consumer").await;
+        let account = create_test_account(&mut tx, "bc_find_account").await;
 
         let content = serde_json::json!({"type": "Withdraw", "amount": "25"});
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-find")
         .bind(&content)
         .fetch_one(&mut *tx)
@@ -1690,14 +1690,14 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_apply_consumer").await;
+        let account = create_test_account(&mut tx, "bc_apply_account").await;
 
         let content = serde_json::json!({"type": "Deposit", "amount": "100"});
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-apply")
         .bind(&content)
         .fetch_one(&mut *tx)
@@ -1730,14 +1730,14 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_lock_consumer").await;
+        let account = create_test_account(&mut tx, "bc_lock_account").await;
 
         let content = serde_json::json!({"type": "Deposit", "amount": "100"});
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-lock")
         .bind(&content)
         .fetch_one(&mut *tx)
@@ -1763,7 +1763,7 @@ mod balance_change_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "bc_spend_consumer").await;
+        let account = create_test_account(&mut tx, "bc_spend_account").await;
 
         let spend = SpendToken {
             input_tokens: 100,
@@ -1780,9 +1780,9 @@ mod balance_change_tests {
         let content_json = serde_json::to_value(&content).unwrap();
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-spend")
         .bind(&content_json)
         .fetch_one(&mut *tx)
@@ -1806,7 +1806,7 @@ mod balance_change_tests {
         let new_bc =
             NewBalanceChange::from_content(1, "req-from-content".to_string(), &content).unwrap();
 
-        assert_eq!(new_bc.consumer_id, 1);
+        assert_eq!(new_bc.account_id, 1);
         assert_eq!(new_bc.unique_request_id, "req-from-content");
         assert_eq!(new_bc.content["type"], "Deposit");
     }
@@ -1820,7 +1820,7 @@ mod balance_change_tests {
         let new_bc =
             NewBalanceChange::from_content(2, "req-withdraw".to_string(), &content).unwrap();
 
-        assert_eq!(new_bc.consumer_id, 2);
+        assert_eq!(new_bc.account_id, 2);
         assert_eq!(new_bc.content["type"], "Withdraw");
     }
 
@@ -1832,7 +1832,7 @@ mod balance_change_tests {
 
         let new_bc = NewBalanceChange::from_content(3, "req-credit".to_string(), &content).unwrap();
 
-        assert_eq!(new_bc.consumer_id, 3);
+        assert_eq!(new_bc.account_id, 3);
         assert_eq!(new_bc.content["type"], "Credit");
     }
 }
@@ -1845,39 +1845,39 @@ mod integration_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_consumer_with_fund_and_api_key() {
+    async fn test_account_with_fund_and_api_key() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        // Create consumer
-        let consumer = create_test_consumer(&mut tx, "integration_consumer").await;
+        // Create account
+        let account = create_test_account(&mut tx, "integration_account").await;
 
-        // Create fund for consumer
+        // Create fund for account
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 1000, 500, 0) RETURNING *",
+            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 1000, 500, 0) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        assert_eq!(fund.consumer_id, consumer.id);
+        assert_eq!(fund.account_id, account.id);
         assert_eq!(fund.available(), BigDecimal::from(1500));
 
-        // Create API key for consumer
+        // Create API key for account
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-integration-key")
         .bind("integration test")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        assert_eq!(api_key.consumer_id, Some(consumer.id));
+        assert_eq!(api_key.account_id, Some(account.id));
 
-        // Verify consumer can be found by API key
+        // Verify account can be found by API key
         let found_key = sqlx::query_as::<_, OpenAIAPIKey>(
             "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
         )
@@ -1889,14 +1889,14 @@ mod integration_tests {
         assert!(found_key.is_some());
         let found_key = found_key.unwrap();
 
-        // Find consumer from API key
-        let found_consumer = sqlx::query_as::<_, Consumer>("SELECT * FROM consumers WHERE id = $1")
-            .bind(found_key.consumer_id.unwrap())
+        // Find account from API key
+        let found_account = sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
+            .bind(found_key.account_id.unwrap())
             .fetch_one(&mut *tx)
             .await
             .unwrap();
 
-        assert_eq!(found_consumer.name, "integration_consumer");
+        assert_eq!(found_account.name, "integration_account");
 
         tx.rollback().await.unwrap();
     }
@@ -1911,19 +1911,19 @@ mod integration_tests {
             create_test_endpoint(&mut tx, "integration-ep", "https://api.integration.com/v1").await;
         let model = create_test_model(&mut tx, endpoint.id, "gpt-4-integration").await;
 
-        // Create consumer and API key
-        let consumer = create_test_consumer(&mut tx, "integration_ep_consumer").await;
+        // Create account and API key
+        let account = create_test_account(&mut tx, "integration_ep_account").await;
         let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (consumer_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("lpx-integration-ep-key")
         .bind("test")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        // Create session event referencing the model and consumer
+        // Create session event referencing the model and account
         let event_data = serde_json::json!({
             "type": "chat_completion",
             "model": "gpt-4-integration",
@@ -1932,12 +1932,12 @@ mod integration_tests {
         });
 
         let event = sqlx::query_as::<_, SessionEvent>(
-            "INSERT INTO session_events (session_id, session_index, consumer_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
         .bind("sess-integration")
         .bind(0)
-        .bind(consumer.id)
+        .bind(account.id)
         .bind(model.id)
         .bind(api_key.id)
         .bind(&event_data)
@@ -1945,7 +1945,7 @@ mod integration_tests {
         .await
         .unwrap();
 
-        assert_eq!(event.consumer_id, consumer.id);
+        assert_eq!(event.account_id, account.id);
         assert_eq!(event.model_id, model.id);
         assert_eq!(event.api_key_id, api_key.id);
 
@@ -1957,12 +1957,12 @@ mod integration_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        // Create consumer
-        let consumer = create_test_consumer(&mut tx, "workflow_consumer").await;
+        // Create account
+        let account = create_test_account(&mut tx, "workflow_account").await;
 
         // Create fund
-        sqlx::query("INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
@@ -1974,9 +1974,9 @@ mod integration_tests {
         let deposit_json = serde_json::to_value(&deposit_content).unwrap();
 
         let bc = sqlx::query_as::<_, BalanceChange>(
-            "INSERT INTO balance_changes (consumer_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
+            "INSERT INTO balance_changes (account_id, unique_request_id, content) VALUES ($1, $2, $3) RETURNING *",
         )
-        .bind(consumer.id)
+        .bind(account.id)
         .bind("req-workflow-deposit")
         .bind(&deposit_json)
         .fetch_one(&mut *tx)
@@ -1986,8 +1986,8 @@ mod integration_tests {
         assert!(!bc.is_applied);
 
         // Simulate applying the balance change: update fund
-        sqlx::query("UPDATE funds SET cash = cash + 500 WHERE consumer_id = $1")
-            .bind(consumer.id)
+        sqlx::query("UPDATE funds SET cash = cash + 500 WHERE account_id = $1")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
@@ -2000,8 +2000,8 @@ mod integration_tests {
             .unwrap();
 
         // Verify
-        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
-            .bind(consumer.id)
+        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+            .bind(account.id)
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -2021,38 +2021,38 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_consumer_deletion_cascades_to_fund() {
+    async fn test_account_deletion_cascades_to_fund() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let consumer = create_test_consumer(&mut tx, "cascade_fund_consumer").await;
+        let account = create_test_account(&mut tx, "cascade_fund_account").await;
 
-        sqlx::query("INSERT INTO funds (consumer_id, cash, credit, debt) VALUES ($1, 100, 0, 0)")
-            .bind(consumer.id)
+        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 100, 0, 0)")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        // Delete consumer - fund should cascade (due to FK constraint)
-        sqlx::query("DELETE FROM consumers WHERE id = $1")
-            .bind(consumer.id)
+        // Delete account - fund should cascade (due to FK constraint)
+        sqlx::query("DELETE FROM accounts WHERE id = $1")
+            .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
-            .bind(consumer.id)
+        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+            .bind(account.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
 
-        // Note: funds table has REFERENCES consumers(id) but without ON DELETE CASCADE,
+        // Note: funds table has REFERENCES accounts(id) but without ON DELETE CASCADE,
         // so this might fail depending on the actual constraint. If it does, the test
         // documents the expected behavior.
-        // If the FK doesn't cascade, the delete of the consumer would fail instead.
+        // If the FK doesn't cascade, the delete of the account would fail instead.
         assert!(
             fund.is_none(),
-            "Fund should be removed when consumer is deleted"
+            "Fund should be removed when account is deleted"
         );
 
         tx.rollback().await.unwrap();

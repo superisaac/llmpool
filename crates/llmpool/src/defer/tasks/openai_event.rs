@@ -64,13 +64,13 @@ pub async fn handle_openai_event(
     balance_change_storage: Data<RedisStorage<BalanceChangeTask>>,
 ) {
     let session_id = event.session_id.clone();
-    let consumer_id = event.consumer_id;
+    let account_id = event.account_id;
     let model_id = event.model_id;
 
     info!(
         session_id = %session_id,
         session_index = event.session_index,
-        consumer_id = consumer_id,
+        account_id = account_id,
         model_id = model_id,
         "Processing deferred event"
     );
@@ -124,7 +124,7 @@ pub async fn handle_openai_event(
     let new_event = NewSessionEvent {
         session_id: session_id.clone(),
         session_index: event.session_index,
-        consumer_id,
+        account_id,
         model_id,
         api_key_id: event.api_key_id,
         input_token_price: input_token_price.clone(),
@@ -166,7 +166,7 @@ pub async fn handle_openai_event(
         let content = BalanceChangeContent::SpendToken(spend_token);
         let unique_request_id = format!("spendtoken-{}-{}", event.session_id, event.session_index);
         let new_change =
-            match NewBalanceChange::from_content(consumer_id, unique_request_id, &content) {
+            match NewBalanceChange::from_content(account_id, unique_request_id, &content) {
                 Ok(change) => change,
                 Err(e) => {
                     warn!(

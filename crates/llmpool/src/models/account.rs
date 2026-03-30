@@ -3,12 +3,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // ============================================================
-// Consumer
+// Account
 // ============================================================
 
-/// Represents a consumer
+/// Represents an account
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct Consumer {
+pub struct Account {
     pub id: i32,
     pub name: String,
     pub is_active: bool,
@@ -16,15 +16,15 @@ pub struct Consumer {
     pub updated_at: NaiveDateTime,
 }
 
-/// Used to insert a new consumer
+/// Used to insert a new account
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewConsumer {
+pub struct NewAccount {
     pub name: String,
 }
 
-/// Used to update an existing consumer
+/// Used to update an existing account
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateConsumer {
+pub struct UpdateAccount {
     pub name: Option<String>,
     pub is_active: Option<bool>,
 }

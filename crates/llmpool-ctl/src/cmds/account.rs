@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{ConsumerResponse, PaginatedResponse, print_pagination, resolve_consumer_id, truncate};
+use super::{AccountResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -9,29 +9,29 @@ use crate::client::ApiClient;
 // ============================================================
 
 #[derive(Subcommand)]
-pub enum ConsumerAction {
-    /// List all consumers
+pub enum AccountAction {
+    /// List all accounts
     List,
-    /// Show a consumer's details
+    /// Show an account's details
     Show {
-        /// Consumer name or consumer ID
+        /// Account name or account ID
         #[arg(long)]
-        consumer: String,
+        account: String,
     },
-    /// Add a new consumer
+    /// Add a new account
     Add {
-        /// Name for the new consumer
+        /// Name for the new account
         name: String,
     },
-    /// Update an existing consumer
+    /// Update an existing account
     Update {
-        /// Name or consumer ID of the consumer to update
+        /// Name or account ID of the account to update
         #[arg(long)]
-        consumer: String,
+        account: String,
         /// New name
         #[arg(long)]
         name: Option<String>,
-        /// Whether the consumer is active (true/false)
+        /// Whether the account is active (true/false)
         #[arg(long)]
         is_active: Option<bool>,
     },
@@ -42,12 +42,12 @@ pub enum ConsumerAction {
 // ============================================================
 
 #[derive(Serialize)]
-struct CreateConsumerRequest {
+struct CreateAccountRequest {
     name: String,
 }
 
 #[derive(Serialize)]
-struct UpdateConsumerRequestBody {
+struct UpdateAccountRequestBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -58,9 +58,9 @@ struct UpdateConsumerRequestBody {
 // Display Helpers
 // ============================================================
 
-fn print_consumers(consumers: &[ConsumerResponse]) {
-    if consumers.is_empty() {
-        println!("No consumers found.");
+fn print_accounts(accounts: &[AccountResponse]) {
+    if accounts.is_empty() {
+        println!("No accounts found.");
         return;
     }
 
@@ -69,7 +69,7 @@ fn print_consumers(consumers: &[ConsumerResponse]) {
         "ID", "Name", "Active", "Created At", "Updated At"
     );
     println!("{}", "-".repeat(80));
-    for u in consumers {
+    for u in accounts {
         println!(
             "{:<5} {:<20} {:<8} {:<22} {:<22}",
             u.id,
@@ -81,8 +81,8 @@ fn print_consumers(consumers: &[ConsumerResponse]) {
     }
 }
 
-fn print_consumer_detail(u: &ConsumerResponse) {
-    println!("Consumer created successfully!");
+fn print_account_detail(u: &AccountResponse) {
+    println!("Account created successfully!");
     println!();
     println!("  ID:         {}", u.id);
     println!("  Name:       {}", u.name);
@@ -91,7 +91,7 @@ fn print_consumer_detail(u: &ConsumerResponse) {
     println!("  Updated At: {}", u.updated_at);
 }
 
-fn print_consumer_info(u: &ConsumerResponse) {
+fn print_account_info(u: &AccountResponse) {
     println!("  ID:         {}", u.id);
     println!("  Name:       {}", u.name);
     println!("  Active:     {}", if u.is_active { "yes" } else { "no" });
@@ -103,71 +103,71 @@ fn print_consumer_info(u: &ConsumerResponse) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_consumer(
-    action: ConsumerAction,
+pub async fn handle_account(
+    action: AccountAction,
     client: &ApiClient,
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        ConsumerAction::List => {
+        AccountAction::List => {
             if json_output {
-                let raw = client.get_raw("/consumers").await?;
+                let raw = client.get_raw("/accounts").await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<ConsumerResponse> = client.get("/consumers").await?;
-                print_consumers(&resp.data);
+                let resp: PaginatedResponse<AccountResponse> = client.get("/accounts").await?;
+                print_accounts(&resp.data);
                 print_pagination(&resp.pagination);
             }
         }
-        ConsumerAction::Show { consumer } => {
+        AccountAction::Show { account } => {
             if json_output {
-                let path = if let Ok(id) = consumer.parse::<i32>() {
-                    format!("/consumers/{}", id)
+                let path = if let Ok(id) = account.parse::<i32>() {
+                    format!("/accounts/{}", id)
                 } else {
-                    format!("/consumers_by_name/{}", consumer)
+                    format!("/accounts_by_name/{}", account)
                 };
                 let raw = client.get_raw(&path).await?;
                 println!("{}", raw);
             } else {
-                let resp: ConsumerResponse = if let Ok(id) = consumer.parse::<i32>() {
-                    client.get(&format!("/consumers/{}", id)).await?
+                let resp: AccountResponse = if let Ok(id) = account.parse::<i32>() {
+                    client.get(&format!("/accounts/{}", id)).await?
                 } else {
                     client
-                        .get(&format!("/consumers_by_name/{}", consumer))
+                        .get(&format!("/accounts_by_name/{}", account))
                         .await?
                 };
-                print_consumer_info(&resp);
+                print_account_info(&resp);
             }
         }
-        ConsumerAction::Add { name } => {
-            let body = CreateConsumerRequest { name };
+        AccountAction::Add { name } => {
+            let body = CreateAccountRequest { name };
             if json_output {
-                let raw = client.post_raw("/consumers", &body).await?;
+                let raw = client.post_raw("/accounts", &body).await?;
                 println!("{}", raw);
             } else {
-                let resp: ConsumerResponse = client.post("/consumers", &body).await?;
-                print_consumer_detail(&resp);
+                let resp: AccountResponse = client.post("/accounts", &body).await?;
+                print_account_detail(&resp);
             }
         }
-        ConsumerAction::Update {
-            consumer,
+        AccountAction::Update {
+            account,
             name,
             is_active,
         } => {
-            let consumer_id = resolve_consumer_id(&consumer, client).await?;
-            let body = UpdateConsumerRequestBody { name, is_active };
+            let account_id = resolve_account_id(&account, client).await?;
+            let body = UpdateAccountRequestBody { name, is_active };
             if json_output {
                 let raw = client
-                    .put_raw(&format!("/consumers/{}", consumer_id), &body)
+                    .put_raw(&format!("/accounts/{}", account_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: ConsumerResponse = client
-                    .put(&format!("/consumers/{}", consumer_id), &body)
+                let resp: AccountResponse = client
+                    .put(&format!("/accounts/{}", account_id), &body)
                     .await?;
-                println!("Consumer updated successfully!");
+                println!("Account updated successfully!");
                 println!();
-                print_consumer_info(&resp);
+                print_account_info(&resp);
             }
         }
     }

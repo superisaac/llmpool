@@ -1,6 +1,6 @@
 # llmpool-ctl — CLI Management Tool
 
-`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing endpoints, models, consumers, API keys, and consumer funds without needing to make raw HTTP requests.
+`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing endpoints, models, accounts, API keys, and account funds without needing to make raw HTTP requests.
 
 ## Prerequisites
 
@@ -168,143 +168,143 @@ llmpool-ctl model update \
 
 ---
 
-### Consumer Management
+### Account Management
 
-Manage consumers.
+Manage accounts.
 
-#### `consumer list`
+#### `account list`
 
-List all consumers.
+List all accounts.
 
 ```bash
-llmpool-ctl consumer list
+llmpool-ctl account list
 ```
 
-#### `consumer show`
+#### `account show`
 
-Show details of a specific consumer.
+Show details of a specific account.
 
 ```bash
-llmpool-ctl consumer show --consumer alice
-llmpool-ctl consumer show --consumer 1
+llmpool-ctl account show --account alice
+llmpool-ctl account show --account 1
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 
-#### `consumer add`
+#### `account add`
 
-Create a new consumer.
+Create a new account.
 
 ```bash
-llmpool-ctl consumer add alice
+llmpool-ctl account add alice
 ```
 
 The positional argument is the name.
 
-#### `consumer update`
+#### `account update`
 
-Update an existing consumer.
+Update an existing account.
 
 ```bash
-llmpool-ctl consumer update --consumer alice --name alice2 --is-active false
+llmpool-ctl account update --account alice --name alice2 --is-active false
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 | `--name` | No | New name |
-| `--is-active` | No | Whether the consumer is active (`true`/`false`) |
+| `--is-active` | No | Whether the account is active (`true`/`false`) |
 
 ---
 
 ### API Key Management
 
-Manage OpenAI-compatible API keys for consumers.
+Manage OpenAI-compatible API keys for accounts.
 
 #### `apikey list`
 
-List all API keys for a consumer.
+List all API keys for an account.
 
 ```bash
-llmpool-ctl apikey list --consumer alice
+llmpool-ctl apikey list --account alice
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 
 #### `apikey add`
 
-Create a new API key for a consumer.
+Create a new API key for an account.
 
 ```bash
-llmpool-ctl apikey add --consumer alice --label "dev key"
+llmpool-ctl apikey add --account alice --label "dev key"
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 | `--label` | No | Label describing the purpose of this API key |
 
 ---
 
 ### Fund Management
 
-Manage consumer balances — view balance, deposit cash, withdraw cash, and add credit.
+Manage account balances — view balance, deposit cash, withdraw cash, and add credit.
 
 #### `fund show`
 
-Show a consumer's fund balance (cash, credit, debt).
+Show an account's fund balance (cash, credit, debt).
 
 ```bash
-llmpool-ctl fund show --consumer alice
+llmpool-ctl fund show --account alice
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 
 #### `fund deposit`
 
-Deposit cash to a consumer's fund.
+Deposit cash to an account's fund.
 
 ```bash
-llmpool-ctl fund deposit --consumer alice --amount "100.00" --request-id "dep-001"
+llmpool-ctl fund deposit --account alice --amount "100.00" --request-id "dep-001"
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 | `--amount` | Yes | Amount to deposit |
 | `--request-id` | Yes | Unique request ID for idempotency |
 
 #### `fund withdraw`
 
-Withdraw cash from a consumer's fund.
+Withdraw cash from an account's fund.
 
 ```bash
-llmpool-ctl fund withdraw --consumer alice --amount "50.00" --request-id "wd-001"
+llmpool-ctl fund withdraw --account alice --amount "50.00" --request-id "wd-001"
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 | `--amount` | Yes | Amount to withdraw |
 | `--request-id` | Yes | Unique request ID for idempotency |
 
 #### `fund credit`
 
-Add credit to a consumer's fund.
+Add credit to an account's fund.
 
 ```bash
-llmpool-ctl fund credit --consumer alice --amount "200.00" --request-id "cr-001"
+llmpool-ctl fund credit --account alice --amount "200.00" --request-id "cr-001"
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--consumer` | Yes | Consumer name or numeric consumer ID |
+| `--account` | Yes | Account name or numeric account ID |
 | `--amount` | Yes | Amount of credit to add |
 | `--request-id` | Yes | Unique request ID for idempotency |
 
@@ -316,18 +316,18 @@ All commands support `--format json` for machine-readable output, useful for scr
 
 ```bash
 llmpool-ctl --format json endpoint list
-llmpool-ctl --format json consumer list
-llmpool-ctl --format json fund show --consumer alice
+llmpool-ctl --format json account list
+llmpool-ctl --format json fund show --account alice
 ```
 
 ## Name or ID Resolution
 
-For `--endpoint` and `--consumer` flags, you can use either the name (string) or the numeric ID. The tool will automatically resolve names to IDs via the API.
+For `--endpoint` and `--account` flags, you can use either the name (string) or the numeric ID. The tool will automatically resolve names to IDs via the API.
 
 ```bash
 # Both are equivalent
-llmpool-ctl consumer show --consumer alice
-llmpool-ctl consumer show --consumer 1
+llmpool-ctl account show --account alice
+llmpool-ctl account show --account 1
 ```
 
 ## Example Workflow
@@ -346,13 +346,13 @@ llmpool-ctl endpoint add \
 # List detected models
 llmpool-ctl model list
 
-# Create a consumer and API key
-llmpool-ctl consumer add alice
-llmpool-ctl apikey add --consumer alice --label "development"
+# Create an account and API key
+llmpool-ctl account add alice
+llmpool-ctl apikey add --account alice --label "development"
 
 # Deposit funds
-llmpool-ctl fund deposit --consumer alice --amount "100.00" --request-id "initial-deposit"
+llmpool-ctl fund deposit --account alice --amount "100.00" --request-id "initial-deposit"
 
 # Check balance
-llmpool-ctl fund show --consumer alice
+llmpool-ctl fund show --account alice
 ```

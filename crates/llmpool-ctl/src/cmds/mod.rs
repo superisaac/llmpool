@@ -1,5 +1,5 @@
+pub mod account;
 pub mod apikey;
-pub mod consumer;
 pub mod endpoint;
 pub mod fund;
 pub mod model;
@@ -8,15 +8,15 @@ pub mod session_event;
 use serde::Deserialize;
 
 // Re-export subcommand enums and handlers
+pub use account::AccountAction;
 pub use apikey::ApiKeyAction;
-pub use consumer::ConsumerAction;
 pub use endpoint::EndpointAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
 pub use session_event::SessionEventAction;
 
+pub use account::handle_account;
 pub use apikey::handle_apikey;
-pub use consumer::handle_consumer;
 pub use endpoint::handle_endpoint;
 pub use fund::handle_fund;
 pub use model::handle_model;
@@ -78,7 +78,7 @@ pub struct ModelResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ConsumerResponse {
+pub struct AccountResponse {
     pub id: i32,
     pub name: String,
     pub is_active: bool,
@@ -90,7 +90,7 @@ pub struct ConsumerResponse {
 #[allow(dead_code)]
 pub struct FundResponse {
     pub id: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub cash: String,
     pub credit: String,
     pub debt: String,
@@ -101,7 +101,7 @@ pub struct FundResponse {
 #[derive(Debug, Deserialize)]
 pub struct BalanceChangeResponse {
     pub id: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
@@ -141,7 +141,7 @@ pub struct TagsResponse {
 #[allow(dead_code)]
 pub struct LLMAPIKeyResponse {
     pub id: i32,
-    pub consumer_id: Option<i32>,
+    pub account_id: Option<i32>,
     pub apikey: String,
     pub label: String,
     pub is_active: bool,
@@ -239,16 +239,16 @@ pub async fn resolve_endpoint_id(
     Ok(resp.id)
 }
 
-/// Resolve a consumer name or consumer ID string to a numeric consumer ID.
-pub async fn resolve_consumer_id(
-    consumer: &str,
+/// Resolve an account name or account ID string to a numeric account ID.
+pub async fn resolve_account_id(
+    account: &str,
     client: &crate::client::ApiClient,
 ) -> Result<i32, String> {
-    if let Ok(id) = consumer.parse::<i32>() {
+    if let Ok(id) = account.parse::<i32>() {
         return Ok(id);
     }
-    let resp: ConsumerResponse = client
-        .get(&format!("/consumers_by_name/{}", consumer))
+    let resp: AccountResponse = client
+        .get(&format!("/accounts_by_name/{}", account))
         .await?;
     Ok(resp.id)
 }

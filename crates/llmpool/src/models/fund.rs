@@ -11,7 +11,7 @@ use sqlx::FromRow;
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Fund {
     pub id: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub cash: BigDecimal,
     pub credit: BigDecimal,
     pub debt: BigDecimal,
@@ -28,7 +28,7 @@ impl Fund {
 /// Used to insert a new fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewFund {
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub cash: BigDecimal,
     pub credit: BigDecimal,
     pub debt: BigDecimal,
@@ -72,7 +72,7 @@ pub enum BalanceChangeContent {
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct BalanceChange {
     pub id: i32,
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
@@ -89,7 +89,7 @@ pub struct BalanceChange {
 /// Used to insert a new balance change
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewBalanceChange {
-    pub consumer_id: i32,
+    pub account_id: i32,
     pub unique_request_id: String,
     pub content: serde_json::Value,
 }
@@ -97,12 +97,12 @@ pub struct NewBalanceChange {
 impl NewBalanceChange {
     /// Create a new balance change from a BalanceChangeContent enum with a given unique_request_id
     pub fn from_content(
-        consumer_id: i32,
+        account_id: i32,
         unique_request_id: String,
         content: &BalanceChangeContent,
     ) -> Result<Self, serde_json::Error> {
         Ok(Self {
-            consumer_id,
+            account_id,
             unique_request_id,
             content: serde_json::to_value(content)?,
         })

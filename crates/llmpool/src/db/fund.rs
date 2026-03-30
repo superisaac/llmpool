@@ -4,13 +4,13 @@ use chrono::Utc;
 use crate::db::DbPool;
 use crate::models::{BalanceChangeContent, Fund, NewFund, UpdateFund};
 
-/// Find a consumer's fund by consumer_id
-pub async fn find_consumer_fund(
+/// Find a consumer's fund by account_id
+pub async fn find_account_fund(
     pool: &DbPool,
-    consumer_id: i32,
+    account_id: i32,
 ) -> Result<Option<Fund>, sqlx::Error> {
-    sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
-        .bind(consumer_id)
+    sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+        .bind(account_id)
         .fetch_optional(pool)
         .await
 }
@@ -28,11 +28,11 @@ pub async fn find_consumer_fund(
 #[allow(dead_code)]
 pub async fn apply_balance_change(
     pool: &DbPool,
-    consumer_id: i32,
+    account_id: i32,
     content: &BalanceChangeContent,
 ) -> Result<Fund, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let result = apply_balance_change_with_tx(&mut tx, consumer_id, content).await?;
+    let result = apply_balance_change_with_tx(&mut tx, account_id, content).await?;
     tx.commit().await?;
     Ok(result)
 }
@@ -42,32 +42,32 @@ pub async fn apply_balance_change(
 /// This variant is useful when you want to run the operation within an existing transaction.
 pub async fn apply_balance_change_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    consumer_id: i32,
+    account_id: i32,
     content: &BalanceChangeContent,
 ) -> Result<Fund, sqlx::Error> {
     // Find or create the consumer fund
-    let consumer_fund: Option<Fund> =
-        sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE consumer_id = $1")
-            .bind(consumer_id)
+    let account_fund: Option<Fund> =
+        sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+            .bind(account_id)
             .fetch_optional(&mut **tx)
             .await?;
 
-    let consumer_fund = match consumer_fund {
+    let account_fund = match account_fund {
         Some(uf) => uf,
         None => {
             // Create a new fund record with zero cash, zero credit, and zero debt
             let new_fund = NewFund {
-                consumer_id,
+                account_id,
                 cash: BigDecimal::from(0),
                 credit: BigDecimal::from(0),
                 debt: BigDecimal::from(0),
             };
             sqlx::query_as::<_, Fund>(
-                "INSERT INTO funds (consumer_id, cash, credit, debt)
+                "INSERT INTO funds (account_id, cash, credit, debt)
                  VALUES ($1, $2, $3, $4)
                  RETURNING *",
             )
-            .bind(new_fund.consumer_id)
+            .bind(new_fund.account_id)
             .bind(&new_fund.cash)
             .bind(&new_fund.credit)
             .bind(&new_fund.debt)
@@ -82,106 +82,106 @@ pub async fn apply_balance_change_with_tx(
         BalanceChangeContent::SpendToken(spend) => {
             let spend_amount = &spend.input_spend_amount + &spend.output_spend_amount;
             // Deduct from credit first
-            let remaining_after_credit = &consumer_fund.credit - &spend_amount;
+            let remaining_after_credit = &account_fund.credit - &spend_amount;
             if remaining_after_credit >= zero {
                 // Credit alone covers the spend
                 (
-                    consumer_fund.cash.clone(),
+                    account_fund.cash.clone(),
                     remaining_after_credit,
-                    consumer_fund.debt.clone(),
+                    account_fund.debt.clone(),
                 )
             } else {
                 // Credit is exhausted, deduct remainder from cash
                 let remainder = zero.clone() - &remaining_after_credit;
-                let remaining_after_cash = &consumer_fund.cash - &remainder;
+                let remaining_after_cash = &account_fund.cash - &remainder;
                 if remaining_after_cash >= zero {
                     // Cash covers the remainder
                     (
                         remaining_after_cash,
                         zero.clone(),
-                        consumer_fund.debt.clone(),
+                        account_fund.debt.clone(),
                     )
                 } else {
                     // Cash is also exhausted, add deficit to debt
                     let deficit = zero.clone() - &remaining_after_cash;
-                    (zero.clone(), zero.clone(), &consumer_fund.debt + &deficit)
+                    (zero.clone(), zero.clone(), &account_fund.debt + &deficit)
                 }
             }
         }
         BalanceChangeContent::Deposit { amount } => {
             // Deposit does not change credit
-            if consumer_fund.debt > zero {
+            if account_fund.debt > zero {
                 // Pay off debt first, then add remaining to cash
-                let remaining_debt = &consumer_fund.debt - amount;
+                let remaining_debt = &account_fund.debt - amount;
                 if remaining_debt > zero {
                     // Deposit is not enough to cover all debt
                     (
-                        consumer_fund.cash.clone(),
-                        consumer_fund.credit.clone(),
+                        account_fund.cash.clone(),
+                        account_fund.credit.clone(),
                         remaining_debt,
                     )
                 } else {
                     // Deposit covers all debt, remainder goes to cash
                     let surplus = zero.clone() - &remaining_debt;
                     (
-                        &consumer_fund.cash + &surplus,
-                        consumer_fund.credit.clone(),
+                        &account_fund.cash + &surplus,
+                        account_fund.credit.clone(),
                         zero,
                     )
                 }
             } else {
-                let new_bal = &consumer_fund.cash + amount;
+                let new_bal = &account_fund.cash + amount;
                 (
                     new_bal,
-                    consumer_fund.credit.clone(),
-                    consumer_fund.debt.clone(),
+                    account_fund.credit.clone(),
+                    account_fund.debt.clone(),
                 )
             }
         }
         BalanceChangeContent::Withdraw { amount } => {
             // Withdraw does not change credit
-            let remaining = &consumer_fund.cash - amount;
+            let remaining = &account_fund.cash - amount;
             if remaining < zero {
                 let deficit = zero.clone() - &remaining;
                 (
                     zero,
-                    consumer_fund.credit.clone(),
-                    &consumer_fund.debt + &deficit,
+                    account_fund.credit.clone(),
+                    &account_fund.debt + &deficit,
                 )
             } else {
                 (
                     remaining,
-                    consumer_fund.credit.clone(),
-                    consumer_fund.debt.clone(),
+                    account_fund.credit.clone(),
+                    account_fund.debt.clone(),
                 )
             }
         }
         BalanceChangeContent::Credit { amount } => {
             // Credit: if debt > 0, pay off debt first; any remaining amount is added to credit
-            if consumer_fund.debt > zero {
-                let remaining_debt = &consumer_fund.debt - amount;
+            if account_fund.debt > zero {
+                let remaining_debt = &account_fund.debt - amount;
                 if remaining_debt > zero {
                     // Credit is not enough to cover all debt
                     (
-                        consumer_fund.cash.clone(),
-                        consumer_fund.credit.clone(),
+                        account_fund.cash.clone(),
+                        account_fund.credit.clone(),
                         remaining_debt,
                     )
                 } else {
                     // Credit covers all debt, remainder goes to credit field
                     let surplus = zero.clone() - &remaining_debt;
                     (
-                        consumer_fund.cash.clone(),
-                        &consumer_fund.credit + &surplus,
+                        account_fund.cash.clone(),
+                        &account_fund.credit + &surplus,
                         zero,
                     )
                 }
             } else {
-                let new_credit = &consumer_fund.credit + amount;
+                let new_credit = &account_fund.credit + amount;
                 (
-                    consumer_fund.cash.clone(),
+                    account_fund.cash.clone(),
                     new_credit,
-                    consumer_fund.debt.clone(),
+                    account_fund.debt.clone(),
                 )
             }
         }
@@ -203,7 +203,7 @@ pub async fn apply_balance_change_with_tx(
     .bind(&update.credit)
     .bind(&update.debt)
     .bind(&update.updated_at)
-    .bind(consumer_fund.id)
+    .bind(account_fund.id)
     .fetch_one(&mut **tx)
     .await
 }

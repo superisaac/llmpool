@@ -30,12 +30,12 @@ use apalis_redis::RedisStorage;
 use crate::db::{self, DbPool, RedisPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
-use crate::models::{CapacityOption, Consumer, OpenAIAPIKey};
+use crate::models::{Account, CapacityOption, OpenAIAPIKey};
 use crate::openai::session_tracer::SessionTracer;
 use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
-    pub static CONSUMER: Consumer;
+    pub static ACCOUNT: Account;
     pub static OPENAI_API_KEY: OpenAIAPIKey;
 }
 
@@ -115,29 +115,29 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 2: Find the consumer by ACCESS_KEY.consumer_id (if present)
-    let consumer_id = match access_key.consumer_id {
+    // Step 2: Find the account by ACCESS_KEY.account_id (if present)
+    let account_id = match access_key.account_id {
         Some(uid) => uid,
         None => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
-                "API key is not associated with a consumer.",
+                "API key is not associated with an account.",
                 "invalid_api_key",
             );
         }
     };
 
-    let consumer = match db::api::find_consumer_by_id(&state.pool, consumer_id).await {
+    let account = match db::api::find_account_by_id(&state.pool, account_id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
-                "Consumer not found for this API key.",
+                "Account not found for this API key.",
                 "invalid_api_key",
             );
         }
         Err(e) => {
-            warn!(error = %e, "Database error during consumer lookup");
+            warn!(error = %e, "Database error during account lookup");
             return auth_error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error during authentication.",
@@ -146,18 +146,18 @@ async fn auth_openai_api(
         }
     };
 
-    // Step 4: Check if the consumer is active
-    if !consumer.is_active {
+    // Step 4: Check if the account is active
+    if !account.is_active {
         return auth_error_response(
             StatusCode::UNAUTHORIZED,
-            "Consumer account is inactive.",
+            "Account is inactive.",
             "invalid_api_key",
         );
     }
 
     // Step 5: Set task-local variables and proceed
     OPENAI_API_KEY
-        .scope(access_key, CONSUMER.scope(consumer, next.run(request)))
+        .scope(access_key, ACCOUNT.scope(account, next.run(request)))
         .await
 }
 
@@ -165,9 +165,9 @@ async fn auth_openai_api(
 
 /// Check if the user has sufficient funds (available > 0).
 /// Returns Ok(()) if funds are sufficient, or Err(Response) with an error response.
-async fn check_fund_available(pool: &DbPool, consumer_id: i32) -> Result<(), Response> {
+async fn check_fund_available(pool: &DbPool, account_id: i32) -> Result<(), Response> {
     let zero = BigDecimal::from(0);
-    match db::fund::find_consumer_fund(pool, consumer_id).await {
+    match db::fund::find_account_fund(pool, account_id).await {
         Ok(Some(fund)) if fund.available() > zero => Ok(()),
         Ok(Some(_fund)) => Err(insufficient_funds_response()),
         Ok(None) => {
@@ -328,10 +328,10 @@ async fn chat_completions(
     Json(payload): Json<CreateChatCompletionRequest>,
 ) -> Response {
     let model_name = &payload.model;
-    let consumer_id = CONSUMER.with(|u| u.id);
+    let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the consumer has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
+    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
 
@@ -351,7 +351,7 @@ async fn chat_completions(
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
-            consumer_id,
+            account_id,
             *model_db_id,
             api_key_id,
         );
@@ -426,10 +426,10 @@ async fn generate_images(
     Json(payload): Json<CreateImageRequest>,
 ) -> axum::response::Response {
     let model_name = image_model_to_string(&payload.model);
-    let consumer_id = CONSUMER.with(|u| u.id);
+    let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the consumer has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
+    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
 
@@ -449,7 +449,7 @@ async fn generate_images(
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
-            consumer_id,
+            account_id,
             *model_db_id,
             api_key_id,
         );
@@ -575,10 +575,10 @@ async fn create_embeddings(
     Json(payload): Json<CreateEmbeddingRequest>,
 ) -> Response {
     let model_name = &payload.model;
-    let consumer_id = CONSUMER.with(|u| u.id);
+    let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the consumer has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, consumer_id).await {
+    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
 
@@ -598,7 +598,7 @@ async fn create_embeddings(
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
-            consumer_id,
+            account_id,
             *model_db_id,
             api_key_id,
         );
