@@ -344,8 +344,8 @@ mod api_key_tests {
 
         let account = create_test_account(&mut tx, "test_apikey_account").await;
 
-        let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (account_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
+        let api_key = sqlx::query_as::<_, ApiCredential>(
+            "INSERT INTO api_credentials (account_id, apikey, label, expires_at) VALUES ($1, $2, $3, $4) RETURNING *",
         )
         .bind(account.id)
         .bind("lpx-testapikey123")
@@ -372,7 +372,7 @@ mod api_key_tests {
         let account = create_test_account(&mut tx, "test_apikey_dup_account").await;
 
         // Create first key
-        sqlx::query("INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3)")
             .bind(account.id)
             .bind("lpx-duplicate-key")
             .bind("first")
@@ -382,7 +382,7 @@ mod api_key_tests {
 
         // Attempt duplicate
         let result = sqlx::query(
-            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
+            "INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3)",
         )
         .bind(account.id)
         .bind("lpx-duplicate-key")
@@ -403,7 +403,7 @@ mod api_key_tests {
         let account = create_test_account(&mut tx, "test_find_active_key").await;
 
         sqlx::query(
-            "INSERT INTO llm_api_keys (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO api_credentials (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
         .bind(account.id)
         .bind("lpx-active-key")
@@ -414,8 +414,8 @@ mod api_key_tests {
         .unwrap();
 
         // Find active key
-        let found = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
+        let found = sqlx::query_as::<_, ApiCredential>(
+            "SELECT * FROM api_credentials WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-active-key")
         .fetch_optional(&mut *tx)
@@ -436,7 +436,7 @@ mod api_key_tests {
         let account = create_test_account(&mut tx, "test_find_inactive_key").await;
 
         sqlx::query(
-            "INSERT INTO llm_api_keys (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
+            "INSERT INTO api_credentials (account_id, apikey, label, is_active) VALUES ($1, $2, $3, $4)",
         )
         .bind(account.id)
         .bind("lpx-inactive-key")
@@ -447,8 +447,8 @@ mod api_key_tests {
         .unwrap();
 
         // Should not find inactive key
-        let found = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
+        let found = sqlx::query_as::<_, ApiCredential>(
+            "SELECT * FROM api_credentials WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-inactive-key")
         .fetch_optional(&mut *tx)
@@ -470,7 +470,7 @@ mod api_key_tests {
         // Create 3 keys
         for i in 0..3 {
             sqlx::query(
-                "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3)",
             )
             .bind(account.id)
             .bind(format!("lpx-count-key-{}", i))
@@ -481,7 +481,7 @@ mod api_key_tests {
         }
 
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE account_id = $1")
+            sqlx::query_as("SELECT COUNT(*) FROM api_credentials WHERE account_id = $1")
                 .bind(account.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -502,7 +502,7 @@ mod api_key_tests {
         // Create 5 keys
         for i in 0..5 {
             sqlx::query(
-                "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)",
+                "INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3)",
             )
             .bind(account.id)
             .bind(format!("lpx-paged-key-{}", i))
@@ -513,8 +513,8 @@ mod api_key_tests {
         }
 
         // Page 1
-        let page1 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+        let page1 = sqlx::query_as::<_, ApiCredential>(
+            "SELECT * FROM api_credentials WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
         .bind(account.id)
         .bind(2i64)
@@ -526,8 +526,8 @@ mod api_key_tests {
         assert_eq!(page1.len(), 2);
 
         // Page 3 (should have 1 item)
-        let page3 = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
+        let page3 = sqlx::query_as::<_, ApiCredential>(
+            "SELECT * FROM api_credentials WHERE account_id = $1 ORDER BY id ASC LIMIT $2 OFFSET $3",
         )
         .bind(account.id)
         .bind(2i64)
@@ -548,7 +548,7 @@ mod api_key_tests {
 
         let account = create_test_account(&mut tx, "test_cascade_delete").await;
 
-        sqlx::query("INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3)")
             .bind(account.id)
             .bind("lpx-cascade-key")
             .bind("cascade")
@@ -565,7 +565,7 @@ mod api_key_tests {
 
         // API key should be gone (CASCADE)
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM llm_api_keys WHERE account_id = $1")
+            sqlx::query_as("SELECT COUNT(*) FROM api_credentials WHERE account_id = $1")
                 .bind(account.id)
                 .fetch_one(&mut *tx)
                 .await
@@ -1865,8 +1865,8 @@ mod integration_tests {
         assert_eq!(fund.available(), BigDecimal::from(1500));
 
         // Create API key for account
-        let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+        let api_key = sqlx::query_as::<_, ApiCredential>(
+            "INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind(account.id)
         .bind("lpx-integration-key")
@@ -1878,8 +1878,8 @@ mod integration_tests {
         assert_eq!(api_key.account_id, Some(account.id));
 
         // Verify account can be found by API key
-        let found_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "SELECT * FROM llm_api_keys WHERE apikey = $1 AND is_active = true",
+        let found_key = sqlx::query_as::<_, ApiCredential>(
+            "SELECT * FROM api_credentials WHERE apikey = $1 AND is_active = true",
         )
         .bind("lpx-integration-key")
         .fetch_optional(&mut *tx)
@@ -1913,8 +1913,8 @@ mod integration_tests {
 
         // Create account and API key
         let account = create_test_account(&mut tx, "integration_ep_account").await;
-        let api_key = sqlx::query_as::<_, OpenAIAPIKey>(
-            "INSERT INTO llm_api_keys (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
+        let api_credential = sqlx::query_as::<_, ApiCredential>(
+            "INSERT INTO api_credentials (account_id, apikey, label) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind(account.id)
         .bind("lpx-integration-ep-key")
@@ -1932,14 +1932,14 @@ mod integration_tests {
         });
 
         let event = sqlx::query_as::<_, SessionEvent>(
-            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_key_id, event_data)
+            "INSERT INTO session_events (session_id, session_index, account_id, model_id, api_credential_id, event_data)
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
         )
         .bind("sess-integration")
         .bind(0)
         .bind(account.id)
         .bind(model.id)
-        .bind(api_key.id)
+        .bind(api_credential.id)
         .bind(&event_data)
         .fetch_one(&mut *tx)
         .await
@@ -1947,7 +1947,7 @@ mod integration_tests {
 
         assert_eq!(event.account_id, account.id);
         assert_eq!(event.model_id, model.id);
-        assert_eq!(event.api_key_id, api_key.id);
+        assert_eq!(event.api_key_id, api_credential.id);
 
         tx.rollback().await.unwrap();
     }

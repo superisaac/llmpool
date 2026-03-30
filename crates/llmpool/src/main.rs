@@ -252,7 +252,7 @@ async fn main() {
                 };
 
                 // Create the API key
-                match db::api::create_api_key_for_consumer(&pool, account.id, "").await {
+                match db::api::create_api_credential_for_account(&pool, account.id, "").await {
                     Ok(api_key) => {
                         println!(
                             "API key created for account '{}' (id={})",

@@ -81,7 +81,7 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
         }
     };
 
-    // 4. Apply the balance change to the consumer's balance within the same transaction
+    // 4. Apply the balance change to the account's balance within the same transaction
     let updated_balance =
         match db::fund::apply_balance_change_with_tx(&mut tx, balance_change.account_id, &content)
             .await

@@ -181,11 +181,11 @@ impl From<crate::models::Fund> for FundResponse {
     }
 }
 
-// --- OpenAIAPIKey Response DTO ---
+// --- ApiCredential Response DTO ---
 
 /// Response DTO for an API key
 #[derive(Serialize)]
-struct OpenAIAPIKeyResponse {
+struct ApiCredentialResponse {
     id: i32,
     account_id: Option<i32>,
     apikey: String,
@@ -196,8 +196,8 @@ struct OpenAIAPIKeyResponse {
     updated_at: String,
 }
 
-impl From<crate::models::OpenAIAPIKey> for OpenAIAPIKeyResponse {
-    fn from(ak: crate::models::OpenAIAPIKey) -> Self {
+impl From<crate::models::ApiCredential> for ApiCredentialResponse {
+    fn from(ak: crate::models::ApiCredential) -> Self {
         Self {
             id: ak.id,
             account_id: ak.account_id,
@@ -659,7 +659,7 @@ async fn list_account_apikeys(
     let offset = (page - 1) * page_size;
 
     // Get total count of API keys for this account
-    let total = match db::api::count_api_keys_by_consumer(&state.pool, account_id).await {
+    let total = match db::api::count_api_credentials_by_account(&state.pool, account_id).await {
         Ok(count) => count,
         Err(e) => {
             warn!(error = %e, "Failed to count API keys for account");
@@ -672,7 +672,7 @@ async fn list_account_apikeys(
     };
 
     // Get paginated API keys
-    let keys = match db::api::list_api_keys_by_account_paginated(
+    let keys = match db::api::list_api_credentials_by_account_paginated(
         &state.pool,
         account_id,
         offset,
@@ -697,8 +697,8 @@ async fn list_account_apikeys(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<OpenAIAPIKeyResponse> =
-        keys.into_iter().map(OpenAIAPIKeyResponse::from).collect();
+    let data: Vec<ApiCredentialResponse> =
+        keys.into_iter().map(ApiCredentialResponse::from).collect();
 
     Json(PaginatedResponse {
         data,
@@ -751,8 +751,8 @@ async fn create_account_apikey(
         }
     }
 
-    match db::api::create_api_key_for_consumer(&state.pool, account_id, &payload.label).await {
-        Ok(key) => (StatusCode::CREATED, Json(OpenAIAPIKeyResponse::from(key))).into_response(),
+    match db::api::create_api_credential_for_account(&state.pool, account_id, &payload.label).await {
+        Ok(key) => (StatusCode::CREATED, Json(ApiCredentialResponse::from(key))).into_response(),
         Err(e) => {
             warn!(error = %e, "Failed to create API key for account");
             error_response(

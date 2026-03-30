@@ -60,7 +60,7 @@ fn print_session_events(events: &[SessionEventResponse]) {
         "ID",
         "Session ID",
         "Index",
-        "Consumer",
+        "Account",
         "Model",
         "APIKey",
         "InTokens",

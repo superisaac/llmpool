@@ -4,7 +4,7 @@ use chrono::Utc;
 use crate::db::DbPool;
 use crate::models::{BalanceChangeContent, Fund, NewFund, UpdateFund};
 
-/// Find a consumer's fund by account_id
+/// Find a account's fund by account_id
 pub async fn find_account_fund(
     pool: &DbPool,
     account_id: i32,
@@ -24,7 +24,7 @@ pub async fn find_account_fund(
 /// If cash goes negative after a spend or withdraw, the deficit is added to debt
 /// and cash is set to zero.
 ///
-/// If the consumer has no existing fund record, one is created automatically.
+/// If the account has no existing fund record, one is created automatically.
 #[allow(dead_code)]
 pub async fn apply_balance_change(
     pool: &DbPool,
@@ -45,7 +45,7 @@ pub async fn apply_balance_change_with_tx(
     account_id: i32,
     content: &BalanceChangeContent,
 ) -> Result<Fund, sqlx::Error> {
-    // Find or create the consumer fund
+    // Find or create the account fund
     let account_fund: Option<Fund> =
         sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
             .bind(account_id)

@@ -30,13 +30,13 @@ use apalis_redis::RedisStorage;
 use crate::db::{self, DbPool, RedisPool};
 use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
-use crate::models::{Account, CapacityOption, OpenAIAPIKey};
+use crate::models::{Account, CapacityOption, ApiCredential};
 use crate::openai::session_tracer::SessionTracer;
 use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
     pub static ACCOUNT: Account;
-    pub static OPENAI_API_KEY: OpenAIAPIKey;
+    pub static API_CREDENTIAL: ApiCredential;
 }
 
 // --- Server State ---
@@ -89,20 +89,20 @@ async fn auth_openai_api(
         _ => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
-                "Missing or invalid Authorization header. Expected: Bearer <api_key>",
+                "Missing or invalid Authorization header. Expected: Bearer <apikey>",
                 "invalid_api_key",
             );
         }
     };
 
     // Step 1: Look up the API key by apikey
-    let access_key = match db::api::find_active_api_key_by_apikey(&state.pool, token).await {
+    let access_key = match db::api::find_active_api_credential_by_apikey(&state.pool, token).await {
         Ok(Some(key)) => key,
         Ok(None) => {
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
                 "Invalid API key.",
-                "invalid_api_key",
+                "invalid_api_credential",
             );
         }
         Err(e) => {
@@ -122,7 +122,7 @@ async fn auth_openai_api(
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
                 "API key is not associated with an account.",
-                "invalid_api_key",
+                "invalid_api_credential",
             );
         }
     };
@@ -133,7 +133,7 @@ async fn auth_openai_api(
             return auth_error_response(
                 StatusCode::UNAUTHORIZED,
                 "Account not found for this API key.",
-                "invalid_api_key",
+                "invalid_api_credential",
             );
         }
         Err(e) => {
@@ -151,12 +151,12 @@ async fn auth_openai_api(
         return auth_error_response(
             StatusCode::UNAUTHORIZED,
             "Account is inactive.",
-            "invalid_api_key",
+            "invalid_api_credential",
         );
     }
 
     // Step 5: Set task-local variables and proceed
-    OPENAI_API_KEY
+    API_CREDENTIAL
         .scope(access_key, ACCOUNT.scope(account, next.run(request)))
         .await
 }
@@ -330,7 +330,7 @@ async fn chat_completions(
     let model_name = &payload.model;
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the consumer has sufficient funds
+    // Check if the account has sufficient funds
     if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
@@ -346,7 +346,7 @@ async fn chat_completions(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
@@ -428,7 +428,7 @@ async fn generate_images(
     let model_name = image_model_to_string(&payload.model);
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the consumer has sufficient funds
+    // Check if the account has sufficient funds
     if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
@@ -444,7 +444,7 @@ async fn generate_images(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
@@ -577,7 +577,7 @@ async fn create_embeddings(
     let model_name = &payload.model;
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the consumer has sufficient funds
+    // Check if the account has sufficient funds
     if let Err(resp) = check_fund_available(&state.pool, account_id).await {
         return resp;
     }
@@ -593,7 +593,7 @@ async fn create_embeddings(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let api_key_id = OPENAI_API_KEY.with(|k| k.id);
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
     for (i, (client, model_db_id)) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(

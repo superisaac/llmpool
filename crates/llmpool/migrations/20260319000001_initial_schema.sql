@@ -43,10 +43,10 @@ CREATE TABLE IF NOT EXISTS accounts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_name ON accounts (name);
 
--- Create llm_api_keys table (formerly openai_api_keys)
-CREATE TABLE IF NOT EXISTS llm_api_keys (
+-- Create api_credentials table
+CREATE TABLE IF NOT EXISTS api_credentials (
     id SERIAL PRIMARY KEY,
-    consumer_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
     apikey VARCHAR NOT NULL,
     label VARCHAR NOT NULL DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -54,17 +54,17 @@ CREATE TABLE IF NOT EXISTS llm_api_keys (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_openai_api_keys_apikey ON llm_api_keys (apikey);
-CREATE INDEX IF NOT EXISTS idx_openai_api_keys_consumer_id ON llm_api_keys (consumer_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_credentials_apikey ON api_credential (apikey);
+CREATE INDEX IF NOT EXISTS idx_api_credentials_account_id ON api_credential (account_id);
 
 -- Create session_events table (unlogged for performance)
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     id BIGSERIAL PRIMARY KEY,
     session_id VARCHAR NOT NULL,
     session_index INT NOT NULL DEFAULT 0,
-    consumer_id INT NOT NULL,
+    account_id INT NOT NULL,
     model_id INT NOT NULL,
-    api_key_id INT NOT NULL DEFAULT 0,
+    api_credential_id INT NOT NULL DEFAULT 0,
     input_token_price NUMERIC NOT NULL DEFAULT 0,
     input_tokens BIGINT NOT NULL DEFAULT 0,
     output_token_price NUMERIC NOT NULL DEFAULT 0,
@@ -78,23 +78,23 @@ CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (sess
 -- Create funds table
 CREATE TABLE IF NOT EXISTS funds (
     id SERIAL PRIMARY KEY,
-    consumer_id INT NOT NULL REFERENCES accounts(id),
+    account_id INT NOT NULL REFERENCES accounts(id),
     cash DECIMAL NOT NULL DEFAULT 0,
     credit DECIMAL NOT NULL DEFAULT 0,
     debt DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_consumer_id ON funds (consumer_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_account_id ON funds (account_id);
 
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,
-    consumer_id INT NOT NULL REFERENCES accounts(id),
+    account_id INT NOT NULL REFERENCES accounts(id),
     unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE INDEX IF NOT EXISTS idx_balance_changes_consumer_id ON balance_changes (consumer_id);
+CREATE INDEX IF NOT EXISTS idx_balance_changes_account_id ON balance_changes (account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_changes_unique_request_id ON balance_changes (unique_request_id);
