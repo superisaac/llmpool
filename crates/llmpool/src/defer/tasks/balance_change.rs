@@ -1,9 +1,10 @@
 use apalis::prelude::*;
 use tracing::{info, warn};
 
-use crate::db::{self, DbPool};
+use crate::db::{self, DbPool, RedisPool};
 use crate::defer::BalanceChangeTask;
 use crate::models::BalanceChangeContent;
+use crate::redis_utils::caches::fund as fund_cache;
 
 /// Handle a balance change entry from the async task queue.
 ///
@@ -13,7 +14,11 @@ use crate::models::BalanceChangeContent;
 /// 3. Parses its content JSON into a BalanceChangeContent enum
 /// 4. Applies the balance change to the user's balance
 /// 5. Marks the balance change as applied
-pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>) {
+pub async fn settle_balance_change(
+    entry: BalanceChangeTask,
+    pool: Data<DbPool>,
+    redis_pool: Data<RedisPool>,
+) {
     let balance_change_id = entry.balance_change_id;
 
     info!(
@@ -121,6 +126,19 @@ pub async fn settle_balance_change(entry: BalanceChangeTask, pool: Data<DbPool>)
                 debt = %updated_balance.debt,
                 "Successfully applied balance change"
             );
+
+            // Update the fund cache with the latest balance
+            if let Err(e) =
+                fund_cache::set_fund_info(&redis_pool, updated_balance.account_id, updated_balance)
+                    .await
+            {
+                warn!(
+                    error = %e,
+                    balance_change_id = balance_change_id,
+                    account_id = balance_change.account_id,
+                    "Failed to update fund cache after balance change"
+                );
+            }
         }
         Err(e) => {
             warn!(

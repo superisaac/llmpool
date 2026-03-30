@@ -16,7 +16,6 @@ pub async fn find_active_api_credential_by_apikey(
     .await
 }
 
-
 /// Generate a random API key string with the prefix "lpx-"
 /// Uses UUIDv7 algorithm (time-ordered with random bits) and outputs as hex string
 fn generate_api_credential() -> String {

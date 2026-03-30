@@ -222,3 +222,13 @@ DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ct
 * get_account_info(account_id: &str) -> Result<AccountInfo>, 从cache中获得account的信息。
 * delete_account(account_id: &str) -> Result<()>, 删除cache 缓存
 在openai_proxy.rs 中使用get_apikey_info, 在admin_rest_api.rs update_account方法中, 使用delete_account
+
+=========
+在redis_utils/caches/fund.rs 中添加如下方法:
+* get_fund_info(fund_id: &str) -> Result<FundInfo>, 从cache中获得fund的信息。
+* set_fund_info(fund_id: &str, info: FundInfo) -> Result<()>
+在apply_balance_change 方法中, 使用set_fund_info
+在openai_proxy.rs 中, 添加一个task_local 变量 FUND: Fund, 在获得ACCOUNT 后设置此变量.
+在需要花费token的function，如chat_completions, create_embedding, generate_images中，检查 FUND.cash + FUND.credit > 0, 否则拒绝请求并报错账户余额不够.
+
+取消task_local变量 FUND, 在chat_completions, create_embedding, generate_images中，中调用一个 check_fund_balance(account_id) 的方法，在方法中实现 get_fund_info, 如果没拿到就从数据库中拿到， 检查 FUND.cash + FUND.credit > 0, 否则拒绝请求并报错账户余额不够.

@@ -33,6 +33,7 @@ use crate::defer::{OpenAIEventData, OpenAIEventTask};
 use crate::models::{Account, ApiCredential, CapacityOption};
 use crate::openai::session_tracer::SessionTracer;
 use crate::redis_utils::caches::apikey::{self as redis_cache, ApiKeyInfo};
+use crate::redis_utils::caches::fund as fund_cache;
 use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
@@ -174,6 +175,7 @@ async fn auth_openai_api(
                 );
             }
         };
+
         return API_CREDENTIAL
             .scope(access_key, ACCOUNT.scope(account, next.run(request)))
             .await;
@@ -260,41 +262,60 @@ async fn auth_openai_api(
 
 // --- Helpers ---
 
-/// Check if the user has sufficient funds (available > 0).
-/// Returns Ok(()) if funds are sufficient, or Err(Response) with an error response.
-async fn check_fund_available(pool: &DbPool, account_id: i32) -> Result<(), Response> {
-    let zero = BigDecimal::from(0);
-    match db::fund::find_account_fund(pool, account_id).await {
-        Ok(Some(fund)) if fund.available() > zero => Ok(()),
-        Ok(Some(_fund)) => Err(insufficient_funds_response()),
-        Ok(None) => {
-            // No fund record means no balance
-            Err(insufficient_funds_response())
-        }
-        Err(e) => {
-            warn!(error = %e, "Database error during fund lookup");
-            Err(auth_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error during fund check.",
-                "internal_error",
-            ))
-        }
-    }
-}
-
-/// Build a JSON error response for insufficient funds.
-fn insufficient_funds_response() -> Response {
-    (
-        StatusCode::PAYMENT_REQUIRED,
-        Json(serde_json::json!({
-            "error": {
-                "message": "Insufficient funds. Please add funds to your account to continue.",
-                "type": "insufficient_funds",
-                "code": "insufficient_funds"
+/// Check if the account has sufficient funds (cash + credit > 0).
+/// Tries Redis cache first, falls back to DB on cache miss.
+/// Returns Ok(()) if funds are sufficient, Err(Response) with a payment-required error otherwise.
+async fn check_fund_balance(state: &AppState, account_id: i32) -> Result<(), Response> {
+    // let fund_id = account_id.to_string();
+    let fund = match fund_cache::get_fund_info(&state.redis_pool, account_id).await {
+        Ok(Some(f)) => f,
+        _ => match db::fund::find_account_fund(&state.pool, account_id).await {
+            Ok(Some(f)) => f,
+            Ok(None) => {
+                return Err((
+                    StatusCode::PAYMENT_REQUIRED,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": "No fund record found for this account.",
+                            "type": "insufficient_funds",
+                            "code": "no_fund_record"
+                        }
+                    })),
+                )
+                    .into_response());
             }
-        })),
-    )
-        .into_response()
+            Err(e) => {
+                warn!(error = %e, "Database error during fund lookup");
+                return Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": "Internal server error during fund lookup.",
+                            "type": "server_error",
+                            "code": "internal_error"
+                        }
+                    })),
+                )
+                    .into_response());
+            }
+        },
+    };
+
+    if fund.cash.clone() + fund.credit.clone() <= BigDecimal::from(0) {
+        return Err((
+            StatusCode::PAYMENT_REQUIRED,
+            Json(serde_json::json!({
+                "error": {
+                    "message": "账户余额不够，请充值后继续使用。",
+                    "type": "insufficient_funds",
+                    "code": "insufficient_funds"
+                }
+            })),
+        )
+            .into_response());
+    }
+
+    Ok(())
 }
 
 // --- Handlers ---
@@ -428,7 +449,7 @@ async fn chat_completions(
     let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
         return resp;
     }
 
@@ -526,7 +547,7 @@ async fn generate_images(
     let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
         return resp;
     }
 
@@ -675,7 +696,7 @@ async fn create_embeddings(
     let account_id = ACCOUNT.with(|u| u.id);
 
     // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_available(&state.pool, account_id).await {
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
         return resp;
     }
 
