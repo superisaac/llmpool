@@ -32,7 +32,7 @@ use crate::defer::{OpenAIEventData, OpenAIEventTask};
 //use crate::models::OpenAIEventData;
 use crate::models::{Account, ApiCredential, CapacityOption};
 use crate::openai::session_tracer::SessionTracer;
-use crate::redis_utils::cache::{self as redis_cache, ApiKeyInfo};
+use crate::redis_utils::caches::apikey::{self as redis_cache, ApiKeyInfo};
 use crate::redis_utils::counters::get_output_token_usage_batch;
 
 tokio::task_local! {
@@ -155,7 +155,7 @@ async fn auth_openai_api(
                     );
                 }
             };
-        let account = match db::api::find_account_by_id(&state.pool, account_id).await {
+        let account = match db::account::get_account_by_id(&state.pool, account_id).await {
             Ok(Some(u)) => u,
             Ok(None) => {
                 let _ = redis_cache::delete_apikey(&state.redis_pool, token).await;
@@ -211,7 +211,7 @@ async fn auth_openai_api(
         }
     };
 
-    let account = match db::api::find_account_by_id(&state.pool, account_id).await {
+    let account = match db::account::get_account_by_id(&state.pool, account_id).await {
         Ok(Some(u)) => u,
         Ok(None) => {
             return auth_error_response(

@@ -214,3 +214,11 @@ DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ct
 * set_apikey_info(apikey: &str, info: ApiKeyInfo) -> Result<()> 设置apikey的信息到cache中。
 * delete_apikey(apikey: &str) -> Result<()> 删除apikey cache缓存。
 在openai_proxy.rs 中使用get_apikey_info, 在admin_rest_api.rs 中使用set_apikey_info.
+
+=========
+将redis_utils/cache.rs 移动到 redis_utils/caches/apikey.rs中。
+
+在redis_utils/caches/account.rs 中添加如下方法:
+* get_account_info(account_id: &str) -> Result<AccountInfo>, 从cache中获得account的信息。
+* delete_account(account_id: &str) -> Result<()>, 删除cache 缓存
+在openai_proxy.rs 中使用get_apikey_info, 在admin_rest_api.rs update_account方法中, 使用delete_account

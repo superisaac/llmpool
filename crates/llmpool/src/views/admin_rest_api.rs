@@ -18,7 +18,8 @@ use crate::defer::BalanceChangeTask;
 use crate::middlewares::admin_auth;
 use crate::models::{Account, NewAccount, UpdateAccount};
 use crate::models::{BalanceChangeContent, NewBalanceChange};
-use crate::redis_utils::cache::{self as redis_cache, ApiKeyInfo};
+use crate::redis_utils::caches::account as account_cache;
+use crate::redis_utils::caches::apikey::{self as redis_cache, ApiKeyInfo};
 
 // --- Server State ---
 
@@ -514,7 +515,15 @@ async fn update_account_by_id(
     };
 
     match db::account::update_account(&state.pool, account_id, &update).await {
-        Ok(account) => Json(AccountResponse::from(account)).into_response(),
+        Ok(account) => {
+            // Invalidate the Redis cache for this account
+            if let Err(e) =
+                account_cache::delete_account(&state.redis_pool, &account_id.to_string()).await
+            {
+                warn!(error = %e, account_id = account_id, "Failed to delete account cache from Redis");
+            }
+            Json(AccountResponse::from(account)).into_response()
+        }
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",

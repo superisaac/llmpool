@@ -16,16 +16,6 @@ pub async fn find_active_api_credential_by_apikey(
     .await
 }
 
-/// Find an account by their ID.
-pub async fn find_account_by_id(
-    pool: &DbPool,
-    account_id: i32,
-) -> Result<Option<Account>, sqlx::Error> {
-    sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
-        .bind(account_id)
-        .fetch_optional(pool)
-        .await
-}
 
 /// Generate a random API key string with the prefix "lpx-"
 /// Uses UUIDv7 algorithm (time-ordered with random bits) and outputs as hex string
