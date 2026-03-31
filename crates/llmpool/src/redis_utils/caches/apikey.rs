@@ -4,8 +4,8 @@ use tracing::warn;
 
 use crate::db::RedisPool;
 
-/// TTL for apikey cache entries (in seconds): 5 minutes
-const APIKEY_CACHE_TTL: u64 = 300;
+/// TTL for apikey cache entries (in seconds): 15 minutes
+const APIKEY_CACHE_TTL: u64 = 900;
 
 /// Cached information about an API key and its associated account.
 /// This is stored in Redis to avoid repeated database lookups on every request.

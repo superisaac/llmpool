@@ -22,6 +22,11 @@ pub enum SessionEventAction {
         #[arg(long, default_value = "20")]
         count: i64,
     },
+    /// Get a session event by ID
+    Get {
+        /// The session event ID
+        event_id: i64,
+    },
 }
 
 // ============================================================
@@ -84,6 +89,24 @@ fn print_session_events(events: &[SessionEventResponse]) {
     }
 }
 
+fn print_session_event_detail(e: &SessionEventResponse) {
+    println!("ID:                {}", e.id);
+    println!("Session ID:        {}", e.session_id);
+    println!("Session Index:     {}", e.session_index);
+    println!("Account ID:        {}", e.account_id);
+    println!("Model ID:          {}", e.model_id);
+    println!("API Key ID:        {}", e.api_key_id);
+    println!("Input Token Price: {}", e.input_token_price);
+    println!("Input Tokens:      {}", e.input_tokens);
+    println!("Output Token Price:{}", e.output_token_price);
+    println!("Output Tokens:     {}", e.output_tokens);
+    println!("Created At:        {}", e.created_at);
+    println!(
+        "Event Data:        {}",
+        serde_json::to_string_pretty(&e.event_data).unwrap_or_else(|_| e.event_data.to_string())
+    );
+}
+
 // ============================================================
 // Command Handler
 // ============================================================
@@ -99,7 +122,7 @@ pub async fn handle_session_event(
             start,
             count,
         } => {
-            let mut path = format!("/sessionevents?start={}&count={}", start, count);
+            let mut path = format!("/session-events?start={}&count={}", start, count);
             if let Some(ref sid) = session {
                 path = format!("{}&session={}", path, sid);
             }
@@ -113,6 +136,17 @@ pub async fn handle_session_event(
                 if resp.has_more {
                     println!("\nhas_more: true, next_id: {}", resp.next_id);
                 }
+            }
+        }
+        SessionEventAction::Get { event_id } => {
+            let path = format!("/session-events/{}", event_id);
+
+            if json_output {
+                let raw = client.get_raw(&path).await?;
+                println!("{}", raw);
+            } else {
+                let event: SessionEventResponse = client.get(&path).await?;
+                print_session_event_detail(&event);
             }
         }
     }

@@ -2312,7 +2312,60 @@
         }
       }
     },
-    "/sessionevents": {
+    "/session-events/{event_id}": {
+      "get": {
+        "tags": [
+          "Session Events"
+        ],
+        "summary": "Get a session event by ID",
+        "description": "Returns a single session event by its ID.",
+        "operationId": "getSessionEventById",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session event details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionEventResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session event not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session-events": {
       "get": {
         "tags": [
           "Session Events"

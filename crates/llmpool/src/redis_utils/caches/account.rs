@@ -4,8 +4,8 @@ use tracing::warn;
 use crate::db::RedisPool;
 use crate::models::Account;
 
-/// TTL for account cache entries (in seconds): 5 minutes
-const ACCOUNT_CACHE_TTL: u64 = 300;
+/// TTL for account cache entries (in seconds): 15 minutes
+const ACCOUNT_CACHE_TTL: u64 = 900;
 
 type CacheError = Box<dyn std::error::Error + Send + Sync>;
 

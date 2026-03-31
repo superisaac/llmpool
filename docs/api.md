@@ -245,24 +245,28 @@ curl -X POST http://localhost:19324/api/v1/credits \
 ### Session Events
 
 ```bash
+# Get a single session event by ID
+curl "http://localhost:19324/api/v1/session-events/1" \
+  -H "x-admin-token: <jwt-token>"
+
 # List session events (cursor-based pagination)
-curl "http://localhost:19324/api/v1/sessionevents" \
+curl "http://localhost:19324/api/v1/session-events" \
   -H "x-admin-token: <jwt-token>"
 
 # List with cursor parameters
-curl "http://localhost:19324/api/v1/sessionevents?start=0&count=50" \
+curl "http://localhost:19324/api/v1/session-events?start=0&count=50" \
   -H "x-admin-token: <jwt-token>"
 
 # Filter by session ID
-curl "http://localhost:19324/api/v1/sessionevents?session=sess-abc123" \
+curl "http://localhost:19324/api/v1/session-events?session=sess-abc123" \
   -H "x-admin-token: <jwt-token>"
 
 # Paginate using next_id from previous response
-curl "http://localhost:19324/api/v1/sessionevents?start=42&count=20" \
+curl "http://localhost:19324/api/v1/session-events?start=42&count=20" \
   -H "x-admin-token: <jwt-token>"
 ```
 
-The session events endpoint uses cursor-based pagination. The response includes:
+The session events list endpoint uses cursor-based pagination. The response includes:
 - `data`: Array of session event objects
 - `next_id`: The ID of the last event in the current page (use as `start` for the next request)
 - `has_more`: Whether there are more events after this page
@@ -288,13 +292,14 @@ The session events endpoint uses cursor-based pagination. The response includes:
 | `POST` | `/api/v1/deposits` | Create a deposit for a consumer |
 | `POST` | `/api/v1/withdrawals` | Create a withdrawal for a consumer |
 | `POST` | `/api/v1/credits` | Create a credit for a consumer |
-| `GET` | `/api/v1/sessionevents` | List session events (cursor-based pagination) |
+| `GET` | `/api/v1/session-events` | List session events (cursor-based pagination) |
+| `GET` | `/api/v1/session-events/:event_id` | Get a single session event by ID |
 
 Most paginated endpoints accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)
 - `page_size` (default: 20, max: 100) — Number of items per page
 
-The `/api/v1/sessionevents` endpoint uses cursor-based pagination:
+The `/api/v1/session-events` endpoint uses cursor-based pagination:
 - `start` (default: 0) — Event ID to start after (exclusive)
 - `count` (default: 20, max: 100) — Number of items to return
 - `session` (optional) — Filter by session_id

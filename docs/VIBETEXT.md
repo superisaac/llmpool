@@ -235,3 +235,12 @@ DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ct
 
 =========
 LLMEndpoint 增加一个字段： provider, 默认为 "openai", 可以是 "openai", "azure", "cohere", "anthropic", "vllm", "ollama", 在admin api中也显示此参数，在创建endpoint 时，可以带上这个参数。 可直接修改migrations 文件，不用新建migration文件。
+
+=========
+实现admin api: GET /api/v1/session-events/:event_id, 获得session event 的详细信息, 并更新llmpool-ctl 命令, 和api-schema.json|yaml 文件。 更新docs/api.md 文件。
+
+=========
+在 openai_proxy.rs 中，实现对 /v1/files 和/v1/batches, 以及 /v1/batches/:batch_id 的代理
+
+=========
+将openai_proxy.rs 中 /v1/files 的处理逻辑，移动到 src/openai_proxy/files.rs 中; 处理 batches 的逻辑，移动到 src/openai_proxy/batches.rs 中；处理 chat_completions 的逻辑，移动到 src/openai_proxy/chat_completions.rs 中; 处理 speech 的逻辑，移动到 src/openai_proxy/speech.rs 中； images 的逻辑，移动到 src/openai_proxy/images.rs 中, 其他逻辑也依次类推

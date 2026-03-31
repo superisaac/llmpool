@@ -52,6 +52,17 @@ pub async fn create_session_event_with_tx(
     .await
 }
 
+/// Get a single session event by its ID
+pub async fn get_session_event_by_id(
+    pool: &DbPool,
+    event_id: i64,
+) -> Result<Option<SessionEvent>, sqlx::Error> {
+    sqlx::query_as::<_, SessionEvent>("SELECT * FROM session_events WHERE id = $1")
+        .bind(event_id)
+        .fetch_optional(pool)
+        .await
+}
+
 /// List session events with optional session_id filter, using cursor-based pagination.
 /// `start` is the event ID to start from (exclusive, i.e. returns events with id > start).
 /// If `start` is None or 0, starts from the beginning.

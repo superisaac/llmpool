@@ -2038,6 +2038,31 @@ struct CursorResponse<T: Serialize> {
 
 // --- Session Event Handler ---
 
+/// GET /api/v1/session-events/:event_id
+///
+/// Returns a single session event by its ID.
+async fn get_session_event_by_id(
+    State(state): State<Arc<AppState>>,
+    Path(event_id): Path<i64>,
+) -> Response {
+    match db::session_event::get_session_event_by_id(&state.pool, event_id).await {
+        Ok(Some(event)) => Json(SessionEventResponse::from(event)).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Session event with id {} not found", event_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get session event by id");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query session event",
+            )
+        }
+    }
+}
+
 /// GET /api/v1/sessionevents
 ///
 /// Returns a cursor-paginated list of session events with optional session_id filter.
@@ -2133,7 +2158,8 @@ pub fn get_router(
             delete(remove_endpoint_tag),
         )
         .route("/endpoint-tests", post(test_endpoint))
-        .route("/sessionevents", get(list_session_events))
+        .route("/session-events", get(list_session_events))
+        .route("/session-events/{event_id}", get(get_session_event_by_id))
         .route("/deposits", post(create_deposit))
         .route("/withdrawals", post(create_withdraw))
         .route("/credits", post(create_credit))
