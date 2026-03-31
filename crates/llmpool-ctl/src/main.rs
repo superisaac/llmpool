@@ -5,9 +5,9 @@ mod client;
 mod cmds;
 
 use cmds::{
-    AccountAction, ApiKeyAction, UpstreamAction, FundAction, ModelAction, SessionEventAction,
-    handle_account, handle_apikey, handle_upstream, handle_fund, handle_model,
-    handle_session_event,
+    AccountAction, ApiKeyAction, FundAction, ModelAction, SessionEventAction, UpstreamAction,
+    handle_account, handle_apikey, handle_fund, handle_model, handle_session_event,
+    handle_upstream,
 };
 
 // ============================================================

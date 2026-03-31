@@ -1,26 +1,26 @@
 pub mod account;
 pub mod apikey;
-pub mod upstream;
 pub mod fund;
 pub mod model;
 pub mod session_event;
+pub mod upstream;
 
 use serde::Deserialize;
 
 // Re-export subcommand enums and handlers
 pub use account::AccountAction;
 pub use apikey::ApiKeyAction;
-pub use upstream::UpstreamAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
 pub use session_event::SessionEventAction;
+pub use upstream::UpstreamAction;
 
 pub use account::handle_account;
 pub use apikey::handle_apikey;
-pub use upstream::handle_upstream;
 pub use fund::handle_fund;
 pub use model::handle_model;
 pub use session_event::handle_session_event;
+pub use upstream::handle_upstream;
 
 // ============================================================
 // Common API Response Types

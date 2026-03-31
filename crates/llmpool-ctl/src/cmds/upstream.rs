@@ -2,8 +2,8 @@ use clap::Subcommand;
 use serde::Serialize;
 
 use super::{
-    UpstreamResponse, UpstreamWithModelsResponse, PaginatedResponse, TagsResponse,
-    TestUpstreamResponse, bool_mark, parse_comma_list, print_models, print_pagination,
+    PaginatedResponse, TagsResponse, TestUpstreamResponse, UpstreamResponse,
+    UpstreamWithModelsResponse, bool_mark, parse_comma_list, print_models, print_pagination,
     resolve_upstream_id, truncate,
 };
 use crate::client::ApiClient;

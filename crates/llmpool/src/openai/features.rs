@@ -19,7 +19,7 @@ use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
 use crate::db::{self, DbPool};
-use crate::models::{NewLLMUpstream, NewLLMModel, UpdateLLMUpstream, UpdateLLMModel};
+use crate::models::{NewLLMModel, NewLLMUpstream, UpdateLLMModel, UpdateLLMUpstream};
 
 pub struct ModelFeatures {
     pub model: Model,

@@ -45,12 +45,10 @@ pub async fn get_file_meta_by_file_id(
     pool: &DbPool,
     file_id: &str,
 ) -> Result<Option<FileMeta>, sqlx::Error> {
-    sqlx::query_as::<_, FileMeta>(
-        "SELECT * FROM file_metas WHERE file_id = $1 AND deleted = FALSE",
-    )
-    .bind(file_id)
-    .fetch_optional(pool)
-    .await
+    sqlx::query_as::<_, FileMeta>("SELECT * FROM file_metas WHERE file_id = $1 AND deleted = FALSE")
+        .bind(file_id)
+        .fetch_optional(pool)
+        .await
 }
 
 /// Mark a FileMeta as deleted by our internal file_id.
