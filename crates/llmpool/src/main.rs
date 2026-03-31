@@ -29,7 +29,7 @@ enum Commands {
         #[arg(long, default_value = "127.0.0.1:19324")]
         bind: String,
     },
-    /// OpenAI endpoint management
+    /// OpenAI upstream management
     Openai {
         #[command(subcommand)]
         command: OpenaiCommands,
@@ -83,24 +83,24 @@ struct AdminClaims {
 
 #[derive(Subcommand)]
 enum OpenaiCommands {
-    /// Add an OpenAI-compatible endpoint by detecting and saving its features
+    /// Add an OpenAI-compatible upstream by detecting and saving its features
     Add {
-        /// A friendly name for this endpoint
+        /// A friendly name for this upstream
         #[arg(long)]
         name: String,
         /// The API key for authentication
         #[arg(long)]
         api_key: String,
-        /// The base URL of the API endpoint
+        /// The base URL of the API upstream
         #[arg(long)]
         api_base: String,
     },
-    /// Detect features of an OpenAI-compatible endpoint and print results
+    /// Detect features of an OpenAI-compatible upstream and print results
     Detect {
         /// The API key for authentication
         #[arg(long)]
         api_key: String,
-        /// The base URL of the API endpoint
+        /// The base URL of the API upstream
         #[arg(long)]
         api_base: String,
     },
@@ -146,7 +146,7 @@ async fn main() {
                 {
                     Ok(()) => {
                         println!(
-                            "Successfully detected and saved features for endpoint '{}'",
+                            "Successfully detected and saved features for upstream '{}'",
                             name
                         );
                     }
@@ -159,7 +159,7 @@ async fn main() {
             OpenaiCommands::Detect { api_key, api_base } => {
                 match openai::features::detect_features(&api_key, &api_base).await {
                     Ok(features) => {
-                        println!("API Endpoint Features for: {}", api_base);
+                        println!("API Upstream Features for: {}", api_base);
                         println!("Responses API supported: {}", features.has_responses_api);
                         println!();
                         println!(

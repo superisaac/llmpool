@@ -59,18 +59,18 @@ fn is_hop_by_hop(name: &str) -> bool {
 
 // --- Handler ---
 
-/// Build a reqwest::Client with an optional random proxy from the endpoint's proxies list.
-fn build_http_client_for_endpoint(
-    endpoint: &crate::models::LLMEndpoint,
+/// Build a reqwest::Client with an optional random proxy from the upstream's proxies list.
+fn build_http_client_for_upstream(
+    upstream: &crate::models::LLMUpstream,
 ) -> Result<reqwest::Client, reqwest::Error> {
     let mut builder = reqwest::Client::builder();
-    if !endpoint.proxies.is_empty() {
+    if !upstream.proxies.is_empty() {
         let mut rng = rand::rng();
-        if let Some(proxy_url) = endpoint.proxies.choose(&mut rng) {
+        if let Some(proxy_url) = upstream.proxies.choose(&mut rng) {
             info!(
-                endpoint_name = %endpoint.name,
+                upstream_name = %upstream.name,
                 proxy = %proxy_url,
-                "Passthrough: using proxy for endpoint"
+                "Passthrough: using proxy for upstream"
             );
             let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
             builder = builder.proxy(proxy);
@@ -79,17 +79,17 @@ fn build_http_client_for_endpoint(
     builder.build()
 }
 
-/// Proxy the request to the given endpoint, rewriting the URL to /{rest}.
-async fn proxy_to_endpoint(
+/// Proxy the request to the given upstream, rewriting the URL to /{rest}.
+async fn proxy_to_upstream(
     _state: &PassthroughState,
-    endpoint: &crate::models::LLMEndpoint,
+    upstream: &crate::models::LLMUpstream,
     rest: &str,
     req: Request,
 ) -> Response {
     // Build the upstream URL: {api_base}/{rest}
     let upstream_url = format!(
         "{}/{}",
-        endpoint.api_base.trim_end_matches('/'),
+        upstream.api_base.trim_end_matches('/'),
         rest.trim_start_matches('/')
     );
 
@@ -106,11 +106,11 @@ async fn proxy_to_endpoint(
     let body = req.into_body();
 
     // Build a per-request HTTP client with optional proxy
-    let http_client = match build_http_client_for_endpoint(endpoint) {
+    let http_client = match build_http_client_for_upstream(upstream) {
         Ok(client) => client,
         Err(e) => {
             error!(
-                endpoint_name = %endpoint.name,
+                upstream_name = %upstream.name,
                 error = %e,
                 "Passthrough: failed to build HTTP client with proxy"
             );
@@ -149,9 +149,9 @@ async fn proxy_to_endpoint(
         }
     }
 
-    // Set Authorization header from endpoint's api_key if it's not empty
-    if !endpoint.api_key.is_empty() {
-        upstream_req = upstream_req.header("Authorization", format!("Bearer {}", endpoint.api_key));
+    // Set Authorization header from upstream's api_key if it's not empty
+    if !upstream.api_key.is_empty() {
+        upstream_req = upstream_req.header("Authorization", format!("Bearer {}", upstream.api_key));
     }
 
     // Forward the body as a stream
@@ -202,85 +202,85 @@ async fn proxy_to_endpoint(
     response
 }
 
-/// Passthrough handler: proxies the request to a randomly selected endpoint matching the tag.
+/// Passthrough handler: proxies the request to a randomly selected upstream matching the tag.
 /// URL pattern: /passthrough/tag/:tag/*rest
-/// The upstream URL is rewritten to: {endpoint.api_base}/{rest}
+/// The upstream URL is rewritten to: {upstream.api_base}/{rest}
 async fn passthrough_by_tag_handler(
     State(state): State<Arc<PassthroughState>>,
     Path((tag, rest)): Path<(String, String)>,
     req: Request,
 ) -> Response {
-    // 1. Find endpoints by tag
-    let endpoints = match db::openai::find_endpoints_by_tag(&state.pool, &tag).await {
+    // 1. Find upstreams by tag
+    let upstreams = match db::openai::find_upstreams_by_tag(&state.pool, &tag).await {
         Ok(eps) => eps,
         Err(e) => {
-            warn!(tag = %tag, error = %e, "Failed to query endpoints by tag");
+            warn!(tag = %tag, error = %e, "Failed to query upstreams by tag");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to query endpoints.",
+                "Failed to query upstreams.",
             );
         }
     };
 
-    if endpoints.is_empty() {
+    if upstreams.is_empty() {
         return error_response(
             StatusCode::NOT_FOUND,
-            &format!("No endpoints found for tag '{}'", tag),
+            &format!("No upstreams found for tag '{}'", tag),
         );
     }
 
-    // 2. Randomly select one endpoint
-    let endpoint = {
+    // 2. Randomly select one upstream
+    let upstream = {
         let mut rng = rand::rng();
-        endpoints.choose(&mut rng).unwrap()
+        upstreams.choose(&mut rng).unwrap()
     };
 
     info!(
         tag = %tag,
-        endpoint_name = %endpoint.name,
-        api_base = %endpoint.api_base,
+        upstream_name = %upstream.name,
+        api_base = %upstream.api_base,
         rest = %rest,
-        "Passthrough: selected endpoint by tag"
+        "Passthrough: selected upstream by tag"
     );
 
-    proxy_to_endpoint(&state, endpoint, &rest, req).await
+    proxy_to_upstream(&state, upstream, &rest, req).await
 }
 
-/// Passthrough handler: proxies the request to a specific endpoint by its ID.
-/// URL pattern: /passthrough/:endpoint_id/*rest
-/// The upstream URL is rewritten to: {endpoint.api_base}/{rest}
-async fn passthrough_by_endpoint_id_handler(
+/// Passthrough handler: proxies the request to a specific upstream by its ID.
+/// URL pattern: /passthrough/:upstream_id/*rest
+/// The upstream URL is rewritten to: {upstream.api_base}/{rest}
+async fn passthrough_by_upstream_id_handler(
     State(state): State<Arc<PassthroughState>>,
-    Path((endpoint_id, rest)): Path<(i32, String)>,
+    Path((upstream_id, rest)): Path<(i32, String)>,
     req: Request,
 ) -> Response {
-    // 1. Find endpoint by ID
-    let endpoint = match db::openai::get_endpoint(&state.pool, endpoint_id).await {
+    // 1. Find upstream by ID
+    let upstream = match db::openai::get_upstream(&state.pool, upstream_id).await {
         Ok(ep) => ep,
         Err(sqlx::Error::RowNotFound) => {
             return error_response(
                 StatusCode::NOT_FOUND,
-                &format!("Endpoint with id '{}' not found", endpoint_id),
+                &format!("Upstream with id '{}' not found", upstream_id),
             );
         }
         Err(e) => {
-            warn!(endpoint_id = %endpoint_id, error = %e, "Failed to query endpoint by id");
+            warn!(upstream_id = %upstream_id, error = %e, "Failed to query upstream by id");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "Failed to query endpoint.",
+                "Failed to query upstream.",
             );
         }
     };
 
     info!(
-        endpoint_id = %endpoint_id,
-        endpoint_name = %endpoint.name,
-        api_base = %endpoint.api_base,
+        upstream_id = %upstream_id,
+        upstream_name = %upstream.name,
+        api_base = %upstream.api_base,
         rest = %rest,
-        "Passthrough: selected endpoint by id"
+        "Passthrough: selected upstream by id"
     );
 
-    proxy_to_endpoint(&state, &endpoint, &rest, req).await
+    proxy_to_upstream(&state, &upstream, &rest, req).await
 }
 
 // --- Router ---
@@ -291,8 +291,8 @@ pub fn get_router(pool: DbPool) -> Router {
     Router::new()
         .route("/tag/{tag}/{*rest}", any(passthrough_by_tag_handler))
         .route(
-            "/{endpoint_id}/{*rest}",
-            any(passthrough_by_endpoint_id_handler),
+            "/{upstream_id}/{*rest}",
+            any(passthrough_by_upstream_id_handler),
         )
         .route_layer(middleware::from_fn(admin_auth::auth_jwt))
         .with_state(state)

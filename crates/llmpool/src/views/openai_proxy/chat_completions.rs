@@ -59,7 +59,7 @@ pub async fn chat_completions(
                     warn!(
                         model = model_name,
                         error = %e,
-                        "Chat completion failed, retrying with another endpoint"
+                        "Chat completion failed, retrying with another upstream"
                     );
                 } else {
                     eprintln!("Chat completion failed after retry: {:?}", e);

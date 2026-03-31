@@ -13,7 +13,7 @@ use crate::defer::OpenAIEventData;
 use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
 
-/// Handle POST /v1/embeddings endpoint
+/// Handle POST /v1/embeddings upstream
 pub async fn create_embeddings(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateEmbeddingRequest>,
@@ -53,7 +53,7 @@ pub async fn create_embeddings(
                     warn!(
                         model = model_name,
                         error = %e,
-                        "Embedding creation failed, retrying with another endpoint"
+                        "Embedding creation failed, retrying with another upstream"
                     );
                 } else {
                     eprintln!("Embedding creation failed after retry: {:?}", e);

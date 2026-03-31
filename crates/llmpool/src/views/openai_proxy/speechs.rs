@@ -9,7 +9,7 @@ use std::sync::Arc;
 use super::helpers::{ACCOUNT, AppState, check_fund_balance, select_model_clients};
 use crate::models::CapacityOption;
 
-/// Handle POST /v1/audio/speech endpoint (text-to-speech)
+/// Handle POST /v1/audio/speech upstream (text-to-speech)
 pub async fn create_speech(
     State(state): State<Arc<AppState>>,
     axum::Json(payload): axum::Json<CreateSpeechRequest>,

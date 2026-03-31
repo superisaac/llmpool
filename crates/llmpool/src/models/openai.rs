@@ -3,16 +3,16 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-/// Valid provider values for an LLM endpoint
+/// Valid provider values for an LLM upstream
 pub const VALID_PROVIDERS: &[&str] = &["openai", "azure", "cohere", "anthropic", "vllm", "ollama"];
 
 fn default_provider() -> String {
     "openai".to_string()
 }
 
-/// Represents an OpenAI-compatible API endpoint
+/// Represents an OpenAI-compatible API upstream
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct LLMEndpoint {
+pub struct LLMUpstream {
     pub id: i32,
     pub name: String,
     pub api_base: String,
@@ -27,9 +27,9 @@ pub struct LLMEndpoint {
     pub updated_at: NaiveDateTime,
 }
 
-/// Used to insert a new OpenAI endpoint
+/// Used to insert a new OpenAI upstream
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewLLMEndpoint {
+pub struct NewLLMUpstream {
     pub name: String,
     pub api_base: String,
     pub api_key: String,
@@ -50,9 +50,9 @@ fn default_status() -> String {
     "online".to_string()
 }
 
-/// Used to update an existing OpenAI endpoint
+/// Used to update an existing OpenAI upstream
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateLLMEndpoint {
+pub struct UpdateLLMUpstream {
     pub name: Option<String>,
     pub api_base: Option<String>,
     pub api_key: Option<String>,
@@ -65,11 +65,11 @@ pub struct UpdateLLMEndpoint {
     pub updated_at: Option<NaiveDateTime>,
 }
 
-/// Represents a model available on an OpenAI-compatible endpoint
+/// Represents a model available on an OpenAI-compatible upstream
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LLMModel {
     pub id: i32,
-    pub endpoint_id: i32,
+    pub upstream_id: i32,
     pub model_id: String,
     pub has_image_generation: bool,
     pub has_speech: bool,
@@ -85,7 +85,7 @@ pub struct LLMModel {
 /// Used to insert a new OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewLLMModel {
-    pub endpoint_id: i32,
+    pub upstream_id: i32,
     pub model_id: String,
     pub has_image_generation: bool,
     pub has_speech: bool,

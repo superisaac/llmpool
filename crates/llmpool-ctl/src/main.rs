@@ -5,8 +5,8 @@ mod client;
 mod cmds;
 
 use cmds::{
-    AccountAction, ApiKeyAction, EndpointAction, FundAction, ModelAction, SessionEventAction,
-    handle_account, handle_apikey, handle_endpoint, handle_fund, handle_model,
+    AccountAction, ApiKeyAction, UpstreamAction, FundAction, ModelAction, SessionEventAction,
+    handle_account, handle_apikey, handle_upstream, handle_fund, handle_model,
     handle_session_event,
 };
 
@@ -30,10 +30,10 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Manage endpoints
-    Endpoint {
+    /// Manage upstreams
+    Upstream {
         #[command(subcommand)]
-        action: EndpointAction,
+        action: UpstreamAction,
     },
     /// Manage models
     Model {
@@ -95,7 +95,7 @@ async fn main() {
     let json_output = cli.format == "json";
 
     let result = match cli.command {
-        Commands::Endpoint { action } => handle_endpoint(action, &api_client, json_output).await,
+        Commands::Upstream { action } => handle_upstream(action, &api_client, json_output).await,
         Commands::Model { action } => handle_model(action, &api_client, json_output).await,
         Commands::Account { action } => handle_account(action, &api_client, json_output).await,
         Commands::Apikey { action } => handle_apikey(action, &api_client, json_output).await,

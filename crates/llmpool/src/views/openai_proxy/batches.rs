@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::helpers::{
-    ACCOUNT, AppState, build_client_from_endpoint, check_fund_balance, select_first_endpoint,
+    ACCOUNT, AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
 };
 
 /// Handle GET /v1/batches — list batches
@@ -19,13 +19,13 @@ pub async fn list_batches_handler(State(state): State<Arc<AppState>>) -> Respons
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
-    info!(endpoint_name = %endpoint.name, "Listing batches");
+    let client = build_client_from_upstream(&upstream);
+    info!(upstream_name = %upstream.name, "Listing batches");
 
     match client.batches().list().await {
         Ok(response) => Json(response).into_response(),
@@ -46,14 +46,14 @@ pub async fn create_batch_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         input_file_id = %payload.input_file_id,
         "Creating batch"
     );
@@ -77,14 +77,14 @@ pub async fn batch_by_id_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         batch_id = %batch_id,
         "Retrieving batch"
     );
@@ -108,14 +108,14 @@ pub async fn batch_cancel_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         batch_id = %batch_id,
         "Cancelling batch"
     );

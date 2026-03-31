@@ -1,6 +1,6 @@
 pub mod account;
 pub mod apikey;
-pub mod endpoint;
+pub mod upstream;
 pub mod fund;
 pub mod model;
 pub mod session_event;
@@ -10,14 +10,14 @@ use serde::Deserialize;
 // Re-export subcommand enums and handlers
 pub use account::AccountAction;
 pub use apikey::ApiKeyAction;
-pub use endpoint::EndpointAction;
+pub use upstream::UpstreamAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
 pub use session_event::SessionEventAction;
 
 pub use account::handle_account;
 pub use apikey::handle_apikey;
-pub use endpoint::handle_endpoint;
+pub use upstream::handle_upstream;
 pub use fund::handle_fund;
 pub use model::handle_model;
 pub use session_event::handle_session_event;
@@ -48,7 +48,7 @@ pub struct CursorResponse<T> {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EndpointResponse {
+pub struct UpstreamResponse {
     pub id: i32,
     pub name: String,
     pub api_base: String,
@@ -65,7 +65,7 @@ pub struct EndpointResponse {
 #[derive(Debug, Deserialize)]
 pub struct ModelResponse {
     pub id: i32,
-    pub endpoint_id: i32,
+    pub upstream_id: i32,
     pub model_id: String,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
@@ -110,8 +110,8 @@ pub struct BalanceChangeResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct EndpointWithModelsResponse {
-    pub endpoint: EndpointResponse,
+pub struct UpstreamWithModelsResponse {
+    pub upstream: UpstreamResponse,
     pub models: Vec<ModelResponse>,
 }
 
@@ -126,7 +126,7 @@ pub struct ModelFeaturesResponse {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct TestEndpointResponse {
+pub struct TestUpstreamResponse {
     pub has_responses_api: bool,
     pub models: Vec<ModelFeaturesResponse>,
 }
@@ -134,7 +134,7 @@ pub struct TestEndpointResponse {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct TagsResponse {
-    pub endpoint_id: i32,
+    pub upstream_id: i32,
     pub tags: Vec<String>,
 }
 
@@ -209,7 +209,7 @@ pub fn print_models(models: &[ModelResponse]) {
         println!(
             "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
             m.id,
-            m.endpoint_id,
+            m.upstream_id,
             truncate(&m.model_id, 33),
             bool_mark(m.has_chat_completion),
             bool_mark(m.has_embedding),
@@ -226,16 +226,16 @@ pub fn print_models(models: &[ModelResponse]) {
 // Common ID Resolution Helpers
 // ============================================================
 
-/// Resolve an endpoint name or ID string to a numeric endpoint ID.
-pub async fn resolve_endpoint_id(
-    endpoint: &str,
+/// Resolve an upstream name or ID string to a numeric upstream ID.
+pub async fn resolve_upstream_id(
+    upstream: &str,
     client: &crate::client::ApiClient,
 ) -> Result<i32, String> {
-    if let Ok(id) = endpoint.parse::<i32>() {
+    if let Ok(id) = upstream.parse::<i32>() {
         return Ok(id);
     }
-    let resp: EndpointResponse = client
-        .get(&format!("/endpoint_by_name/{}", endpoint))
+    let resp: UpstreamResponse = client
+        .get(&format!("/upstream_by_name/{}", upstream))
         .await?;
     Ok(resp.id)
 }

@@ -51,7 +51,7 @@ fn print_model_detail(m: &ModelResponse) {
     println!("Model updated successfully!");
     println!();
     println!("  ID:                {}", m.id);
-    println!("  Endpoint ID:       {}", m.endpoint_id);
+    println!("  Upstream ID:       {}", m.upstream_id);
     println!("  Model ID:          {}", m.model_id);
     println!("  Chat Completion:   {}", bool_mark(m.has_chat_completion));
     println!("  Embedding:         {}", bool_mark(m.has_embedding));

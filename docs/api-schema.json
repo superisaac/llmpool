@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "LLMPool Admin REST API",
-    "description": "RESTful management interface for LLMPool administration.\nAll endpoints require JWT authentication via the `x-admin-token` header.\nAll list endpoints support pagination via `page` and `page_size` query parameters.\n",
+    "description": "RESTful management interface for LLMPool administration.\nAll upstreams require JWT authentication via the `x-admin-token` header.\nAll list upstreams support pagination via `page` and `page_size` query parameters.\n",
     "version": "1.0.0",
     "license": {
       "name": "MIT"
@@ -83,7 +83,7 @@
           }
         }
       },
-      "EndpointResponse": {
+      "UpstreamResponse": {
         "type": "object",
         "required": [
           "id",
@@ -143,7 +143,7 @@
           },
           "description": {
             "type": "string",
-            "example": "OpenAI production endpoint"
+            "example": "OpenAI production upstream"
           },
           "created_at": {
             "type": "string",
@@ -157,7 +157,7 @@
           }
         }
       },
-      "CreateEndpointRequest": {
+      "CreateUpstreamRequest": {
         "type": "object",
         "required": [
           "name",
@@ -167,17 +167,17 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "A display name for the endpoint",
+            "description": "A display name for the upstream",
             "example": "OpenAI"
           },
           "api_key": {
             "type": "string",
-            "description": "The API key for the endpoint",
+            "description": "The API key for the upstream",
             "example": "sk-xxx"
           },
           "api_base": {
             "type": "string",
-            "description": "The base URL of the endpoint",
+            "description": "The base URL of the upstream",
             "example": "https://api.openai.com/v1"
           },
           "tags": {
@@ -200,12 +200,12 @@
           }
         }
       },
-      "UpdateEndpointRequest": {
+      "UpdateUpstreamRequest": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "The display name for the endpoint"
+            "description": "The display name for the upstream"
           },
           "tags": {
             "type": "array",
@@ -232,15 +232,15 @@
           }
         }
       },
-      "EndpointWithModelsResponse": {
+      "UpstreamWithModelsResponse": {
         "type": "object",
         "required": [
-          "endpoint",
+          "upstream",
           "models"
         ],
         "properties": {
-          "endpoint": {
-            "$ref": "#/components/schemas/EndpointResponse"
+          "upstream": {
+            "$ref": "#/components/schemas/UpstreamResponse"
           },
           "models": {
             "type": "array",
@@ -250,7 +250,7 @@
           }
         }
       },
-      "PaginatedEndpoints": {
+      "PaginatedUpstreams": {
         "type": "object",
         "required": [
           "data",
@@ -260,7 +260,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/EndpointResponse"
+              "$ref": "#/components/schemas/UpstreamResponse"
             }
           },
           "pagination": {
@@ -272,7 +272,7 @@
         "type": "object",
         "required": [
           "id",
-          "endpoint_id",
+          "upstream_id",
           "model_id",
           "has_chat_completion",
           "has_embedding",
@@ -290,7 +290,7 @@
             "format": "int32",
             "example": 1
           },
-          "endpoint_id": {
+          "upstream_id": {
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -717,11 +717,11 @@
       "TagsResponse": {
         "type": "object",
         "required": [
-          "endpoint_id",
+          "upstream_id",
           "tags"
         ],
         "properties": {
-          "endpoint_id": {
+          "upstream_id": {
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -751,7 +751,7 @@
           }
         }
       },
-      "TestEndpointRequest": {
+      "TestUpstreamRequest": {
         "type": "object",
         "required": [
           "api_key",
@@ -760,12 +760,12 @@
         "properties": {
           "api_key": {
             "type": "string",
-            "description": "The API key for the endpoint",
+            "description": "The API key for the upstream",
             "example": "sk-xxx"
           },
           "api_base": {
             "type": "string",
-            "description": "The base URL of the endpoint",
+            "description": "The base URL of the upstream",
             "example": "https://api.openai.com/v1"
           }
         }
@@ -807,7 +807,7 @@
           }
         }
       },
-      "TestEndpointResponse": {
+      "TestUpstreamResponse": {
         "type": "object",
         "required": [
           "has_responses_api",
@@ -962,14 +962,14 @@
     }
   },
   "paths": {
-    "/endpoints": {
+    "/upstreams": {
       "get": {
         "tags": [
-          "Endpoints"
+          "Upstreams"
         ],
-        "summary": "List all OpenAI endpoints",
-        "description": "Returns a paginated list of OpenAI endpoints.",
-        "operationId": "listEndpoints",
+        "summary": "List all OpenAI upstreams",
+        "description": "Returns a paginated list of OpenAI upstreams.",
+        "operationId": "listUpstreams",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageParam"
@@ -980,11 +980,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of endpoints",
+            "description": "Paginated list of upstreams",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedEndpoints"
+                  "$ref": "#/components/schemas/PaginatedUpstreams"
                 }
               }
             }
@@ -1003,28 +1003,28 @@
       },
       "post": {
         "tags": [
-          "Endpoints"
+          "Upstreams"
         ],
-        "summary": "Create a new endpoint",
-        "description": "Creates a new OpenAI-compatible endpoint by detecting its features and saving\nthe endpoint along with its models to the database.\n",
-        "operationId": "createEndpoint",
+        "summary": "Create a new upstream",
+        "description": "Creates a new OpenAI-compatible upstream by detecting its features and saving\nthe upstream along with its models to the database.\n",
+        "operationId": "createUpstream",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateEndpointRequest"
+                "$ref": "#/components/schemas/CreateUpstreamRequest"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Endpoint created successfully with detected models",
+            "description": "Upstream created successfully with detected models",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EndpointWithModelsResponse"
+                  "$ref": "#/components/schemas/UpstreamWithModelsResponse"
                 }
               }
             }
@@ -1040,7 +1040,7 @@
             }
           },
           "502": {
-            "description": "Failed to detect endpoint features from remote API",
+            "description": "Failed to detect upstream features from remote API",
             "content": {
               "application/json": {
                 "schema": {
@@ -1062,17 +1062,17 @@
         }
       }
     },
-    "/endpoints/{endpoint_id}": {
+    "/upstreams/{upstream_id}": {
       "get": {
         "tags": [
-          "Endpoints"
+          "Upstreams"
         ],
-        "summary": "Get an endpoint by ID",
-        "description": "Returns a single endpoint by its ID.",
-        "operationId": "getEndpointById",
+        "summary": "Get an upstream by ID",
+        "description": "Returns a single upstream by its ID.",
+        "operationId": "getUpstreamById",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1083,17 +1083,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Endpoint details",
+            "description": "Upstream details",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EndpointResponse"
+                  "$ref": "#/components/schemas/UpstreamResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1116,14 +1116,14 @@
       },
       "put": {
         "tags": [
-          "Endpoints"
+          "Upstreams"
         ],
-        "summary": "Update an endpoint",
-        "description": "Updates an existing endpoint. Only the provided fields will be updated.\n",
-        "operationId": "updateEndpointById",
+        "summary": "Update an upstream",
+        "description": "Updates an existing upstream. Only the provided fields will be updated.\n",
+        "operationId": "updateUpstreamById",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1137,18 +1137,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateEndpointRequest"
+                "$ref": "#/components/schemas/UpdateUpstreamRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Endpoint updated successfully",
+            "description": "Upstream updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EndpointResponse"
+                  "$ref": "#/components/schemas/UpstreamResponse"
                 }
               }
             }
@@ -1164,7 +1164,7 @@
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1186,14 +1186,14 @@
         }
       }
     },
-    "/endpoint_by_name/{name}": {
+    "/upstream_by_name/{name}": {
       "get": {
         "tags": [
-          "Endpoints"
+          "Upstreams"
         ],
-        "summary": "Get an endpoint by name",
-        "description": "Returns a single endpoint by its name.",
-        "operationId": "getEndpointByName",
+        "summary": "Get an upstream by name",
+        "description": "Returns a single upstream by its name.",
+        "operationId": "getUpstreamByName",
         "parameters": [
           {
             "name": "name",
@@ -1206,17 +1206,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Endpoint details",
+            "description": "Upstream details",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EndpointResponse"
+                  "$ref": "#/components/schemas/UpstreamResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1238,17 +1238,17 @@
         }
       }
     },
-    "/endpoints/{endpoint_id}/tags": {
+    "/upstreams/{upstream_id}/tags": {
       "get": {
         "tags": [
-          "Endpoint Tags"
+          "Upstream Tags"
         ],
-        "summary": "List endpoint tags",
-        "description": "Returns the list of tags for a given endpoint.",
-        "operationId": "listEndpointTags",
+        "summary": "List upstream tags",
+        "description": "Returns the list of tags for a given upstream.",
+        "operationId": "listUpstreamTags",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1259,7 +1259,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Tags for the endpoint",
+            "description": "Tags for the upstream",
             "content": {
               "application/json": {
                 "schema": {
@@ -1269,7 +1269,7 @@
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1292,14 +1292,14 @@
       },
       "post": {
         "tags": [
-          "Endpoint Tags"
+          "Upstream Tags"
         ],
-        "summary": "Add a tag to an endpoint",
-        "description": "Adds a tag to the specified endpoint. If the tag already exists, it is not duplicated.",
-        "operationId": "addEndpointTag",
+        "summary": "Add a tag to an upstream",
+        "description": "Adds a tag to the specified upstream. If the tag already exists, it is not duplicated.",
+        "operationId": "addUpstreamTag",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1340,7 +1340,7 @@
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1362,17 +1362,17 @@
         }
       }
     },
-    "/endpoints/{endpoint_id}/tags/{tag}": {
+    "/upstreams/{upstream_id}/tags/{tag}": {
       "delete": {
         "tags": [
-          "Endpoint Tags"
+          "Upstream Tags"
         ],
-        "summary": "Remove a tag from an endpoint",
-        "description": "Removes a tag from the specified endpoint.",
-        "operationId": "removeEndpointTag",
+        "summary": "Remove a tag from an upstream",
+        "description": "Removes a tag from the specified upstream.",
+        "operationId": "removeUpstreamTag",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1401,7 +1401,7 @@
             }
           },
           "404": {
-            "description": "Endpoint not found",
+            "description": "Upstream not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1423,20 +1423,20 @@
         }
       }
     },
-    "/endpoint-tests": {
+    "/upstream-tests": {
       "post": {
         "tags": [
-          "Endpoint Tests"
+          "Upstream Tests"
         ],
-        "summary": "Test an endpoint",
-        "description": "Tests an OpenAI-compatible endpoint by detecting its supported features.\nThis does NOT save anything to the database — it only probes the remote API.\n",
-        "operationId": "testEndpoint",
+        "summary": "Test an upstream",
+        "description": "Tests an OpenAI-compatible upstream by detecting its supported features.\nThis does NOT save anything to the database — it only probes the remote API.\n",
+        "operationId": "testUpstream",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TestEndpointRequest"
+                "$ref": "#/components/schemas/TestUpstreamRequest"
               }
             }
           }
@@ -1447,7 +1447,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TestEndpointResponse"
+                  "$ref": "#/components/schemas/TestUpstreamResponse"
                 }
               }
             }
@@ -1463,7 +1463,7 @@
             }
           },
           "502": {
-            "description": "Failed to detect endpoint features",
+            "description": "Failed to detect upstream features",
             "content": {
               "application/json": {
                 "schema": {
@@ -1485,9 +1485,9 @@
         "operationId": "listModels",
         "parameters": [
           {
-            "name": "endpoint_id",
+            "name": "upstream_id",
             "in": "query",
-            "description": "Filter by endpoint ID",
+            "description": "Filter by upstream ID",
             "required": false,
             "schema": {
               "type": "integer",
@@ -1495,9 +1495,9 @@
             }
           },
           {
-            "name": "endpoint_name",
+            "name": "upstream_name",
             "in": "query",
-            "description": "Filter by endpoint name",
+            "description": "Filter by upstream name",
             "required": false,
             "schema": {
               "type": "string"
@@ -2436,16 +2436,16 @@
   },
   "tags": [
     {
-      "name": "Endpoints",
-      "description": "Manage OpenAI-compatible endpoints"
+      "name": "Upstreams",
+      "description": "Manage OpenAI-compatible upstreams"
     },
     {
-      "name": "Endpoint Tags",
-      "description": "Manage tags on endpoints"
+      "name": "Upstream Tags",
+      "description": "Manage tags on upstreams"
     },
     {
-      "name": "Endpoint Tests",
-      "description": "Test endpoint feature detection without saving"
+      "name": "Upstream Tests",
+      "description": "Test upstream feature detection without saving"
     },
     {
       "name": "Models",

@@ -6,7 +6,7 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::Subscr
 /// Initialize OpenTelemetry tracing with OTLP exporter.
 ///
 /// This sets up:
-/// - An OTLP gRPC exporter (default endpoint: http://localhost:4317, configurable via OTEL_EXPORTER_OTLP_ENDPOINT)
+/// - An OTLP gRPC exporter (default upstream: http://localhost:4317, configurable via OTEL_EXPORTER_OTLP_ENDPOINT)
 /// - A tracing-subscriber with both a fmt layer (for console output) and an OpenTelemetry layer
 /// - Environment filter via RUST_LOG (defaults to "info")
 ///

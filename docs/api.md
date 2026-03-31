@@ -2,9 +2,9 @@
 
 LLMPool provides three sets of APIs:
 
-1. **OpenAI-Compatible API** — Standard OpenAI endpoints for AI model access
+1. **OpenAI-Compatible API** — Standard OpenAI upstreams for AI model access
 2. **Admin REST API** — RESTful management interface for administration
-3. **Passthrough API** — Proxy requests to upstream endpoints
+3. **Passthrough API** — Proxy requests to upstream upstreams
 
 Both the Admin REST API and Passthrough API use the `x-admin-token` header for JWT authentication.
 
@@ -28,7 +28,7 @@ The JWT token is validated against the `[admin] jwt_secret` in the configuration
 
 ---
 
-## OpenAI-Compatible Endpoints
+## OpenAI-Compatible Upstreams
 
 LLMPool exposes standard OpenAI-compatible APIs. You can use any OpenAI SDK or compatible client directly:
 
@@ -96,21 +96,21 @@ print(response.choices[0].message.content)
 
 ## Admin REST API
 
-The Admin API is a RESTful interface under `/api/v1/` and requires JWT authentication via the `x-admin-token` header. All list endpoints support pagination via `page` and `page_size` query parameters.
+The Admin API is a RESTful interface under `/api/v1/` and requires JWT authentication via the `x-admin-token` header. All list upstreams support pagination via `page` and `page_size` query parameters.
 
-### Endpoints
+### Upstreams
 
 ```bash
-# List all OpenAI endpoints (paginated)
-curl http://localhost:19324/api/v1/endpoints \
+# List all OpenAI upstreams (paginated)
+curl http://localhost:19324/api/v1/upstreams \
   -H "x-admin-token: <jwt-token>"
 
-# List endpoints with pagination
-curl "http://localhost:19324/api/v1/endpoints?page=1&page_size=10" \
+# List upstreams with pagination
+curl "http://localhost:19324/api/v1/upstreams?page=1&page_size=10" \
   -H "x-admin-token: <jwt-token>"
 
-# Create a new endpoint (auto-detects features and models)
-curl -X POST http://localhost:19324/api/v1/endpoints \
+# Create a new upstream (auto-detects features and models)
+curl -X POST http://localhost:19324/api/v1/upstreams \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -120,11 +120,11 @@ curl -X POST http://localhost:19324/api/v1/endpoints \
   }'
 ```
 
-### Endpoint Testing
+### Upstream Testing
 
 ```bash
-# Test an endpoint (detect features without saving)
-curl -X POST http://localhost:19324/api/v1/endpoint-tests \
+# Test an upstream (detect features without saving)
+curl -X POST http://localhost:19324/api/v1/upstream-tests \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -140,11 +140,11 @@ curl -X POST http://localhost:19324/api/v1/endpoint-tests \
 curl http://localhost:19324/api/v1/models \
   -H "x-admin-token: <jwt-token>"
 
-# Filter models by endpoint ID, endpoint name, or model name
-curl "http://localhost:19324/api/v1/models?endpoint_id=1" \
+# Filter models by upstream ID, upstream name, or model name
+curl "http://localhost:19324/api/v1/models?upstream_id=1" \
   -H "x-admin-token: <jwt-token>"
 
-curl "http://localhost:19324/api/v1/models?endpoint_name=OpenAI&name=gpt-4o" \
+curl "http://localhost:19324/api/v1/models?upstream_name=OpenAI&name=gpt-4o" \
   -H "x-admin-token: <jwt-token>"
 
 # Get a model by ID
@@ -266,18 +266,18 @@ curl "http://localhost:19324/api/v1/session-events?start=42&count=20" \
   -H "x-admin-token: <jwt-token>"
 ```
 
-The session events list endpoint uses cursor-based pagination. The response includes:
+The session events list upstream uses cursor-based pagination. The response includes:
 - `data`: Array of session event objects
 - `next_id`: The ID of the last event in the current page (use as `start` for the next request)
 - `has_more`: Whether there are more events after this page
 
 ### Admin REST API Reference
 
-| Method | Endpoint | Description |
+| Method | Upstream | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/endpoints` | List all OpenAI endpoints (paginated) |
-| `POST` | `/api/v1/endpoints` | Create a new endpoint (auto-detects features) |
-| `POST` | `/api/v1/endpoint-tests` | Test an endpoint without saving |
+| `GET` | `/api/v1/upstreams` | List all OpenAI upstreams (paginated) |
+| `POST` | `/api/v1/upstreams` | Create a new upstream (auto-detects features) |
+| `POST` | `/api/v1/upstream-tests` | Test an upstream without saving |
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
 | `GET` | `/api/v1/models/:model_id` | Get a model by ID |
 | `PUT` | `/api/v1/models/:model_id` | Update a model (description) |
@@ -295,11 +295,11 @@ The session events list endpoint uses cursor-based pagination. The response incl
 | `GET` | `/api/v1/session-events` | List session events (cursor-based pagination) |
 | `GET` | `/api/v1/session-events/:event_id` | Get a single session event by ID |
 
-Most paginated endpoints accept the following query parameters:
+Most paginated upstreams accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)
 - `page_size` (default: 20, max: 100) — Number of items per page
 
-The `/api/v1/session-events` endpoint uses cursor-based pagination:
+The `/api/v1/session-events` upstream uses cursor-based pagination:
 - `start` (default: 0) — Event ID to start after (exclusive)
 - `count` (default: 20, max: 100) — Number of items to return
 - `session` (optional) — Filter by session_id
@@ -308,14 +308,14 @@ The `/api/v1/session-events` endpoint uses cursor-based pagination:
 
 ## Passthrough API
 
-The Passthrough API proxies requests to upstream OpenAI-compatible endpoints. It requires JWT authentication via the `x-admin-token` header (same as the Admin REST API). The `x-admin-token` header is **not** forwarded to the upstream endpoint.
+The Passthrough API proxies requests to upstream OpenAI-compatible upstreams. It requires JWT authentication via the `x-admin-token` header (same as the Admin REST API). The `x-admin-token` header is **not** forwarded to the upstream upstream.
 
 ### By Tag
 
-Proxies the request to a randomly selected endpoint matching the given tag:
+Proxies the request to a randomly selected upstream matching the given tag:
 
 ```bash
-# Proxy a chat completion request to an endpoint tagged "openai"
+# Proxy a chat completion request to an upstream tagged "openai"
 curl -X POST http://localhost:19324/passthrough/tag/openai/v1/chat/completions \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
@@ -325,12 +325,12 @@ curl -X POST http://localhost:19324/passthrough/tag/openai/v1/chat/completions \
   }'
 ```
 
-### By Endpoint ID
+### By Upstream ID
 
-Proxies the request to a specific endpoint by its ID:
+Proxies the request to a specific upstream by its ID:
 
 ```bash
-# Proxy a chat completion request to endpoint with ID 1
+# Proxy a chat completion request to upstream with ID 1
 curl -X POST http://localhost:19324/passthrough/1/v1/chat/completions \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
@@ -342,9 +342,9 @@ curl -X POST http://localhost:19324/passthrough/1/v1/chat/completions \
 
 ### Passthrough API Reference
 
-| Method | Endpoint | Description |
+| Method | Upstream | Description |
 |--------|----------|-------------|
-| `ANY` | `/passthrough/tag/:tag/*rest` | Proxy to a random endpoint matching the tag |
-| `ANY` | `/passthrough/:endpoint_id/*rest` | Proxy to a specific endpoint by ID |
+| `ANY` | `/passthrough/tag/:tag/*rest` | Proxy to a random upstream matching the tag |
+| `ANY` | `/passthrough/:upstream_id/*rest` | Proxy to a specific upstream by ID |
 
-> **Note:** The passthrough proxy automatically sets the `Authorization` header using the endpoint's stored API key. Any `x-admin-token` header is stripped before forwarding to the upstream.
+> **Note:** The passthrough proxy automatically sets the `Authorization` header using the upstream's stored API key. Any `x-admin-token` header is stripped before forwarding to the upstream.

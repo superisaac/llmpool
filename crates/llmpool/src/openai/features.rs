@@ -19,7 +19,7 @@ use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
 use crate::db::{self, DbPool};
-use crate::models::{NewLLMEndpoint, NewLLMModel, UpdateLLMEndpoint, UpdateLLMModel};
+use crate::models::{NewLLMUpstream, NewLLMModel, UpdateLLMUpstream, UpdateLLMModel};
 
 pub struct ModelFeatures {
     pub model: Model,
@@ -30,7 +30,7 @@ pub struct ModelFeatures {
     pub has_chat_completion: bool,
 }
 
-pub struct APIEndpointFeatures {
+pub struct APIUpstreamFeatures {
     pub has_responses_api: bool,
     pub model_features: Vec<ModelFeatures>,
 }
@@ -38,7 +38,7 @@ pub struct APIEndpointFeatures {
 pub async fn detect_features(
     api_key: &str,
     api_base: &str,
-) -> Result<APIEndpointFeatures, OpenAIError> {
+) -> Result<APIUpstreamFeatures, OpenAIError> {
     // Initialize client from environment variables
     let config = OpenAIConfig::new()
         .with_api_key(api_key.to_string())
@@ -59,14 +59,14 @@ pub async fn detect_features(
         let features = detect_model_features(&client, &model).await;
         model_features.push(features);
     }
-    let api_features = APIEndpointFeatures {
+    let api_features = APIUpstreamFeatures {
         has_responses_api,
         model_features,
     };
     Ok(api_features)
 }
 
-/// Detect model features through actual endpoint calls
+/// Detect model features through actual upstream calls
 async fn detect_model_features(
     client: &Client<async_openai::config::OpenAIConfig>,
     model: &Model,
@@ -181,8 +181,8 @@ async fn check_responses_api_support(client: &Client<async_openai::config::OpenA
     }
 }
 
-/// Detect features for an API endpoint and save the results to the database.
-/// This will upsert the endpoint (by api_base) and upsert each model (by endpoint_id + model_id).
+/// Detect features for an API upstream and save the results to the database.
+/// This will upsert the upstream (by api_base) and upsert each model (by upstream_id + model_id).
 pub async fn detect_and_save_features(
     pool: &DbPool,
     name: &str,
@@ -192,11 +192,11 @@ pub async fn detect_and_save_features(
     // 1. Detect features from the remote API
     let api_features = detect_features(api_key, api_base).await?;
 
-    // 2. Upsert the LLMEndpoint
-    let endpoint = match db::openai::get_endpoint_by_api_base(pool, api_base).await {
+    // 2. Upsert the LLMUpstream
+    let upstream = match db::openai::get_upstream_by_api_base(pool, api_base).await {
         Ok(existing) => {
-            // Update existing endpoint
-            let update = UpdateLLMEndpoint {
+            // Update existing upstream
+            let update = UpdateLLMUpstream {
                 name: Some(name.to_string()),
                 api_base: None,
                 api_key: Some(api_key.to_string()),
@@ -208,11 +208,11 @@ pub async fn detect_and_save_features(
                 description: None,
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            db::openai::update_endpoint(pool, existing.id, &update).await?
+            db::openai::update_upstream(pool, existing.id, &update).await?
         }
         Err(sqlx::Error::RowNotFound) => {
-            // Insert new endpoint
-            let new_endpoint = NewLLMEndpoint {
+            // Insert new upstream
+            let new_upstream = NewLLMUpstream {
                 name: name.to_string(),
                 api_base: api_base.to_string(),
                 api_key: api_key.to_string(),
@@ -223,14 +223,14 @@ pub async fn detect_and_save_features(
                 status: "online".to_string(),
                 description: String::new(),
             };
-            db::openai::create_endpoint(pool, &new_endpoint).await?
+            db::openai::create_upstream(pool, &new_upstream).await?
         }
         Err(e) => return Err(Box::new(e)),
     };
 
     // 3. Upsert each model
     for mf in &api_features.model_features {
-        match db::openai::find_model_by_endpoint_and_model_id(pool, endpoint.id, &mf.model.id).await
+        match db::openai::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await
         {
             Ok(existing_model) => {
                 // Update existing model
@@ -251,7 +251,7 @@ pub async fn detect_and_save_features(
                 // Insert new model
                 let default_token_price = BigDecimal::from_str("0.000001").unwrap();
                 let new_model = NewLLMModel {
-                    endpoint_id: endpoint.id,
+                    upstream_id: upstream.id,
                     model_id: mf.model.id.clone(),
                     has_image_generation: mf.has_image_generation,
                     has_speech: mf.has_speech,

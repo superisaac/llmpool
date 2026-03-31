@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::helpers::{
-    ACCOUNT, AppState, build_client_from_endpoint, check_fund_balance, select_first_endpoint,
+    ACCOUNT, AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
 };
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -36,13 +36,13 @@ pub async fn list_files_handler(State(state): State<Arc<AppState>>) -> Response 
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
-    info!(endpoint_name = %endpoint.name, "Listing files");
+    let client = build_client_from_upstream(&upstream);
+    info!(upstream_name = %upstream.name, "Listing files");
 
     match client.files().list().await {
         Ok(response) => {
@@ -66,7 +66,7 @@ pub async fn create_file_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
@@ -175,9 +175,9 @@ pub async fn create_file_handler(
         expires_after: None,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         filename = %filename,
         "Uploading file"
     );
@@ -204,14 +204,14 @@ pub async fn retrieve_file_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         file_id = %file_id,
         "Retrieving file metadata"
     );
@@ -235,14 +235,14 @@ pub async fn delete_file_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         file_id = %file_id,
         "Deleting file"
     );
@@ -266,14 +266,14 @@ pub async fn file_content_handler(
         return resp;
     }
 
-    let endpoint = match select_first_endpoint(&state).await {
+    let upstream = match select_first_upstream(&state).await {
         Ok(ep) => ep,
         Err(resp) => return resp,
     };
 
-    let client = build_client_from_endpoint(&endpoint);
+    let client = build_client_from_upstream(&upstream);
     info!(
-        endpoint_name = %endpoint.name,
+        upstream_name = %upstream.name,
         file_id = %file_id,
         "Retrieving file content"
     );

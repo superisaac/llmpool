@@ -67,7 +67,7 @@ Deposit和Withdraw 都不更改credit。
 BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕后设置成true.   initial_schema和migration文件可以直接修改，不需要新建。handle_balance_change的执行要在一个数据库事务中执行。
 
 ========
-使用axum 实现一个restful api, 用于管理llmpool的运行，验证采用jsonrpc同样的方法和secret, 先实现 GET /api/v1/endpoints 方法，返回当前运行中的endpoint列表, 支持page参数。
+使用axum 实现一个restful api, 用于管理llmpool的运行，验证采用jsonrpc同样的方法和secret, 先实现 GET /api/v1/upstreams 方法，返回当前运行中的upstream列表, 支持page参数。
 
 ========
 再实现一个RESTful api, 用于管理用户 GET|POST /api/v1/users。
@@ -76,13 +76,13 @@ BalanceChange 对象增加一个字段is_applied, 缺省为False, 当apply完毕
 SessionEvent 增加一个session_index 字段，从OpenAIEventTask 中获取； initial_schema和migrations 文件可以修改，不用新增。
 
 ========
-LLMEndpoint 添加一个字段tags: Vec<String>, 用于记录该endpoint的标签.
+LLMUpstream 添加一个字段tags: Vec<String>, 用于记录该upstream的标签.
 
 ========
-在文件 views/passthrough.rs 中，实现透传request 和 response 的逻辑。URL /passthrough/tag/:tag/:rest, 通过tag 找到对应的endpoint list, 随机选择一个endpoint, 使用reqwest, 透传request 和 response。url 重写为 /:rest.
+在文件 views/passthrough.rs 中，实现透传request 和 response 的逻辑。URL /passthrough/tag/:tag/:rest, 通过tag 找到对应的upstream list, 随机选择一个upstream, 使用reqwest, 透传request 和 response。url 重写为 /:rest.
 
 ========
-实现 /passthrough/:endpoint_id/:rest, 根据endpoint_id 找到对应的endpoint, 透传request 和 response。url 重写为 /:rest.
+实现 /passthrough/:upstream_id/:rest, 根据upstream_id 找到对应的upstream, 透传request 和 response。url 重写为 /:rest.
 
 ========
 admin rest api 使用"x-admin-token" header作为验证， header的内容是jwt token，取代以前的auth bearer token. passthrough 也使用x-admin-token header作为验证。并更新API.md.
@@ -91,26 +91,26 @@ admin rest api 使用"x-admin-token" header作为验证， header的内容是jwt
 middleware auth_jwt 的逻辑抽出来单独放在 middlewares/admin_auth.rs 中，并修改passthrough.rs 和admin_rest.rs 中使用middleware.
 
 ========
-给LLMEndpoint 增加一个字段 proxies: Vec<String>, 用于记录该endpoint的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。
+给LLMUpstream 增加一个字段 proxies: Vec<String>, 用于记录该upstream的代理地址, 在建立passthrough 客户端和 openaiclient 时，如果proxies 不为空，则从中随机选择一个作为代理地址。openaiclient 可以用底层的 reqwest::Client::builder() 方法设置代理地址。
 
 ========
-LLMEndpoint 添加一个字段 status: String, 用于记录该endpoint的运行状态, 可选值为 online, offline, maintenance, 默认值为online.
-LLMEndpoint 添加一个字段 description: String, 用于记录该endpoint的描述信息, 缺省为空。
+LLMUpstream 添加一个字段 status: String, 用于记录该upstream的运行状态, 可选值为 online, offline, maintenance, 默认值为online.
+LLMUpstream 添加一个字段 description: String, 用于记录该upstream的描述信息, 缺省为空。
 LLMModel 添加一个字段 description: String, 用于记录该model的描述信息, 缺省为空。
 可以直接修改migrations 文件，不用新建migration文件。
 
-增加 admin api: GET /api/v1/endpoints/:endpoint_id, 根据endpoint_id 获得endpoint信息
-增加 admin api: PUT /api/v1/endpoints/:endpoint_id, 修改endpoint信息，可修改字段为 name, tags, proxies, description,status
+增加 admin api: GET /api/v1/upstreams/:upstream_id, 根据upstream_id 获得upstream信息
+增加 admin api: PUT /api/v1/upstreams/:upstream_id, 修改upstream信息，可修改字段为 name, tags, proxies, description,status
 
 增加 admin api: GET /api/v1/models/:model_id, 根据model_id 获得model信息
 增加 admin api: PUT /api/v1/models/:model_id, 修改model_id信息，可修改字段为 description
 
 ========
 在crates llmpool-ctl 中实现一个命令行工具，用于通过调用admin api管理llmpool。通过环境变量 LLMPOOL_ADMIN_URL 设置admin api的url; LLMPOOL_ADMIN_TOKEN 设置admin api的token. 程序可以读取当前目录下.env文件，读取环境变量。 命令行工具应该实现以下功能:
-1. llmpool-ctl endpoint list 显示所有endpoint信息
-2. llmpool-ctl endpoint test --api-key <api-key> --api-base <api-url> 测试一个endpoint是否可用
-3. llmpool-ctl endpoint add --name <name> --api-key <api-key> --api-base <api-url> [--description <description>] [--tags <tags>] [--proxies <proxies>] 创建一个endpoint
-4. llmpool-ctl endpoint update --endpoint-id <endpoint-id> [--name <name>] [--description <description>] [--tags <tags>] [--proxies <proxies>] [--status <status>] 更新一个endpoint
+1. llmpool-ctl upstream list 显示所有upstream信息
+2. llmpool-ctl upstream test --api-key <api-key> --api-base <api-url> 测试一个upstream是否可用
+3. llmpool-ctl upstream add --name <name> --api-key <api-key> --api-base <api-url> [--description <description>] [--tags <tags>] [--proxies <proxies>] 创建一个upstream
+4. llmpool-ctl upstream update --upstream-id <upstream-id> [--name <name>] [--description <description>] [--tags <tags>] [--proxies <proxies>] [--status <status>] 更新一个upstream
 5. llmpool-ctl model list 显示所有model信息
 6. llmpool-ctl model update --model-id <model-id> [--description <description>]
 7. llmpool-ctl user list 显示所有用户信息
@@ -146,25 +146,25 @@ llmpool-ctl 添加以下命令
 jwt token 需要添加realm=api, 在auth的时候要检查realm 是否等于"api"
 
 =========
-实现 endpoint tags操作的 admin api
-1. GET /api/v1/endpoints/:endpoint_id/tags, 获得endpoint的tags列表
-1. POST /api/v1/endpoints/:endpoint_id/tags, 添加一个tag
-1. DELETE /api/v1/endpoints/:endpoint_id/tags/:tag, 删除一个tag
+实现 upstream tags操作的 admin api
+1. GET /api/v1/upstreams/:upstream_id/tags, 获得upstream的tags列表
+1. POST /api/v1/upstreams/:upstream_id/tags, 添加一个tag
+1. DELETE /api/v1/upstreams/:upstream_id/tags/:tag, 删除一个tag
 
-实现 admin api GET /api/v1/endpoint_by_name/:name, 通过endpoint name 获得endpoint 信息
+实现 admin api GET /api/v1/upstream_by_name/:name, 通过upstream name 获得upstream 信息
 
 llmpool-ctl 添加以下命令
-1. llmpool-ctl endpoint listtags --endpoint <endpoint_name_or_id>, 显示endpoint的tags列表
-1. llmpool-ctl endpoint addtag --endpoint <endpoint_name_or_id> --tag <tag>, 添加一个tag
-1. llmpool-ctl endpoint deltag --endpoint <endpoint_name_or_id> --tag <tag>, 删除一个tag
+1. llmpool-ctl upstream listtags --upstream <upstream_name_or_id>, 显示upstream的tags列表
+1. llmpool-ctl upstream addtag --upstream <upstream_name_or_id> --tag <tag>, 添加一个tag
+1. llmpool-ctl upstream deltag --upstream <upstream_name_or_id> --tag <tag>, 删除一个tag
 
-<endpoint_name_or_id> 如果是名字，则通过/endpoint_by_name 查找endpoint_id, 命令 llmpool-ctl endpoint update 也修改成这种参数
+<upstream_name_or_id> 如果是名字，则通过/upstream_by_name 查找upstream_id, 命令 llmpool-ctl upstream update 也修改成这种参数
 
 =========
 llmpool-ctl root 程序支持命令行参数 --format <format>, <format> 可以是"", 和"json", 如果是"json", 则输出json格式的响应。
 
 =========
-将一级子命令分拆到不同文件中，比如 endpoint xxx 命令可以放在 cmds/endpoint.rs 中, ...
+将一级子命令分拆到不同文件中，比如 upstream xxx 命令可以放在 cmds/upstream.rs 中, ...
 
 =========
 model 的admin api信息中应该有price, 也可以修改price 字段
@@ -234,7 +234,7 @@ DB model Consumer 的名字换成 Account, admin api 中相应修改, llmpool-ct
 取消task_local变量 FUND, 在chat_completions, create_embedding, generate_images中，中调用一个 check_fund_balance(account_id) 的方法，在方法中实现 get_fund_info, 如果没拿到就从数据库中拿到， 检查 FUND.cash + FUND.credit > 0, 否则拒绝请求并报错账户余额不够.
 
 =========
-LLMEndpoint 增加一个字段： provider, 默认为 "openai", 可以是 "openai", "azure", "cohere", "anthropic", "vllm", "ollama", 在admin api中也显示此参数，在创建endpoint 时，可以带上这个参数。 可直接修改migrations 文件，不用新建migration文件。
+LLMUpstream 增加一个字段： provider, 默认为 "openai", 可以是 "openai", "azure", "cohere", "anthropic", "vllm", "ollama", 在admin api中也显示此参数，在创建upstream 时，可以带上这个参数。 可直接修改migrations 文件，不用新建migration文件。
 
 =========
 实现admin api: GET /api/v1/session-events/:event_id, 获得session event 的详细信息, 并更新llmpool-ctl 命令, 和api-schema.json|yaml 文件。 更新docs/api.md 文件。

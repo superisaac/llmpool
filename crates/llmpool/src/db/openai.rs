@@ -6,15 +6,15 @@ use crate::models::*;
 pub type DbPool = PgPool;
 
 // ============================================================
-// Helper: decrypt api_key in an LLMEndpoint after reading from DB
+// Helper: decrypt api_key in an LLMUpstream after reading from DB
 // ============================================================
 
-/// Decrypt the `api_key` field of an `LLMEndpoint`.
+/// Decrypt the `api_key` field of an `LLMUpstream`.
 /// If encryption is not configured, the value is returned as-is.
-fn decrypt_endpoint(mut endpoint: LLMEndpoint) -> Result<LLMEndpoint, sqlx::Error> {
-    endpoint.api_key = crypto::decrypt_if_configured(&endpoint.api_key)
+fn decrypt_upstream(mut upstream: LLMUpstream) -> Result<LLMUpstream, sqlx::Error> {
+    upstream.api_key = crypto::decrypt_if_configured(&upstream.api_key)
         .map_err(|e| sqlx::Error::Protocol(format!("Failed to decrypt api_key: {}", e)))?;
-    Ok(endpoint)
+    Ok(upstream)
 }
 
 /// Encrypt a plaintext api_key before storing it in the database.
@@ -25,106 +25,106 @@ fn encrypt_api_key(api_key: &str) -> Result<String, sqlx::Error> {
 }
 
 // ============================================================
-// LLMEndpoint CRUD operations
+// LLMUpstream CRUD operations
 // ============================================================
 
-/// Create a new OpenAI endpoint
-pub async fn create_endpoint(
+/// Create a new OpenAI upstream
+pub async fn create_upstream(
     pool: &DbPool,
-    new_endpoint: &NewLLMEndpoint,
-) -> Result<LLMEndpoint, sqlx::Error> {
-    let encrypted_key = encrypt_api_key(&new_endpoint.api_key)?;
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
-        "INSERT INTO llm_endpoints (name, api_base, api_key, provider, has_responses_api, tags, proxies, status, description)
+    new_upstream: &NewLLMUpstream,
+) -> Result<LLMUpstream, sqlx::Error> {
+    let encrypted_key = encrypt_api_key(&new_upstream.api_key)?;
+    let upstream = sqlx::query_as::<_, LLMUpstream>(
+        "INSERT INTO llm_upstreams (name, api_base, api_key, provider, has_responses_api, tags, proxies, status, description)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *",
     )
-    .bind(&new_endpoint.name)
-    .bind(&new_endpoint.api_base)
+    .bind(&new_upstream.name)
+    .bind(&new_upstream.api_base)
     .bind(&encrypted_key)
-    .bind(&new_endpoint.provider)
-    .bind(new_endpoint.has_responses_api)
-    .bind(&new_endpoint.tags)
-    .bind(&new_endpoint.proxies)
-    .bind(&new_endpoint.status)
-    .bind(&new_endpoint.description)
+    .bind(&new_upstream.provider)
+    .bind(new_upstream.has_responses_api)
+    .bind(&new_upstream.tags)
+    .bind(&new_upstream.proxies)
+    .bind(&new_upstream.status)
+    .bind(&new_upstream.description)
     .fetch_one(pool)
     .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// List all OpenAI endpoints (with decrypted api_keys)
-pub async fn list_endpoints(pool: &DbPool) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
-    let endpoints = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints")
+/// List all OpenAI upstreams (with decrypted api_keys)
+pub async fn list_upstreams(pool: &DbPool) -> Result<Vec<LLMUpstream>, sqlx::Error> {
+    let upstreams = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams")
         .fetch_all(pool)
         .await?;
-    endpoints.into_iter().map(decrypt_endpoint).collect()
+    upstreams.into_iter().map(decrypt_upstream).collect()
 }
 
-/// Count total number of OpenAI endpoints
-pub async fn count_endpoints(pool: &DbPool) -> Result<i64, sqlx::Error> {
-    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
+/// Count total number of OpenAI upstreams
+pub async fn count_upstreams(pool: &DbPool) -> Result<i64, sqlx::Error> {
+    let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_upstreams")
         .fetch_one(pool)
         .await?;
     Ok(row.0)
 }
 
-/// List OpenAI endpoints with pagination (with decrypted api_keys).
+/// List OpenAI upstreams with pagination (with decrypted api_keys).
 /// `offset` is the number of rows to skip, `limit` is the max number of rows to return.
-pub async fn list_endpoints_paginated(
+pub async fn list_upstreams_paginated(
     pool: &DbPool,
     offset: i64,
     limit: i64,
-) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
-    let endpoints = sqlx::query_as::<_, LLMEndpoint>(
-        "SELECT * FROM llm_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
+) -> Result<Vec<LLMUpstream>, sqlx::Error> {
+    let upstreams = sqlx::query_as::<_, LLMUpstream>(
+        "SELECT * FROM llm_upstreams ORDER BY id ASC LIMIT $1 OFFSET $2",
     )
     .bind(limit)
     .bind(offset)
     .fetch_all(pool)
     .await?;
-    endpoints.into_iter().map(decrypt_endpoint).collect()
+    upstreams.into_iter().map(decrypt_upstream).collect()
 }
 
-/// Get an OpenAI endpoint by ID (with decrypted api_key)
-pub async fn get_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-        .bind(endpoint_id)
+/// Get an OpenAI upstream by ID (with decrypted api_key)
+pub async fn get_upstream(pool: &DbPool, upstream_id: i32) -> Result<LLMUpstream, sqlx::Error> {
+    let upstream = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
+        .bind(upstream_id)
         .fetch_one(pool)
         .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Get an OpenAI endpoint by name (with decrypted api_key)
-pub async fn get_endpoint_by_name(pool: &DbPool, name: &str) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
+/// Get an OpenAI upstream by name (with decrypted api_key)
+pub async fn get_upstream_by_name(pool: &DbPool, name: &str) -> Result<LLMUpstream, sqlx::Error> {
+    let upstream = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE name = $1")
         .bind(name)
         .fetch_one(pool)
         .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Get an OpenAI endpoint by api_base (with decrypted api_key)
-pub async fn get_endpoint_by_api_base(
+/// Get an OpenAI upstream by api_base (with decrypted api_key)
+pub async fn get_upstream_by_api_base(
     pool: &DbPool,
     api_base: &str,
-) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint =
-        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE api_base = $1")
+) -> Result<LLMUpstream, sqlx::Error> {
+    let upstream =
+        sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE api_base = $1")
             .bind(api_base)
             .fetch_one(pool)
             .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Update an OpenAI endpoint
-pub async fn update_endpoint(
+/// Update an OpenAI upstream
+pub async fn update_upstream(
     pool: &DbPool,
-    endpoint_id: i32,
-    update: &UpdateLLMEndpoint,
-) -> Result<LLMEndpoint, sqlx::Error> {
-    // Fetch current values first (already decrypted by get_endpoint)
-    let current = get_endpoint(pool, endpoint_id).await?;
+    upstream_id: i32,
+    update: &UpdateLLMUpstream,
+) -> Result<LLMUpstream, sqlx::Error> {
+    // Fetch current values first (already decrypted by get_upstream)
+    let current = get_upstream(pool, upstream_id).await?;
 
     let name = update.name.as_deref().unwrap_or(&current.name);
     let api_base = update.api_base.as_deref().unwrap_or(&current.api_base);
@@ -144,8 +144,8 @@ pub async fn update_endpoint(
         .unwrap_or(&current.description);
     let updated_at = update.updated_at.unwrap_or(current.updated_at);
 
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
-        "UPDATE llm_endpoints
+    let upstream = sqlx::query_as::<_, LLMUpstream>(
+        "UPDATE llm_upstreams
          SET name = $1, api_base = $2, api_key = $3, provider = $4, has_responses_api = $5, tags = $6, proxies = $7, status = $8, description = $9, updated_at = $10
          WHERE id = $11
          RETURNING *",
@@ -160,16 +160,16 @@ pub async fn update_endpoint(
     .bind(status)
     .bind(description)
     .bind(updated_at)
-    .bind(endpoint_id)
+    .bind(upstream_id)
     .fetch_one(pool)
     .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Delete an OpenAI endpoint
-pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sqlx::Error> {
-    let result = sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
-        .bind(endpoint_id)
+/// Delete an OpenAI upstream
+pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sqlx::Error> {
+    let result = sqlx::query("DELETE FROM llm_upstreams WHERE id = $1")
+        .bind(upstream_id)
         .execute(pool)
         .await?;
     Ok(result.rows_affected())
@@ -182,11 +182,11 @@ pub async fn delete_endpoint(pool: &DbPool, endpoint_id: i32) -> Result<u64, sql
 /// Create a new OpenAI model
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (endpoint_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
+        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *"
     )
-    .bind(new_model.endpoint_id)
+    .bind(new_model.upstream_id)
     .bind(&new_model.model_id)
     .bind(new_model.has_image_generation)
     .bind(new_model.has_speech)
@@ -205,13 +205,13 @@ pub async fn list_models(pool: &DbPool) -> Result<Vec<LLMModel>, sqlx::Error> {
         .await
 }
 
-/// List models belonging to a specific endpoint
-pub async fn list_models_by_endpoint(
+/// List models belonging to a specific upstream
+pub async fn list_models_by_upstream(
     pool: &DbPool,
-    endpoint_id: i32,
+    upstream_id: i32,
 ) -> Result<Vec<LLMModel>, sqlx::Error> {
-    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE endpoint_id = $1")
-        .bind(endpoint_id)
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE upstream_id = $1")
+        .bind(upstream_id)
         .fetch_all(pool)
         .await
 }
@@ -235,16 +235,16 @@ pub async fn get_model_with_tx(
         .await
 }
 
-/// Find a model by endpoint_id and model_id string
-pub async fn find_model_by_endpoint_and_model_id(
+/// Find a model by upstream_id and model_id string
+pub async fn find_model_by_upstream_and_model_id(
     pool: &DbPool,
-    endpoint_id: i32,
+    upstream_id: i32,
     model_id_str: &str,
 ) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "SELECT * FROM llm_models WHERE endpoint_id = $1 AND model_id = $2",
+        "SELECT * FROM llm_models WHERE upstream_id = $1 AND model_id = $2",
     )
-    .bind(endpoint_id)
+    .bind(upstream_id)
     .bind(model_id_str)
     .fetch_one(pool)
     .await
@@ -317,8 +317,8 @@ pub async fn find_first_model_by_name(
 
 /// Filter options for listing models
 pub struct ListModelsFilter {
-    pub endpoint_id: Option<i32>,
-    pub endpoint_name: Option<String>,
+    pub upstream_id: Option<i32>,
+    pub upstream_name: Option<String>,
     pub name: Option<String>,
 }
 
@@ -329,15 +329,15 @@ pub async fn count_models_filtered(
 ) -> Result<i64, sqlx::Error> {
     let mut sql = String::from(
         "SELECT COUNT(*) FROM llm_models m
-         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
+         INNER JOIN llm_upstreams e ON m.upstream_id = e.id
          WHERE 1=1",
     );
     let mut param_idx = 0u32;
-    if filter.endpoint_id.is_some() {
+    if filter.upstream_id.is_some() {
         param_idx += 1;
-        sql.push_str(&format!(" AND m.endpoint_id = ${}", param_idx));
+        sql.push_str(&format!(" AND m.upstream_id = ${}", param_idx));
     }
-    if filter.endpoint_name.is_some() {
+    if filter.upstream_name.is_some() {
         param_idx += 1;
         sql.push_str(&format!(" AND e.name = ${}", param_idx));
     }
@@ -348,10 +348,10 @@ pub async fn count_models_filtered(
     let _ = param_idx;
 
     let mut query = sqlx::query_as::<_, (i64,)>(&sql);
-    if let Some(ref eid) = filter.endpoint_id {
+    if let Some(ref eid) = filter.upstream_id {
         query = query.bind(eid);
     }
-    if let Some(ref ename) = filter.endpoint_name {
+    if let Some(ref ename) = filter.upstream_name {
         query = query.bind(ename);
     }
     if let Some(ref name) = filter.name {
@@ -370,15 +370,15 @@ pub async fn list_models_filtered_paginated(
 ) -> Result<Vec<LLMModel>, sqlx::Error> {
     let mut sql = String::from(
         "SELECT m.* FROM llm_models m
-         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
+         INNER JOIN llm_upstreams e ON m.upstream_id = e.id
          WHERE 1=1",
     );
     let mut param_idx = 0u32;
-    if filter.endpoint_id.is_some() {
+    if filter.upstream_id.is_some() {
         param_idx += 1;
-        sql.push_str(&format!(" AND m.endpoint_id = ${}", param_idx));
+        sql.push_str(&format!(" AND m.upstream_id = ${}", param_idx));
     }
-    if filter.endpoint_name.is_some() {
+    if filter.upstream_name.is_some() {
         param_idx += 1;
         sql.push_str(&format!(" AND e.name = ${}", param_idx));
     }
@@ -396,10 +396,10 @@ pub async fn list_models_filtered_paginated(
     ));
 
     let mut query = sqlx::query_as::<_, LLMModel>(&sql);
-    if let Some(ref eid) = filter.endpoint_id {
+    if let Some(ref eid) = filter.upstream_id {
         query = query.bind(eid);
     }
-    if let Some(ref ename) = filter.endpoint_name {
+    if let Some(ref ename) = filter.upstream_name {
         query = query.bind(ename);
     }
     if let Some(ref name) = filter.name {
@@ -418,38 +418,38 @@ pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Err
     Ok(result.rows_affected())
 }
 
-/// Get an endpoint with all its models
-pub async fn get_endpoint_with_models(
+/// Get an upstream with all its models
+pub async fn get_upstream_with_models(
     pool: &DbPool,
-    endpoint_id: i32,
-) -> Result<(LLMEndpoint, Vec<LLMModel>), sqlx::Error> {
-    let endpoint = get_endpoint(pool, endpoint_id).await?;
-    let models = list_models_by_endpoint(pool, endpoint_id).await?;
-    Ok((endpoint, models))
+    upstream_id: i32,
+) -> Result<(LLMUpstream, Vec<LLMModel>), sqlx::Error> {
+    let upstream = get_upstream(pool, upstream_id).await?;
+    let models = list_models_by_upstream(pool, upstream_id).await?;
+    Ok((upstream, models))
 }
 
-/// Get the tags of an endpoint by its ID.
-pub async fn get_endpoint_tags(
+/// Get the tags of an upstream by its ID.
+pub async fn get_upstream_tags(
     pool: &DbPool,
-    endpoint_id: i32,
+    upstream_id: i32,
 ) -> Result<Vec<String>, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-        .bind(endpoint_id)
+    let upstream = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
+        .bind(upstream_id)
         .fetch_one(pool)
         .await?;
-    Ok(endpoint.tags)
+    Ok(upstream.tags)
 }
 
-/// Add a tag to an endpoint. Uses array_append and ensures no duplicates.
-/// Returns the updated endpoint.
-pub async fn add_endpoint_tag(
+/// Add a tag to an upstream. Uses array_append and ensures no duplicates.
+/// Returns the updated upstream.
+pub async fn add_upstream_tag(
     pool: &DbPool,
-    endpoint_id: i32,
+    upstream_id: i32,
     tag: &str,
-) -> Result<LLMEndpoint, sqlx::Error> {
+) -> Result<LLMUpstream, sqlx::Error> {
     // Use array_append only if the tag is not already present
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
-        "UPDATE llm_endpoints
+    let upstream = sqlx::query_as::<_, LLMUpstream>(
+        "UPDATE llm_upstreams
          SET tags = CASE
              WHEN $2 = ANY(tags) THEN tags
              ELSE array_append(tags, $2)
@@ -458,54 +458,54 @@ pub async fn add_endpoint_tag(
          WHERE id = $1
          RETURNING *",
     )
-    .bind(endpoint_id)
+    .bind(upstream_id)
     .bind(tag)
     .fetch_one(pool)
     .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Remove a tag from an endpoint. Uses array_remove.
-/// Returns the updated endpoint.
-pub async fn remove_endpoint_tag(
+/// Remove a tag from an upstream. Uses array_remove.
+/// Returns the updated upstream.
+pub async fn remove_upstream_tag(
     pool: &DbPool,
-    endpoint_id: i32,
+    upstream_id: i32,
     tag: &str,
-) -> Result<LLMEndpoint, sqlx::Error> {
-    let endpoint = sqlx::query_as::<_, LLMEndpoint>(
-        "UPDATE llm_endpoints
+) -> Result<LLMUpstream, sqlx::Error> {
+    let upstream = sqlx::query_as::<_, LLMUpstream>(
+        "UPDATE llm_upstreams
          SET tags = array_remove(tags, $2),
          updated_at = NOW()
          WHERE id = $1
          RETURNING *",
     )
-    .bind(endpoint_id)
+    .bind(upstream_id)
     .bind(tag)
     .fetch_one(pool)
     .await?;
-    decrypt_endpoint(endpoint)
+    decrypt_upstream(upstream)
 }
 
-/// Find all OpenAI endpoints that contain the given tag in their tags array.
-/// Returns endpoints with decrypted api_keys.
-pub async fn find_endpoints_by_tag(
+/// Find all OpenAI upstreams that contain the given tag in their tags array.
+/// Returns upstreams with decrypted api_keys.
+pub async fn find_upstreams_by_tag(
     pool: &DbPool,
     tag: &str,
-) -> Result<Vec<LLMEndpoint>, sqlx::Error> {
-    let endpoints =
-        sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)")
+) -> Result<Vec<LLMUpstream>, sqlx::Error> {
+    let upstreams =
+        sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE $1 = ANY(tags)")
             .bind(tag)
             .fetch_all(pool)
             .await?;
-    endpoints.into_iter().map(decrypt_endpoint).collect()
+    upstreams.into_iter().map(decrypt_upstream).collect()
 }
 
-/// A helper struct for the joined query result of LLMModel + LLMEndpoint
+/// A helper struct for the joined query result of LLMModel + LLMUpstream
 #[derive(Debug, Clone, sqlx::FromRow)]
-struct ModelEndpointRow {
+struct ModelUpstreamRow {
     // LLMModel fields
     pub id: i32,
-    pub endpoint_id: i32,
+    pub upstream_id: i32,
     pub model_id: String,
     pub has_image_generation: bool,
     pub has_speech: bool,
@@ -516,7 +516,7 @@ struct ModelEndpointRow {
     pub description: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
-    // LLMEndpoint fields (aliased)
+    // LLMUpstream fields (aliased)
     pub ep_id: i32,
     pub ep_name: String,
     pub ep_api_base: String,
@@ -531,11 +531,11 @@ struct ModelEndpointRow {
     pub ep_updated_at: chrono::NaiveDateTime,
 }
 
-impl ModelEndpointRow {
-    fn into_tuple(self) -> Result<(LLMModel, LLMEndpoint), sqlx::Error> {
+impl ModelUpstreamRow {
+    fn into_tuple(self) -> Result<(LLMModel, LLMUpstream), sqlx::Error> {
         let model = LLMModel {
             id: self.id,
-            endpoint_id: self.endpoint_id,
+            upstream_id: self.upstream_id,
             model_id: self.model_id,
             has_image_generation: self.has_image_generation,
             has_speech: self.has_speech,
@@ -547,7 +547,7 @@ impl ModelEndpointRow {
             created_at: self.created_at,
             updated_at: self.updated_at,
         };
-        let endpoint = LLMEndpoint {
+        let upstream = LLMUpstream {
             id: self.ep_id,
             name: self.ep_name,
             api_base: self.ep_api_base,
@@ -561,24 +561,24 @@ impl ModelEndpointRow {
             created_at: self.ep_created_at,
             updated_at: self.ep_updated_at,
         };
-        // Decrypt the api_key from the joined endpoint data
-        let endpoint = decrypt_endpoint(endpoint)?;
-        Ok((model, endpoint))
+        // Decrypt the api_key from the joined upstream data
+        let upstream = decrypt_upstream(upstream)?;
+        Ok((model, upstream))
     }
 }
 
 /// Find all OpenAI models with a given model_id (name) that match the specified capacity options,
-/// along with their associated endpoint information (api_key, api_base).
+/// along with their associated upstream information (api_key, api_base).
 ///
 /// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
 pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
     capacity: &CapacityOption,
-) -> Result<Vec<(LLMModel, LLMEndpoint)>, sqlx::Error> {
+) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
-        "SELECT m.id, m.endpoint_id, m.model_id, m.has_image_generation, m.has_speech,
+        "SELECT m.id, m.upstream_id, m.model_id, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
@@ -588,7 +588,7 @@ pub async fn find_models_by_name_and_capacity(
                 e.status AS ep_status, e.description AS ep_description,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
          FROM llm_models m
-         INNER JOIN llm_endpoints e ON m.endpoint_id = e.id
+         INNER JOIN llm_upstreams e ON m.upstream_id = e.id
          WHERE m.model_id = $1",
     );
 
@@ -617,7 +617,7 @@ pub async fn find_models_by_name_and_capacity(
         sql.push_str(cond);
     }
 
-    let mut query = sqlx::query_as::<_, ModelEndpointRow>(&sql).bind(model_name);
+    let mut query = sqlx::query_as::<_, ModelUpstreamRow>(&sql).bind(model_name);
 
     // Bind the `true` values for each capacity filter
     if capacity.has_chat_completion == Some(true) {

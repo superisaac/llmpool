@@ -45,7 +45,7 @@ pub struct RedisConfig {
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct SecurityConfig {
     /// Hex-encoded 256-bit (32-byte) key used for AES-256-GCM encryption of sensitive fields
-    /// (e.g., OpenAI endpoint API keys). Generate with: `openssl rand -hex 32`
+    /// (e.g., OpenAI upstream API keys). Generate with: `openssl rand -hex 32`
     #[serde(default)]
     pub encryption_key: String,
 }

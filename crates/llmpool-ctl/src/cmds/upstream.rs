@@ -2,9 +2,9 @@ use clap::Subcommand;
 use serde::Serialize;
 
 use super::{
-    EndpointResponse, EndpointWithModelsResponse, PaginatedResponse, TagsResponse,
-    TestEndpointResponse, bool_mark, parse_comma_list, print_models, print_pagination,
-    resolve_endpoint_id, truncate,
+    UpstreamResponse, UpstreamWithModelsResponse, PaginatedResponse, TagsResponse,
+    TestUpstreamResponse, bool_mark, parse_comma_list, print_models, print_pagination,
+    resolve_upstream_id, truncate,
 };
 use crate::client::ApiClient;
 
@@ -13,33 +13,33 @@ use crate::client::ApiClient;
 // ============================================================
 
 #[derive(Subcommand)]
-pub enum EndpointAction {
-    /// List all endpoints
+pub enum UpstreamAction {
+    /// List all upstreams
     List,
-    /// Test an endpoint (detect features without saving)
+    /// Test an upstream (detect features without saving)
     Test {
-        /// API key for the endpoint
+        /// API key for the upstream
         #[arg(long)]
         api_key: String,
-        /// Base URL of the endpoint
+        /// Base URL of the upstream
         #[arg(long)]
         api_base: String,
     },
-    /// Add a new endpoint
+    /// Add a new upstream
     Add {
-        /// Display name for the endpoint
+        /// Display name for the upstream
         #[arg(long)]
         name: String,
-        /// API key for the endpoint
+        /// API key for the upstream
         #[arg(long)]
         api_key: String,
-        /// Base URL of the endpoint
+        /// Base URL of the upstream
         #[arg(long)]
         api_base: String,
         /// Provider type (openai, azure, cohere, anthropic, vllm, ollama)
         #[arg(long, default_value = "openai")]
         provider: String,
-        /// Description of the endpoint
+        /// Description of the upstream
         #[arg(long)]
         description: Option<String>,
         /// Comma-separated tags
@@ -49,12 +49,12 @@ pub enum EndpointAction {
         #[arg(long)]
         proxies: Option<String>,
     },
-    /// Update an existing endpoint
+    /// Update an existing upstream
     Update {
-        /// Endpoint name or ID
+        /// Upstream name or ID
         #[arg(long)]
-        endpoint: String,
-        /// New name for the endpoint
+        upstream: String,
+        /// New name for the upstream
         #[arg(long)]
         name: Option<String>,
         /// Provider type (openai, azure, cohere, anthropic, vllm, ollama)
@@ -73,26 +73,26 @@ pub enum EndpointAction {
         #[arg(long)]
         status: Option<String>,
     },
-    /// List tags of an endpoint
+    /// List tags of an upstream
     Listtags {
-        /// Endpoint name or ID
+        /// Upstream name or ID
         #[arg(long)]
-        endpoint: String,
+        upstream: String,
     },
-    /// Add a tag to an endpoint
+    /// Add a tag to an upstream
     Addtag {
-        /// Endpoint name or ID
+        /// Upstream name or ID
         #[arg(long)]
-        endpoint: String,
+        upstream: String,
         /// Tag to add
         #[arg(long)]
         tag: String,
     },
-    /// Delete a tag from an endpoint
+    /// Delete a tag from an upstream
     Deltag {
-        /// Endpoint name or ID
+        /// Upstream name or ID
         #[arg(long)]
-        endpoint: String,
+        upstream: String,
         /// Tag to delete
         #[arg(long)]
         tag: String,
@@ -104,7 +104,7 @@ pub enum EndpointAction {
 // ============================================================
 
 #[derive(Serialize)]
-struct CreateEndpointRequest {
+struct CreateUpstreamRequest {
     name: String,
     api_key: String,
     api_base: String,
@@ -116,13 +116,13 @@ struct CreateEndpointRequest {
 }
 
 #[derive(Serialize)]
-struct TestEndpointRequest {
+struct TestUpstreamRequest {
     api_key: String,
     api_base: String,
 }
 
 #[derive(Serialize)]
-struct UpdateEndpointRequestBody {
+struct UpdateUpstreamRequestBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -146,9 +146,9 @@ struct AddTagRequestBody {
 // Display Helpers
 // ============================================================
 
-fn print_endpoints(endpoints: &[EndpointResponse]) {
-    if endpoints.is_empty() {
-        println!("No endpoints found.");
+fn print_upstreams(upstreams: &[UpstreamResponse]) {
+    if upstreams.is_empty() {
+        println!("No upstreams found.");
         return;
     }
 
@@ -157,7 +157,7 @@ fn print_endpoints(endpoints: &[EndpointResponse]) {
         "ID", "Name", "API Base", "Status", "Resp.API", "Tags", "Proxies"
     );
     println!("{}", "-".repeat(125));
-    for ep in endpoints {
+    for ep in upstreams {
         println!(
             "{:<5} {:<20} {:<40} {:<12} {:<8} {:<20} {:<20}",
             ep.id,
@@ -171,7 +171,7 @@ fn print_endpoints(endpoints: &[EndpointResponse]) {
     }
 }
 
-fn print_test_result(result: &TestEndpointResponse) {
+fn print_test_result(result: &TestUpstreamResponse) {
     println!(
         "Responses API: {}",
         if result.has_responses_api {
@@ -203,25 +203,25 @@ fn print_test_result(result: &TestEndpointResponse) {
     }
 }
 
-fn print_endpoint_with_models(resp: &EndpointWithModelsResponse) {
-    println!("Endpoint created successfully!");
+fn print_upstream_with_models(resp: &UpstreamWithModelsResponse) {
+    println!("Upstream created successfully!");
     println!();
-    println!("  ID:             {}", resp.endpoint.id);
-    println!("  Name:           {}", resp.endpoint.name);
-    println!("  API Base:       {}", resp.endpoint.api_base);
-    println!("  Provider:       {}", resp.endpoint.provider);
-    println!("  Status:         {}", resp.endpoint.status);
+    println!("  ID:             {}", resp.upstream.id);
+    println!("  Name:           {}", resp.upstream.name);
+    println!("  API Base:       {}", resp.upstream.api_base);
+    println!("  Provider:       {}", resp.upstream.provider);
+    println!("  Status:         {}", resp.upstream.status);
     println!(
         "  Responses API:  {}",
-        if resp.endpoint.has_responses_api {
+        if resp.upstream.has_responses_api {
             "yes"
         } else {
             "no"
         }
     );
-    println!("  Tags:           {}", resp.endpoint.tags.join(", "));
-    println!("  Proxies:        {}", resp.endpoint.proxies.join(", "));
-    println!("  Description:    {}", resp.endpoint.description);
+    println!("  Tags:           {}", resp.upstream.tags.join(", "));
+    println!("  Proxies:        {}", resp.upstream.proxies.join(", "));
+    println!("  Description:    {}", resp.upstream.description);
     println!();
     if !resp.models.is_empty() {
         println!("Models ({}):", resp.models.len());
@@ -229,8 +229,8 @@ fn print_endpoint_with_models(resp: &EndpointWithModelsResponse) {
     }
 }
 
-fn print_endpoint_detail(ep: &EndpointResponse) {
-    println!("Endpoint updated successfully!");
+fn print_upstream_detail(ep: &UpstreamResponse) {
+    println!("Upstream updated successfully!");
     println!();
     println!("  ID:             {}", ep.id);
     println!("  Name:           {}", ep.name);
@@ -252,38 +252,38 @@ fn print_endpoint_detail(ep: &EndpointResponse) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_endpoint(
-    action: EndpointAction,
+pub async fn handle_upstream(
+    action: UpstreamAction,
     client: &ApiClient,
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        EndpointAction::List => {
+        UpstreamAction::List => {
             if json_output {
-                let raw = client.get_raw("/endpoints").await?;
+                let raw = client.get_raw("/upstreams").await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<EndpointResponse> = client.get("/endpoints").await?;
-                print_endpoints(&resp.data);
+                let resp: PaginatedResponse<UpstreamResponse> = client.get("/upstreams").await?;
+                print_upstreams(&resp.data);
                 print_pagination(&resp.pagination);
             }
         }
-        EndpointAction::Test { api_key, api_base } => {
-            let body = TestEndpointRequest {
+        UpstreamAction::Test { api_key, api_base } => {
+            let body = TestUpstreamRequest {
                 api_key,
                 api_base: api_base.clone(),
             };
             if json_output {
-                let raw = client.post_raw("/endpoint-tests", &body).await?;
+                let raw = client.post_raw("/upstream-tests", &body).await?;
                 println!("{}", raw);
             } else {
-                println!("Testing endpoint {}...", api_base);
-                let resp: TestEndpointResponse = client.post("/endpoint-tests", &body).await?;
+                println!("Testing upstream {}...", api_base);
+                let resp: TestUpstreamResponse = client.post("/upstream-tests", &body).await?;
                 println!();
                 print_test_result(&resp);
             }
         }
-        EndpointAction::Add {
+        UpstreamAction::Add {
             name,
             api_key,
             api_base,
@@ -292,7 +292,7 @@ pub async fn handle_endpoint(
             tags,
             proxies,
         } => {
-            let body = CreateEndpointRequest {
+            let body = CreateUpstreamRequest {
                 name,
                 api_key,
                 api_base: api_base.clone(),
@@ -301,17 +301,17 @@ pub async fn handle_endpoint(
                 proxies: proxies.map(|p| parse_comma_list(&p)).unwrap_or_default(),
             };
             if json_output {
-                let raw = client.post_raw("/endpoints", &body).await?;
+                let raw = client.post_raw("/upstreams", &body).await?;
                 println!("{}", raw);
             } else {
-                println!("Adding endpoint {}...", api_base);
-                let resp: EndpointWithModelsResponse = client.post("/endpoints", &body).await?;
+                println!("Adding upstream {}...", api_base);
+                let resp: UpstreamWithModelsResponse = client.post("/upstreams", &body).await?;
                 println!();
-                print_endpoint_with_models(&resp);
+                print_upstream_with_models(&resp);
             }
         }
-        EndpointAction::Update {
-            endpoint,
+        UpstreamAction::Update {
+            upstream,
             name,
             provider,
             description,
@@ -319,8 +319,8 @@ pub async fn handle_endpoint(
             proxies,
             status,
         } => {
-            let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
-            let body = UpdateEndpointRequestBody {
+            let upstream_id = resolve_upstream_id(&upstream, client).await?;
+            let body = UpdateUpstreamRequestBody {
                 name,
                 provider,
                 tags: tags.map(|t| parse_comma_list(&t)),
@@ -330,28 +330,28 @@ pub async fn handle_endpoint(
             };
             if json_output {
                 let raw = client
-                    .put_raw(&format!("/endpoints/{}", endpoint_id), &body)
+                    .put_raw(&format!("/upstreams/{}", upstream_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: EndpointResponse = client
-                    .put(&format!("/endpoints/{}", endpoint_id), &body)
+                let resp: UpstreamResponse = client
+                    .put(&format!("/upstreams/{}", upstream_id), &body)
                     .await?;
-                print_endpoint_detail(&resp);
+                print_upstream_detail(&resp);
             }
         }
-        EndpointAction::Listtags { endpoint } => {
-            let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
+        UpstreamAction::Listtags { upstream } => {
+            let upstream_id = resolve_upstream_id(&upstream, client).await?;
             if json_output {
                 let raw = client
-                    .get_raw(&format!("/endpoints/{}/tags", endpoint_id))
+                    .get_raw(&format!("/upstreams/{}/tags", upstream_id))
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
-                    .get(&format!("/endpoints/{}/tags", endpoint_id))
+                    .get(&format!("/upstreams/{}/tags", upstream_id))
                     .await?;
-                println!("Tags for endpoint {} (ID: {}):", endpoint, resp.endpoint_id);
+                println!("Tags for upstream {} (ID: {}):", upstream, resp.upstream_id);
                 if resp.tags.is_empty() {
                     println!("  (no tags)");
                 } else {
@@ -361,21 +361,21 @@ pub async fn handle_endpoint(
                 }
             }
         }
-        EndpointAction::Addtag { endpoint, tag } => {
-            let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
+        UpstreamAction::Addtag { upstream, tag } => {
+            let upstream_id = resolve_upstream_id(&upstream, client).await?;
             let body = AddTagRequestBody { tag: tag.clone() };
             if json_output {
                 let raw = client
-                    .post_raw(&format!("/endpoints/{}/tags", endpoint_id), &body)
+                    .post_raw(&format!("/upstreams/{}/tags", upstream_id), &body)
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
-                    .post(&format!("/endpoints/{}/tags", endpoint_id), &body)
+                    .post(&format!("/upstreams/{}/tags", upstream_id), &body)
                     .await?;
                 println!(
-                    "Tag '{}' added to endpoint {} (ID: {}).",
-                    tag, endpoint, resp.endpoint_id
+                    "Tag '{}' added to upstream {} (ID: {}).",
+                    tag, upstream, resp.upstream_id
                 );
                 println!("Current tags:");
                 for t in &resp.tags {
@@ -383,20 +383,20 @@ pub async fn handle_endpoint(
                 }
             }
         }
-        EndpointAction::Deltag { endpoint, tag } => {
-            let endpoint_id = resolve_endpoint_id(&endpoint, client).await?;
+        UpstreamAction::Deltag { upstream, tag } => {
+            let upstream_id = resolve_upstream_id(&upstream, client).await?;
             if json_output {
                 let raw = client
-                    .delete_raw(&format!("/endpoints/{}/tags/{}", endpoint_id, tag))
+                    .delete_raw(&format!("/upstreams/{}/tags/{}", upstream_id, tag))
                     .await?;
                 println!("{}", raw);
             } else {
                 let resp: TagsResponse = client
-                    .delete(&format!("/endpoints/{}/tags/{}", endpoint_id, tag))
+                    .delete(&format!("/upstreams/{}/tags/{}", upstream_id, tag))
                     .await?;
                 println!(
-                    "Tag '{}' removed from endpoint {} (ID: {}).",
-                    tag, endpoint, resp.endpoint_id
+                    "Tag '{}' removed from upstream {} (ID: {}).",
+                    tag, upstream, resp.upstream_id
                 );
                 println!("Current tags:");
                 if resp.tags.is_empty() {

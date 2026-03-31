@@ -40,14 +40,14 @@ async fn create_test_account(
         .expect("Failed to create test account")
 }
 
-/// Helper: create an endpoint within a transaction (no encryption)
-async fn create_test_endpoint(
+/// Helper: create an upstream within a transaction (no encryption)
+async fn create_test_upstream(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     name: &str,
     api_base: &str,
-) -> LLMEndpoint {
-    sqlx::query_as::<_, LLMEndpoint>(
-        "INSERT INTO llm_endpoints (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
+) -> LLMUpstream {
+    sqlx::query_as::<_, LLMUpstream>(
+        "INSERT INTO llm_upstreams (name, api_base, api_key, has_responses_api, tags, proxies, status, description)
          VALUES ($1, $2, 'test-key', false, '{}', '{}', 'online', '')
          RETURNING *",
     )
@@ -55,21 +55,21 @@ async fn create_test_endpoint(
     .bind(api_base)
     .fetch_one(&mut **tx)
     .await
-    .expect("Failed to create test endpoint")
+    .expect("Failed to create test upstream")
 }
 
 /// Helper: create a model within a transaction
 async fn create_test_model(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    endpoint_id: i32,
+    upstream_id: i32,
     model_id: &str,
 ) -> LLMModel {
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (endpoint_id, model_id, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
+        "INSERT INTO llm_models (upstream_id, model_id, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
          VALUES ($1, $2, true, false, false, false, 0.000001, 0.000001)
          RETURNING *",
     )
-    .bind(endpoint_id)
+    .bind(upstream_id)
     .bind(model_id)
     .fetch_one(&mut **tx)
     .await
@@ -578,39 +578,39 @@ mod api_key_tests {
 }
 
 // ============================================================
-// OpenAI Endpoint & Model DB Tests
+// OpenAI Upstream & Model DB Tests
 // ============================================================
 
 mod openai_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_create_endpoint() {
+    async fn test_create_upstream() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint = create_test_endpoint(&mut tx, "test-ep", "https://api.test.com/v1").await;
+        let upstream = create_test_upstream(&mut tx, "test-ep", "https://api.test.com/v1").await;
 
-        assert_eq!(endpoint.name, "test-ep");
-        assert_eq!(endpoint.api_base, "https://api.test.com/v1");
-        assert_eq!(endpoint.api_key, "test-key");
-        assert!(!endpoint.has_responses_api);
-        assert_eq!(endpoint.status, "online");
-        assert!(endpoint.tags.is_empty());
-        assert!(endpoint.proxies.is_empty());
+        assert_eq!(upstream.name, "test-ep");
+        assert_eq!(upstream.api_base, "https://api.test.com/v1");
+        assert_eq!(upstream.api_key, "test-key");
+        assert!(!upstream.has_responses_api);
+        assert_eq!(upstream.status, "online");
+        assert!(upstream.tags.is_empty());
+        assert!(upstream.proxies.is_empty());
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_create_endpoint_duplicate_api_base() {
+    async fn test_create_upstream_duplicate_api_base() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        create_test_endpoint(&mut tx, "ep1", "https://api.dup.com/v1").await;
+        create_test_upstream(&mut tx, "ep1", "https://api.dup.com/v1").await;
 
-        let result = sqlx::query_as::<_, LLMEndpoint>(
-            "INSERT INTO llm_endpoints (name, api_base, api_key) VALUES ($1, $2, $3) RETURNING *",
+        let result = sqlx::query_as::<_, LLMUpstream>(
+            "INSERT INTO llm_upstreams (name, api_base, api_key) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind("ep2")
         .bind("https://api.dup.com/v1")
@@ -624,15 +624,15 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_get_endpoint_by_id() {
+    async fn test_get_upstream_by_id() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "test-get-ep", "https://api.getep.com/v1").await;
+        let upstream =
+            create_test_upstream(&mut tx, "test-get-ep", "https://api.getep.com/v1").await;
 
-        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint.id)
+        let found = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
+            .bind(upstream.id)
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -643,13 +643,13 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_get_endpoint_by_name() {
+    async fn test_get_upstream_by_name() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        create_test_endpoint(&mut tx, "test-name-ep", "https://api.nameep.com/v1").await;
+        create_test_upstream(&mut tx, "test-name-ep", "https://api.nameep.com/v1").await;
 
-        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE name = $1")
+        let found = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE name = $1")
             .bind("test-name-ep")
             .fetch_one(&mut *tx)
             .await
@@ -661,19 +661,19 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_update_endpoint() {
+    async fn test_update_upstream() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "test-update-ep", "https://api.updateep.com/v1").await;
+        let upstream =
+            create_test_upstream(&mut tx, "test-update-ep", "https://api.updateep.com/v1").await;
 
-        let updated = sqlx::query_as::<_, LLMEndpoint>(
-            "UPDATE llm_endpoints SET name = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMUpstream>(
+            "UPDATE llm_upstreams SET name = $1, status = $2, updated_at = NOW() WHERE id = $3 RETURNING *",
         )
         .bind("updated-ep-name")
         .bind("offline")
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -685,15 +685,15 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_delete_endpoint() {
+    async fn test_delete_upstream() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "test-delete-ep", "https://api.deleteep.com/v1").await;
+        let upstream =
+            create_test_upstream(&mut tx, "test-delete-ep", "https://api.deleteep.com/v1").await;
 
-        let result = sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint.id)
+        let result = sqlx::query("DELETE FROM llm_upstreams WHERE id = $1")
+            .bind(upstream.id)
             .execute(&mut *tx)
             .await
             .unwrap();
@@ -701,8 +701,8 @@ mod openai_tests {
         assert_eq!(result.rows_affected(), 1);
 
         // Verify it's gone
-        let found = sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint.id)
+        let found = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
+            .bind(upstream.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
@@ -713,19 +713,19 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_count_endpoints() {
+    async fn test_count_upstreams() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
+        let before: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_upstreams")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
 
-        create_test_endpoint(&mut tx, "count-ep-1", "https://api.count1.com/v1").await;
-        create_test_endpoint(&mut tx, "count-ep-2", "https://api.count2.com/v1").await;
+        create_test_upstream(&mut tx, "count-ep-1", "https://api.count1.com/v1").await;
+        create_test_upstream(&mut tx, "count-ep-2", "https://api.count2.com/v1").await;
 
-        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_endpoints")
+        let after: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM llm_upstreams")
             .fetch_one(&mut *tx)
             .await
             .unwrap();
@@ -736,17 +736,17 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_endpoint_tags() {
+    async fn test_upstream_tags() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint = create_test_endpoint(&mut tx, "tag-ep", "https://api.tagep.com/v1").await;
+        let upstream = create_test_upstream(&mut tx, "tag-ep", "https://api.tagep.com/v1").await;
 
         // Add a tag
-        let updated = sqlx::query_as::<_, LLMEndpoint>(
-            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMUpstream>(
+            "UPDATE llm_upstreams SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("production")
         .fetch_one(&mut *tx)
         .await
@@ -755,10 +755,10 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production"]);
 
         // Add another tag
-        let updated = sqlx::query_as::<_, LLMEndpoint>(
-            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMUpstream>(
+            "UPDATE llm_upstreams SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("fast")
         .fetch_one(&mut *tx)
         .await
@@ -767,10 +767,10 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production", "fast"]);
 
         // Adding duplicate tag should not change
-        let updated = sqlx::query_as::<_, LLMEndpoint>(
-            "UPDATE llm_endpoints SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMUpstream>(
+            "UPDATE llm_upstreams SET tags = CASE WHEN $2 = ANY(tags) THEN tags ELSE array_append(tags, $2) END, updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("production")
         .fetch_one(&mut *tx)
         .await
@@ -779,10 +779,10 @@ mod openai_tests {
         assert_eq!(updated.tags, vec!["production", "fast"]);
 
         // Remove a tag
-        let updated = sqlx::query_as::<_, LLMEndpoint>(
-            "UPDATE llm_endpoints SET tags = array_remove(tags, $2), updated_at = NOW() WHERE id = $1 RETURNING *",
+        let updated = sqlx::query_as::<_, LLMUpstream>(
+            "UPDATE llm_upstreams SET tags = array_remove(tags, $2), updated_at = NOW() WHERE id = $1 RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("production")
         .fetch_one(&mut *tx)
         .await
@@ -794,18 +794,18 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_find_endpoints_by_tag() {
+    async fn test_find_upstreams_by_tag() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        // Create endpoints with different tags
+        // Create upstreams with different tags
         let ep1 =
-            create_test_endpoint(&mut tx, "tag-search-1", "https://api.tagsearch1.com/v1").await;
+            create_test_upstream(&mut tx, "tag-search-1", "https://api.tagsearch1.com/v1").await;
         let _ep2 =
-            create_test_endpoint(&mut tx, "tag-search-2", "https://api.tagsearch2.com/v1").await;
+            create_test_upstream(&mut tx, "tag-search-2", "https://api.tagsearch2.com/v1").await;
 
         // Add tag to ep1 only
-        sqlx::query("UPDATE llm_endpoints SET tags = array_append(tags, $2) WHERE id = $1")
+        sqlx::query("UPDATE llm_upstreams SET tags = array_append(tags, $2) WHERE id = $1")
             .bind(ep1.id)
             .bind("special")
             .execute(&mut *tx)
@@ -813,7 +813,7 @@ mod openai_tests {
             .unwrap();
 
         let found =
-            sqlx::query_as::<_, LLMEndpoint>("SELECT * FROM llm_endpoints WHERE $1 = ANY(tags)")
+            sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE $1 = ANY(tags)")
                 .bind("special")
                 .fetch_all(&mut *tx)
                 .await
@@ -830,11 +830,11 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "model-ep", "https://api.modelep.com/v1").await;
-        let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
+        let upstream =
+            create_test_upstream(&mut tx, "model-ep", "https://api.modelep.com/v1").await;
+        let model = create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
-        assert_eq!(model.endpoint_id, endpoint.id);
+        assert_eq!(model.upstream_id, upstream.id);
         assert_eq!(model.model_id, "gpt-4");
         assert!(model.has_chat_completion);
         assert!(!model.has_embedding);
@@ -849,40 +849,40 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "dup-model-ep", "https://api.dupmodel.com/v1").await;
-        create_test_model(&mut tx, endpoint.id, "gpt-4").await;
+        let upstream =
+            create_test_upstream(&mut tx, "dup-model-ep", "https://api.dupmodel.com/v1").await;
+        create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
-        // Duplicate (endpoint_id, model_id) should fail
+        // Duplicate (upstream_id, model_id) should fail
         let result = sqlx::query_as::<_, LLMModel>(
-            "INSERT INTO llm_models (endpoint_id, model_id) VALUES ($1, $2) RETURNING *",
+            "INSERT INTO llm_models (upstream_id, model_id) VALUES ($1, $2) RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("gpt-4")
         .fetch_one(&mut *tx)
         .await;
 
         assert!(
             result.is_err(),
-            "Duplicate (endpoint_id, model_id) should fail"
+            "Duplicate (upstream_id, model_id) should fail"
         );
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_list_models_by_endpoint() {
+    async fn test_list_models_by_upstream() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "list-model-ep", "https://api.listmodel.com/v1").await;
-        create_test_model(&mut tx, endpoint.id, "gpt-4").await;
-        create_test_model(&mut tx, endpoint.id, "gpt-3.5-turbo").await;
+        let upstream =
+            create_test_upstream(&mut tx, "list-model-ep", "https://api.listmodel.com/v1").await;
+        create_test_model(&mut tx, upstream.id, "gpt-4").await;
+        create_test_model(&mut tx, upstream.id, "gpt-3.5-turbo").await;
 
         let models =
-            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE endpoint_id = $1")
-                .bind(endpoint.id)
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE upstream_id = $1")
+                .bind(upstream.id)
                 .fetch_all(&mut *tx)
                 .await
                 .unwrap();
@@ -897,9 +897,9 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "get-model-ep", "https://api.getmodel.com/v1").await;
-        let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
+        let upstream =
+            create_test_upstream(&mut tx, "get-model-ep", "https://api.getmodel.com/v1").await;
+        let model = create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
         let found = sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
             .bind(model.id)
@@ -913,25 +913,25 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_find_model_by_endpoint_and_model_id() {
+    async fn test_find_model_by_upstream_and_model_id() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "find-model-ep", "https://api.findmodel.com/v1").await;
-        create_test_model(&mut tx, endpoint.id, "claude-3").await;
+        let upstream =
+            create_test_upstream(&mut tx, "find-model-ep", "https://api.findmodel.com/v1").await;
+        create_test_model(&mut tx, upstream.id, "claude-3").await;
 
         let found = sqlx::query_as::<_, LLMModel>(
-            "SELECT * FROM llm_models WHERE endpoint_id = $1 AND model_id = $2",
+            "SELECT * FROM llm_models WHERE upstream_id = $1 AND model_id = $2",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("claude-3")
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
         assert_eq!(found.model_id, "claude-3");
-        assert_eq!(found.endpoint_id, endpoint.id);
+        assert_eq!(found.upstream_id, upstream.id);
 
         tx.rollback().await.unwrap();
     }
@@ -941,9 +941,9 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "upd-model-ep", "https://api.updmodel.com/v1").await;
-        let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
+        let upstream =
+            create_test_upstream(&mut tx, "upd-model-ep", "https://api.updmodel.com/v1").await;
+        let model = create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
         let updated = sqlx::query_as::<_, LLMModel>(
             "UPDATE llm_models SET has_embedding = true, has_image_generation = true, updated_at = NOW() WHERE id = $1 RETURNING *",
@@ -965,9 +965,9 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "del-model-ep", "https://api.delmodel.com/v1").await;
-        let model = create_test_model(&mut tx, endpoint.id, "gpt-4").await;
+        let upstream =
+            create_test_upstream(&mut tx, "del-model-ep", "https://api.delmodel.com/v1").await;
+        let model = create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
         let result = sqlx::query("DELETE FROM llm_models WHERE id = $1")
             .bind(model.id)
@@ -981,30 +981,30 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_models_cascade_delete_on_endpoint() {
+    async fn test_models_cascade_delete_on_upstream() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint = create_test_endpoint(
+        let upstream = create_test_upstream(
             &mut tx,
             "cascade-model-ep",
             "https://api.cascademodel.com/v1",
         )
         .await;
-        create_test_model(&mut tx, endpoint.id, "gpt-4").await;
-        create_test_model(&mut tx, endpoint.id, "gpt-3.5").await;
+        create_test_model(&mut tx, upstream.id, "gpt-4").await;
+        create_test_model(&mut tx, upstream.id, "gpt-3.5").await;
 
-        // Delete endpoint
-        sqlx::query("DELETE FROM llm_endpoints WHERE id = $1")
-            .bind(endpoint.id)
+        // Delete upstream
+        sqlx::query("DELETE FROM llm_upstreams WHERE id = $1")
+            .bind(upstream.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
         // Models should be gone (CASCADE)
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM llm_models WHERE endpoint_id = $1")
-                .bind(endpoint.id)
+            sqlx::query_as("SELECT COUNT(*) FROM llm_models WHERE upstream_id = $1")
+                .bind(upstream.id)
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();
@@ -1020,10 +1020,10 @@ mod openai_tests {
         let mut tx = pool.begin().await.unwrap();
 
         let ep1 =
-            create_test_endpoint(&mut tx, "first-model-ep1", "https://api.firstmodel1.com/v1")
+            create_test_upstream(&mut tx, "first-model-ep1", "https://api.firstmodel1.com/v1")
                 .await;
         let ep2 =
-            create_test_endpoint(&mut tx, "first-model-ep2", "https://api.firstmodel2.com/v1")
+            create_test_upstream(&mut tx, "first-model-ep2", "https://api.firstmodel2.com/v1")
                 .await;
 
         create_test_model(&mut tx, ep1.id, "shared-model").await;
@@ -1042,12 +1042,12 @@ mod openai_tests {
     }
 
     #[tokio::test]
-    async fn test_list_endpoints_paginated() {
+    async fn test_list_upstreams_paginated() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
         for i in 0..5 {
-            create_test_endpoint(
+            create_test_upstream(
                 &mut tx,
                 &format!("paged-ep-{}", i),
                 &format!("https://api.paged{}.com/v1", i),
@@ -1055,8 +1055,8 @@ mod openai_tests {
             .await;
         }
 
-        let page = sqlx::query_as::<_, LLMEndpoint>(
-            "SELECT * FROM llm_endpoints ORDER BY id ASC LIMIT $1 OFFSET $2",
+        let page = sqlx::query_as::<_, LLMUpstream>(
+            "SELECT * FROM llm_upstreams ORDER BY id ASC LIMIT $1 OFFSET $2",
         )
         .bind(3i64)
         .bind(0i64)
@@ -1074,14 +1074,14 @@ mod openai_tests {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let endpoint =
-            create_test_endpoint(&mut tx, "price-ep", "https://api.priceep.com/v1").await;
+        let upstream =
+            create_test_upstream(&mut tx, "price-ep", "https://api.priceep.com/v1").await;
 
         let model = sqlx::query_as::<_, LLMModel>(
-            "INSERT INTO llm_models (endpoint_id, model_id, input_token_price, output_token_price)
+            "INSERT INTO llm_models (upstream_id, model_id, input_token_price, output_token_price)
              VALUES ($1, $2, $3, $4) RETURNING *",
         )
-        .bind(endpoint.id)
+        .bind(upstream.id)
         .bind("expensive-model")
         .bind(BigDecimal::from_str("0.03").unwrap())
         .bind(BigDecimal::from_str("0.06").unwrap())
@@ -1899,14 +1899,14 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_endpoint_with_models_and_session_events() {
+    async fn test_upstream_with_models_and_session_events() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        // Create endpoint and model
-        let endpoint =
-            create_test_endpoint(&mut tx, "integration-ep", "https://api.integration.com/v1").await;
-        let model = create_test_model(&mut tx, endpoint.id, "gpt-4-integration").await;
+        // Create upstream and model
+        let upstream =
+            create_test_upstream(&mut tx, "integration-ep", "https://api.integration.com/v1").await;
+        let model = create_test_model(&mut tx, upstream.id, "gpt-4-integration").await;
 
         // Create account and API key
         let account = create_test_account(&mut tx, "integration_ep_account").await;

@@ -299,31 +299,31 @@ pub async fn check_fund_balance(state: &AppState, account_id: i32) -> Result<(),
     Ok(())
 }
 
-/// Select the first available endpoint from the database.
-/// Returns an error Response if no endpoint is found.
-pub(super) async fn select_first_endpoint(
+/// Select the first available upstream from the database.
+/// Returns an error Response if no upstream is found.
+pub(super) async fn select_first_upstream(
     state: &AppState,
-) -> Result<crate::models::LLMEndpoint, Response> {
-    match db::openai::list_endpoints(&state.pool).await {
-        Ok(endpoints) if !endpoints.is_empty() => Ok(endpoints.into_iter().next().unwrap()),
+) -> Result<crate::models::LLMUpstream, Response> {
+    match db::openai::list_upstreams(&state.pool).await {
+        Ok(upstreams) if !upstreams.is_empty() => Ok(upstreams.into_iter().next().unwrap()),
         Ok(_) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
             Json(serde_json::json!({
                 "error": {
-                    "message": "No upstream endpoints configured.",
+                    "message": "No upstream upstreams configured.",
                     "type": "server_error",
-                    "code": "no_endpoint"
+                    "code": "no_upstream"
                 }
             })),
         )
             .into_response()),
         Err(e) => {
-            warn!(error = %e, "Failed to query endpoints for files/batches proxy");
+            warn!(error = %e, "Failed to query upstreams for files/batches proxy");
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({
                     "error": {
-                        "message": "Internal server error while selecting endpoint.",
+                        "message": "Internal server error while selecting upstream.",
                         "type": "server_error",
                         "code": "internal_error"
                     }
@@ -334,24 +334,24 @@ pub(super) async fn select_first_endpoint(
     }
 }
 
-/// Build an async-openai Client from an LLMEndpoint (no model_id needed).
-pub(super) fn build_client_from_endpoint(
-    endpoint: &crate::models::LLMEndpoint,
+/// Build an async-openai Client from an LLMUpstream (no model_id needed).
+pub(super) fn build_client_from_upstream(
+    upstream: &crate::models::LLMUpstream,
 ) -> async_openai::Client<async_openai::config::OpenAIConfig> {
     use async_openai::{Client, config::OpenAIConfig};
 
     let config = OpenAIConfig::new()
-        .with_api_key(endpoint.api_key.clone())
-        .with_api_base(endpoint.api_base.clone());
+        .with_api_key(upstream.api_key.clone())
+        .with_api_base(upstream.api_base.clone());
 
-    if !endpoint.proxies.is_empty() {
+    if !upstream.proxies.is_empty() {
         use rand::seq::IndexedRandom;
         let mut rng = rand::rng();
-        if let Some(proxy_url) = endpoint.proxies.choose(&mut rng) {
+        if let Some(proxy_url) = upstream.proxies.choose(&mut rng) {
             info!(
-                endpoint_name = %endpoint.name,
+                upstream_name = %upstream.name,
                 proxy = %proxy_url,
-                "OpenAI proxy: using proxy for endpoint (batches)"
+                "OpenAI proxy: using proxy for upstream (batches)"
             );
             let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
             let http_client = reqwest::Client::builder()
@@ -364,11 +364,11 @@ pub(super) fn build_client_from_endpoint(
     Client::with_config(config)
 }
 
-/// Build a Client from an (LLMModel, LLMEndpoint) pair.
-/// If the endpoint has proxies configured, a random one is selected and used.
-pub(super) fn build_client_from_model_endpoint(
+/// Build a Client from an (LLMModel, LLMUpstream) pair.
+/// If the upstream has proxies configured, a random one is selected and used.
+pub(super) fn build_client_from_model_upstream(
     model: &crate::models::LLMModel,
-    endpoint: &crate::models::LLMEndpoint,
+    upstream: &crate::models::LLMUpstream,
 ) -> (
     async_openai::Client<async_openai::config::OpenAIConfig>,
     i32,
@@ -376,17 +376,17 @@ pub(super) fn build_client_from_model_endpoint(
     use async_openai::{Client, config::OpenAIConfig};
 
     let config = OpenAIConfig::new()
-        .with_api_key(endpoint.api_key.clone())
-        .with_api_base(endpoint.api_base.clone());
+        .with_api_key(upstream.api_key.clone())
+        .with_api_base(upstream.api_base.clone());
 
-    let client = if !endpoint.proxies.is_empty() {
+    let client = if !upstream.proxies.is_empty() {
         use rand::seq::IndexedRandom;
         let mut rng = rand::rng();
-        if let Some(proxy_url) = endpoint.proxies.choose(&mut rng) {
+        if let Some(proxy_url) = upstream.proxies.choose(&mut rng) {
             info!(
-                endpoint_name = %endpoint.name,
+                upstream_name = %upstream.name,
                 proxy = %proxy_url,
-                "OpenAI proxy: using proxy for endpoint"
+                "OpenAI proxy: using proxy for upstream"
             );
             let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
             let http_client = reqwest::Client::builder()
@@ -443,7 +443,7 @@ pub(super) async fn select_model_clients(
     let model_ids: Vec<i32> = models.iter().map(|(m, _)| m.id).collect();
     let usages = get_output_token_usage_batch(redis_pool, &model_ids).await;
 
-    let mut models_with_usage: Vec<(i64, &(crate::models::LLMModel, crate::models::LLMEndpoint))> =
+    let mut models_with_usage: Vec<(i64, &(crate::models::LLMModel, crate::models::LLMUpstream))> =
         usages.into_iter().zip(models.iter()).collect();
 
     models_with_usage.sort_by_key(|(usage, _)| *usage);
@@ -451,15 +451,15 @@ pub(super) async fn select_model_clients(
 
     models_with_usage
         .into_iter()
-        .map(|(usage, (model, endpoint))| {
+        .map(|(usage, (model, upstream))| {
             info!(
                 model = model_name,
-                endpoint_name = endpoint.name,
-                api_base = endpoint.api_base,
+                upstream_name = upstream.name,
+                api_base = upstream.api_base,
                 output_token_usage = usage,
-                "Selected endpoint candidate by lowest output token usage"
+                "Selected upstream candidate by lowest output token usage"
             );
-            build_client_from_model_endpoint(model, endpoint)
+            build_client_from_model_upstream(model, upstream)
         })
         .collect()
 }

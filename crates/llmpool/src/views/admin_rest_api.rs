@@ -89,11 +89,11 @@ struct PaginationInfo {
     total_pages: i64,
 }
 
-// --- Endpoint Response DTO ---
+// --- Upstream Response DTO ---
 
-/// Response DTO for an endpoint (excludes sensitive api_key field)
+/// Response DTO for an upstream (excludes sensitive api_key field)
 #[derive(Serialize)]
-struct EndpointResponse {
+struct UpstreamResponse {
     id: i32,
     name: String,
     api_base: String,
@@ -107,8 +107,8 @@ struct EndpointResponse {
     updated_at: String,
 }
 
-impl From<crate::models::LLMEndpoint> for EndpointResponse {
-    fn from(ep: crate::models::LLMEndpoint) -> Self {
+impl From<crate::models::LLMUpstream> for UpstreamResponse {
+    fn from(ep: crate::models::LLMUpstream) -> Self {
         Self {
             id: ep.id,
             name: ep.name,
@@ -220,14 +220,14 @@ impl From<crate::models::ApiCredential> for ApiCredentialResponse {
 
 // --- Handlers ---
 
-/// GET /api/v1/endpoints
+/// GET /api/v1/upstreams
 ///
-/// Returns a paginated list of OpenAI endpoints.
+/// Returns a paginated list of OpenAI upstreams.
 ///
 /// Query parameters:
 /// - `page` (optional, default: 1): Page number (1-based)
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
-async fn list_endpoints(
+async fn list_upstreams(
     State(state): State<Arc<AppState>>,
     Query(params): Query<PaginationParams>,
 ) -> Response {
@@ -237,28 +237,28 @@ async fn list_endpoints(
     let offset = (page - 1) * page_size;
 
     // Get total count
-    let total = match db::openai::count_endpoints(&state.pool).await {
+    let total = match db::openai::count_upstreams(&state.pool).await {
         Ok(count) => count,
         Err(e) => {
-            warn!(error = %e, "Failed to count endpoints");
+            warn!(error = %e, "Failed to count upstreams");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query endpoints",
+                "Failed to query upstreams",
             );
         }
     };
 
-    // Get paginated endpoints
-    let endpoints = match db::openai::list_endpoints_paginated(&state.pool, offset, page_size).await
+    // Get paginated upstreams
+    let upstreams = match db::openai::list_upstreams_paginated(&state.pool, offset, page_size).await
     {
         Ok(eps) => eps,
         Err(e) => {
-            warn!(error = %e, "Failed to list endpoints");
+            warn!(error = %e, "Failed to list upstreams");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query endpoints",
+                "Failed to query upstreams",
             );
         }
     };
@@ -269,7 +269,7 @@ async fn list_endpoints(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<EndpointResponse> = endpoints.into_iter().map(EndpointResponse::from).collect();
+    let data: Vec<UpstreamResponse> = upstreams.into_iter().map(UpstreamResponse::from).collect();
 
     Json(PaginatedResponse {
         data,
@@ -846,16 +846,16 @@ async fn delete_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<St
     }
 }
 
-// --- Endpoint Test DTOs ---
+// --- Upstream Test DTOs ---
 
 // --- Model List Query Params ---
 
 #[derive(Debug, Deserialize)]
 struct ListModelsParams {
-    /// Filter by endpoint ID
-    endpoint_id: Option<i32>,
-    /// Filter by endpoint name
-    endpoint_name: Option<String>,
+    /// Filter by upstream ID
+    upstream_id: Option<i32>,
+    /// Filter by upstream name
+    upstream_name: Option<String>,
     /// Filter by model name (model_id)
     name: Option<String>,
     /// Page number (1-based), defaults to 1
@@ -873,8 +873,8 @@ struct ListModelsParams {
 /// Returns a paginated list of OpenAI models with optional filters.
 ///
 /// Query parameters:
-/// - `endpoint_id` (optional): Filter by endpoint ID
-/// - `endpoint_name` (optional): Filter by endpoint name
+/// - `upstream_id` (optional): Filter by upstream ID
+/// - `upstream_name` (optional): Filter by upstream name
 /// - `name` (optional): Filter by model name (model_id)
 /// - `page` (optional, default: 1): Page number (1-based)
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
@@ -887,8 +887,8 @@ async fn list_models(
     let offset = (page - 1) * page_size;
 
     let filter = db::openai::ListModelsFilter {
-        endpoint_id: params.endpoint_id,
-        endpoint_name: params.endpoint_name,
+        upstream_id: params.upstream_id,
+        upstream_name: params.upstream_name,
         name: params.name,
     };
 
@@ -941,9 +941,9 @@ async fn list_models(
     .into_response()
 }
 
-/// Request body for creating a new OpenAI endpoint
+/// Request body for creating a new OpenAI upstream
 #[derive(Deserialize)]
-struct CreateEndpointRequest {
+struct CreateUpstreamRequest {
     name: String,
     api_key: String,
     api_base: String,
@@ -959,9 +959,9 @@ fn default_provider() -> String {
     "openai".to_string()
 }
 
-/// Request body for testing an OpenAI endpoint
+/// Request body for testing an OpenAI upstream
 #[derive(Deserialize)]
-struct TestEndpointRequest {
+struct TestUpstreamRequest {
     api_key: String,
     api_base: String,
 }
@@ -970,7 +970,7 @@ struct TestEndpointRequest {
 #[derive(Serialize)]
 struct ModelResponse {
     id: i32,
-    endpoint_id: i32,
+    upstream_id: i32,
     model_id: String,
     has_chat_completion: bool,
     has_embedding: bool,
@@ -987,7 +987,7 @@ impl From<crate::models::LLMModel> for ModelResponse {
     fn from(m: crate::models::LLMModel) -> Self {
         Self {
             id: m.id,
-            endpoint_id: m.endpoint_id,
+            upstream_id: m.upstream_id,
             model_id: m.model_id,
             has_chat_completion: m.has_chat_completion,
             has_embedding: m.has_embedding,
@@ -1002,10 +1002,10 @@ impl From<crate::models::LLMModel> for ModelResponse {
     }
 }
 
-/// Response DTO for an endpoint with its models
+/// Response DTO for an upstream with its models
 #[derive(Serialize)]
-struct EndpointWithModelsResponse {
-    endpoint: EndpointResponse,
+struct UpstreamWithModelsResponse {
+    upstream: UpstreamResponse,
     models: Vec<ModelResponse>,
 }
 
@@ -1020,27 +1020,27 @@ struct ModelFeaturesResponse {
     has_speech: bool,
 }
 
-/// Response DTO for endpoint feature detection results
+/// Response DTO for upstream feature detection results
 #[derive(Serialize)]
-struct TestEndpointResponse {
+struct TestUpstreamResponse {
     has_responses_api: bool,
     models: Vec<ModelFeaturesResponse>,
 }
 
-// --- Endpoint Create Handler ---
+// --- Upstream Create Handler ---
 
-/// POST /api/v1/endpoints
+/// POST /api/v1/upstreams
 ///
-/// Creates a new OpenAI-compatible endpoint by detecting its features and saving
-/// the endpoint along with its models to the database.
+/// Creates a new OpenAI-compatible upstream by detecting its features and saving
+/// the upstream along with its models to the database.
 ///
 /// Request body (JSON):
-/// - `name` (required): A display name for the endpoint
-/// - `api_key` (required): The API key for the endpoint
-/// - `api_base` (required): The base URL of the endpoint
-async fn create_endpoint(
+/// - `name` (required): A display name for the upstream
+/// - `api_key` (required): The API key for the upstream
+/// - `api_base` (required): The base URL of the upstream
+async fn create_upstream(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<CreateEndpointRequest>,
+    Json(payload): Json<CreateUpstreamRequest>,
 ) -> Response {
     if payload.name.trim().is_empty() {
         return error_response(
@@ -1074,15 +1074,15 @@ async fn create_endpoint(
     .await
     {
         Ok(()) => {
-            // Fetch the saved endpoint and update tags if provided
-            match db::openai::get_endpoint_by_api_base(&state.pool, payload.api_base.trim()).await {
-                Ok(endpoint) => {
+            // Fetch the saved upstream and update tags if provided
+            match db::openai::get_upstream_by_api_base(&state.pool, payload.api_base.trim()).await {
+                Ok(upstream) => {
                     // Update provider, tags and proxies if the request included them
-                    let endpoint = if payload.provider != "openai"
+                    let upstream = if payload.provider != "openai"
                         || !payload.tags.is_empty()
                         || !payload.proxies.is_empty()
                     {
-                        let update = crate::models::UpdateLLMEndpoint {
+                        let update = crate::models::UpdateLLMUpstream {
                             name: None,
                             api_base: None,
                             api_key: None,
@@ -1102,26 +1102,26 @@ async fn create_endpoint(
                             description: None,
                             updated_at: None,
                         };
-                        match db::openai::update_endpoint(&state.pool, endpoint.id, &update).await {
+                        match db::openai::update_upstream(&state.pool, upstream.id, &update).await {
                             Ok(ep) => ep,
                             Err(e) => {
-                                warn!(error = %e, "Failed to update endpoint tags");
-                                endpoint
+                                warn!(error = %e, "Failed to update upstream tags");
+                                upstream
                             }
                         }
                     } else {
-                        endpoint
+                        upstream
                     };
-                    // Also fetch the models for this endpoint
+                    // Also fetch the models for this upstream
                     let models =
-                        match db::openai::list_models_by_endpoint(&state.pool, endpoint.id).await {
+                        match db::openai::list_models_by_upstream(&state.pool, upstream.id).await {
                             Ok(models) => models,
                             Err(e) => {
-                                warn!(error = %e, "Failed to list models for endpoint");
+                                warn!(error = %e, "Failed to list models for upstream");
                                 return error_response(
                                     StatusCode::INTERNAL_SERVER_ERROR,
                                     "database_error",
-                                    "Endpoint created but failed to retrieve models",
+                                    "Upstream created but failed to retrieve models",
                                 );
                             }
                         };
@@ -1131,45 +1131,45 @@ async fn create_endpoint(
 
                     (
                         StatusCode::CREATED,
-                        Json(EndpointWithModelsResponse {
-                            endpoint: EndpointResponse::from(endpoint),
+                        Json(UpstreamWithModelsResponse {
+                            upstream: UpstreamResponse::from(upstream),
                             models: model_responses,
                         }),
                     )
                         .into_response()
                 }
                 Err(e) => {
-                    warn!(error = %e, "Failed to retrieve created endpoint");
+                    warn!(error = %e, "Failed to retrieve created upstream");
                     error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
                         "database_error",
-                        "Endpoint created but failed to retrieve it",
+                        "Upstream created but failed to retrieve it",
                     )
                 }
             }
         }
         Err(e) => {
-            warn!(error = %e, "Failed to detect and save endpoint features");
+            warn!(error = %e, "Failed to detect and save upstream features");
             error_response(
                 StatusCode::BAD_GATEWAY,
                 "detection_error",
-                &format!("Failed to detect and save endpoint features: {}", e),
+                &format!("Failed to detect and save upstream features: {}", e),
             )
         }
     }
 }
 
-// --- Endpoint Test Handler ---
+// --- Upstream Test Handler ---
 
-/// POST /api/v1/endpoints-tests
+/// POST /api/v1/upstreams-tests
 ///
-/// Tests an OpenAI-compatible endpoint by detecting its supported features.
+/// Tests an OpenAI-compatible upstream by detecting its supported features.
 /// This does NOT save anything to the database — it only probes the remote API.
 ///
 /// Request body (JSON):
-/// - `api_key` (required): The API key for the endpoint
-/// - `api_base` (required): The base URL of the endpoint
-async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
+/// - `api_key` (required): The API key for the upstream
+/// - `api_base` (required): The base URL of the upstream
+async fn test_upstream(Json(payload): Json<TestUpstreamRequest>) -> Response {
     if payload.api_key.trim().is_empty() {
         return error_response(
             StatusCode::BAD_REQUEST,
@@ -1200,81 +1200,81 @@ async fn test_endpoint(Json(payload): Json<TestEndpointRequest>) -> Response {
                 })
                 .collect();
 
-            Json(TestEndpointResponse {
+            Json(TestUpstreamResponse {
                 has_responses_api: api_features.has_responses_api,
                 models,
             })
             .into_response()
         }
         Err(e) => {
-            warn!(error = %e, "Failed to detect endpoint features");
+            warn!(error = %e, "Failed to detect upstream features");
             error_response(
                 StatusCode::BAD_GATEWAY,
                 "detection_error",
-                &format!("Failed to detect endpoint features: {}", e),
+                &format!("Failed to detect upstream features: {}", e),
             )
         }
     }
 }
 
-// --- Endpoint Get/Update Handlers ---
+// --- Upstream Get/Update Handlers ---
 
-/// Valid status values for an endpoint
+/// Valid status values for an upstream
 const VALID_ENDPOINT_STATUSES: &[&str] = &["online", "offline", "maintenance"];
 
-/// GET /api/v1/endpoint_by_name/:name
+/// GET /api/v1/upstream_by_name/:name
 ///
-/// Returns a single endpoint by its name.
-async fn get_endpoint_by_name(
+/// Returns a single upstream by its name.
+async fn get_upstream_by_name(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
 ) -> Response {
-    match db::openai::get_endpoint_by_name(&state.pool, &name).await {
-        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+    match db::openai::get_upstream_by_name(&state.pool, &name).await {
+        Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with name '{}' not found", name),
+            &format!("Upstream with name '{}' not found", name),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to get endpoint by name");
+            warn!(error = %e, "Failed to get upstream by name");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query endpoint",
+                "Failed to query upstream",
             )
         }
     }
 }
 
-/// GET /api/v1/endpoints/:endpoint_id
+/// GET /api/v1/upstreams/:upstream_id
 ///
-/// Returns a single endpoint by its ID.
-async fn get_endpoint_by_id(
+/// Returns a single upstream by its ID.
+async fn get_upstream_by_id(
     State(state): State<Arc<AppState>>,
-    Path(endpoint_id): Path<i32>,
+    Path(upstream_id): Path<i32>,
 ) -> Response {
-    match db::openai::get_endpoint(&state.pool, endpoint_id).await {
-        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+    match db::openai::get_upstream(&state.pool, upstream_id).await {
+        Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with id {} not found", endpoint_id),
+            &format!("Upstream with id {} not found", upstream_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to get endpoint by id");
+            warn!(error = %e, "Failed to get upstream by id");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query endpoint",
+                "Failed to query upstream",
             )
         }
     }
 }
 
-/// Request body for updating an OpenAI endpoint
+/// Request body for updating an OpenAI upstream
 #[derive(Deserialize)]
-struct UpdateEndpointRequest {
+struct UpdateUpstreamRequest {
     name: Option<String>,
     provider: Option<String>,
     tags: Option<Vec<String>>,
@@ -1283,20 +1283,20 @@ struct UpdateEndpointRequest {
     status: Option<String>,
 }
 
-/// PUT /api/v1/endpoints/:endpoint_id
+/// PUT /api/v1/upstreams/:upstream_id
 ///
-/// Updates an existing endpoint. Only the provided fields will be updated.
+/// Updates an existing upstream. Only the provided fields will be updated.
 ///
 /// Request body (JSON):
-/// - `name` (optional): The display name for the endpoint
-/// - `tags` (optional): Tags for the endpoint
+/// - `name` (optional): The display name for the upstream
+/// - `tags` (optional): Tags for the upstream
 /// - `proxies` (optional): Proxy configurations
-/// - `description` (optional): Description of the endpoint
-/// - `status` (optional): Status of the endpoint (online, offline, maintenance)
-async fn update_endpoint_by_id(
+/// - `description` (optional): Description of the upstream
+/// - `status` (optional): Status of the upstream (online, offline, maintenance)
+async fn update_upstream_by_id(
     State(state): State<Arc<AppState>>,
-    Path(endpoint_id): Path<i32>,
-    Json(payload): Json<UpdateEndpointRequest>,
+    Path(upstream_id): Path<i32>,
+    Json(payload): Json<UpdateUpstreamRequest>,
 ) -> Response {
     // Validate status if provided
     if let Some(ref status) = payload.status {
@@ -1324,7 +1324,7 @@ async fn update_endpoint_by_id(
         }
     }
 
-    let update = crate::models::UpdateLLMEndpoint {
+    let update = crate::models::UpdateLLMUpstream {
         name: payload.name,
         api_base: None,
         api_key: None,
@@ -1337,19 +1337,19 @@ async fn update_endpoint_by_id(
         updated_at: Some(chrono::Utc::now().naive_utc()),
     };
 
-    match db::openai::update_endpoint(&state.pool, endpoint_id, &update).await {
-        Ok(endpoint) => Json(EndpointResponse::from(endpoint)).into_response(),
+    match db::openai::update_upstream(&state.pool, upstream_id, &update).await {
+        Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with id {} not found", endpoint_id),
+            &format!("Upstream with id {} not found", upstream_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to update endpoint");
+            warn!(error = %e, "Failed to update upstream");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to update endpoint",
+                "Failed to update upstream",
             )
         }
     }
@@ -1852,55 +1852,55 @@ async fn create_credit(
         .into_response()
 }
 
-// --- Endpoint Tags Handlers ---
+// --- Upstream Tags Handlers ---
 
-/// Response DTO for endpoint tags
+/// Response DTO for upstream tags
 #[derive(Serialize)]
 struct TagsResponse {
-    endpoint_id: i32,
+    upstream_id: i32,
     tags: Vec<String>,
 }
 
-/// Request body for adding a tag to an endpoint
+/// Request body for adding a tag to an upstream
 #[derive(Deserialize)]
 struct AddTagRequest {
     tag: String,
 }
 
-/// GET /api/v1/endpoints/:endpoint_id/tags
+/// GET /api/v1/upstreams/:upstream_id/tags
 ///
-/// Returns the list of tags for a given endpoint.
-async fn list_endpoint_tags(
+/// Returns the list of tags for a given upstream.
+async fn list_upstream_tags(
     State(state): State<Arc<AppState>>,
-    Path(endpoint_id): Path<i32>,
+    Path(upstream_id): Path<i32>,
 ) -> Response {
-    match db::openai::get_endpoint_tags(&state.pool, endpoint_id).await {
-        Ok(tags) => Json(TagsResponse { endpoint_id, tags }).into_response(),
+    match db::openai::get_upstream_tags(&state.pool, upstream_id).await {
+        Ok(tags) => Json(TagsResponse { upstream_id, tags }).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with id {} not found", endpoint_id),
+            &format!("Upstream with id {} not found", upstream_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to get endpoint tags");
+            warn!(error = %e, "Failed to get upstream tags");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query endpoint tags",
+                "Failed to query upstream tags",
             )
         }
     }
 }
 
-/// POST /api/v1/endpoints/:endpoint_id/tags
+/// POST /api/v1/upstreams/:upstream_id/tags
 ///
-/// Adds a tag to the specified endpoint. If the tag already exists, it is not duplicated.
+/// Adds a tag to the specified upstream. If the tag already exists, it is not duplicated.
 ///
 /// Request body (JSON):
 /// - `tag` (required): The tag string to add
-async fn add_endpoint_tag(
+async fn add_upstream_tag(
     State(state): State<Arc<AppState>>,
-    Path(endpoint_id): Path<i32>,
+    Path(upstream_id): Path<i32>,
     Json(payload): Json<AddTagRequest>,
 ) -> Response {
     if payload.tag.trim().is_empty() {
@@ -1913,55 +1913,55 @@ async fn add_endpoint_tag(
 
     let tag = payload.tag.trim();
 
-    match db::openai::add_endpoint_tag(&state.pool, endpoint_id, tag).await {
-        Ok(endpoint) => (
+    match db::openai::add_upstream_tag(&state.pool, upstream_id, tag).await {
+        Ok(upstream) => (
             StatusCode::OK,
             Json(TagsResponse {
-                endpoint_id,
-                tags: endpoint.tags,
+                upstream_id,
+                tags: upstream.tags,
             }),
         )
             .into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with id {} not found", endpoint_id),
+            &format!("Upstream with id {} not found", upstream_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to add tag to endpoint");
+            warn!(error = %e, "Failed to add tag to upstream");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to add tag to endpoint",
+                "Failed to add tag to upstream",
             )
         }
     }
 }
 
-/// DELETE /api/v1/endpoints/:endpoint_id/tags/:tag
+/// DELETE /api/v1/upstreams/:upstream_id/tags/:tag
 ///
-/// Removes a tag from the specified endpoint.
-async fn remove_endpoint_tag(
+/// Removes a tag from the specified upstream.
+async fn remove_upstream_tag(
     State(state): State<Arc<AppState>>,
-    Path((endpoint_id, tag)): Path<(i32, String)>,
+    Path((upstream_id, tag)): Path<(i32, String)>,
 ) -> Response {
-    match db::openai::remove_endpoint_tag(&state.pool, endpoint_id, &tag).await {
-        Ok(endpoint) => Json(TagsResponse {
-            endpoint_id,
-            tags: endpoint.tags,
+    match db::openai::remove_upstream_tag(&state.pool, upstream_id, &tag).await {
+        Ok(upstream) => Json(TagsResponse {
+            upstream_id,
+            tags: upstream.tags,
         })
         .into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
             "not_found",
-            &format!("Endpoint with id {} not found", endpoint_id),
+            &format!("Upstream with id {} not found", upstream_id),
         ),
         Err(e) => {
-            warn!(error = %e, "Failed to remove tag from endpoint");
+            warn!(error = %e, "Failed to remove tag from upstream");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to remove tag from endpoint",
+                "Failed to remove tag from upstream",
             )
         }
     }
@@ -2127,10 +2127,10 @@ pub fn get_router(
         balance_change_storage,
     });
     Router::new()
-        .route("/endpoints", get(list_endpoints).post(create_endpoint))
+        .route("/upstreams", get(list_upstreams).post(create_upstream))
         .route(
-            "/endpoints/{endpoint_id}",
-            get(get_endpoint_by_id).put(update_endpoint_by_id),
+            "/upstreams/{upstream_id}",
+            get(get_upstream_by_id).put(update_upstream_by_id),
         )
         .route("/models", get(list_models))
         .route(
@@ -2148,16 +2148,16 @@ pub fn get_router(
             get(list_account_apikeys).post(create_account_apikey),
         )
         .route("/accounts_by_name/{name}", get(get_account_by_name))
-        .route("/endpoint_by_name/{name}", get(get_endpoint_by_name))
+        .route("/upstream_by_name/{name}", get(get_upstream_by_name))
         .route(
-            "/endpoints/{endpoint_id}/tags",
-            get(list_endpoint_tags).post(add_endpoint_tag),
+            "/upstreams/{upstream_id}/tags",
+            get(list_upstream_tags).post(add_upstream_tag),
         )
         .route(
-            "/endpoints/{endpoint_id}/tags/{tag}",
-            delete(remove_endpoint_tag),
+            "/upstreams/{upstream_id}/tags/{tag}",
+            delete(remove_upstream_tag),
         )
-        .route("/endpoint-tests", post(test_endpoint))
+        .route("/upstream-tests", post(test_upstream))
         .route("/session-events", get(list_session_events))
         .route("/session-events/{event_id}", get(get_session_event_by_id))
         .route("/deposits", post(create_deposit))

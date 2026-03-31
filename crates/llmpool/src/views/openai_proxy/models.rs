@@ -11,7 +11,7 @@ use std::sync::Arc;
 use super::helpers::AppState;
 use crate::db;
 
-/// Handle /v1/models endpoint, return available model list from database
+/// Handle /v1/models upstream, return available model list from database
 pub async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
     let res = db::openai::list_models(&state.pool).await;
 

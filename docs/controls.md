@@ -1,6 +1,6 @@
 # llmpool-ctl — CLI Management Tool
 
-`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing endpoints, models, accounts, API keys, and account funds without needing to make raw HTTP requests.
+`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing upstreams, models, accounts, API keys, and account funds without needing to make raw HTTP requests.
 
 ## Prerequisites
 
@@ -42,37 +42,37 @@ cargo build --release -p llmpool-ctl
 
 ## Commands
 
-### Endpoint Management
+### Upstream Management
 
-Manage OpenAI-compatible backend endpoints.
+Manage OpenAI-compatible backend upstreams.
 
-#### `endpoint list`
+#### `upstream list`
 
-List all registered endpoints.
+List all registered upstreams.
 
 ```bash
-llmpool-ctl endpoint list
+llmpool-ctl upstream list
 ```
 
-#### `endpoint test`
+#### `upstream test`
 
-Test an endpoint by detecting its capabilities and available models without saving to the database.
+Test an upstream by detecting its capabilities and available models without saving to the database.
 
 ```bash
-llmpool-ctl endpoint test --api-key sk-xxx --api-base https://api.openai.com/v1
+llmpool-ctl upstream test --api-key sk-xxx --api-base https://api.openai.com/v1
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--api-key` | Yes | API key for the endpoint |
-| `--api-base` | Yes | Base URL of the endpoint |
+| `--api-key` | Yes | API key for the upstream |
+| `--api-base` | Yes | Base URL of the upstream |
 
-#### `endpoint add`
+#### `upstream add`
 
-Add a new endpoint. This will auto-detect supported models and capabilities.
+Add a new upstream. This will auto-detect supported models and capabilities.
 
 ```bash
-llmpool-ctl endpoint add \
+llmpool-ctl upstream add \
   --name "OpenAI" \
   --api-key sk-xxx \
   --api-base https://api.openai.com/v1 \
@@ -82,66 +82,66 @@ llmpool-ctl endpoint add \
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--name` | Yes | Display name for the endpoint |
-| `--api-key` | Yes | API key for the endpoint |
-| `--api-base` | Yes | Base URL of the endpoint |
-| `--description` | No | Description of the endpoint |
+| `--name` | Yes | Display name for the upstream |
+| `--api-key` | Yes | API key for the upstream |
+| `--api-base` | Yes | Base URL of the upstream |
+| `--description` | No | Description of the upstream |
 | `--tags` | No | Comma-separated tags |
 | `--proxies` | No | Comma-separated proxy URLs |
 
-#### `endpoint update`
+#### `upstream update`
 
-Update an existing endpoint's properties.
+Update an existing upstream's properties.
 
 ```bash
-llmpool-ctl endpoint update \
-  --endpoint "OpenAI" \
-  --description "Main OpenAI endpoint" \
+llmpool-ctl upstream update \
+  --upstream "OpenAI" \
+  --description "Main OpenAI upstream" \
   --status online
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--endpoint` | Yes | Endpoint name or numeric ID |
+| `--upstream` | Yes | Upstream name or numeric ID |
 | `--name` | No | New name |
 | `--description` | No | New description |
 | `--tags` | No | Comma-separated tags (replaces existing) |
 | `--proxies` | No | Comma-separated proxy URLs (replaces existing) |
 | `--status` | No | Status: `online`, `offline`, or `maintenance` |
 
-#### `endpoint listtags`
+#### `upstream listtags`
 
-List tags of an endpoint.
+List tags of an upstream.
 
 ```bash
-llmpool-ctl endpoint listtags --endpoint "OpenAI"
+llmpool-ctl upstream listtags --upstream "OpenAI"
 ```
 
-#### `endpoint addtag`
+#### `upstream addtag`
 
-Add a tag to an endpoint.
+Add a tag to an upstream.
 
 ```bash
-llmpool-ctl endpoint addtag --endpoint "OpenAI" --tag "production"
+llmpool-ctl upstream addtag --upstream "OpenAI" --tag "production"
 ```
 
-#### `endpoint deltag`
+#### `upstream deltag`
 
-Remove a tag from an endpoint.
+Remove a tag from an upstream.
 
 ```bash
-llmpool-ctl endpoint deltag --endpoint "OpenAI" --tag "deprecated"
+llmpool-ctl upstream deltag --upstream "OpenAI" --tag "deprecated"
 ```
 
 ---
 
 ### Model Management
 
-Manage models associated with endpoints.
+Manage models associated with upstreams.
 
 #### `model list`
 
-List all models across all endpoints.
+List all models across all upstreams.
 
 ```bash
 llmpool-ctl model list
@@ -315,14 +315,14 @@ llmpool-ctl fund credit --account alice --amount "200.00" --request-id "cr-001"
 All commands support `--format json` for machine-readable output, useful for scripting and automation:
 
 ```bash
-llmpool-ctl --format json endpoint list
+llmpool-ctl --format json upstream list
 llmpool-ctl --format json account list
 llmpool-ctl --format json fund show --account alice
 ```
 
 ## Name or ID Resolution
 
-For `--endpoint` and `--account` flags, you can use either the name (string) or the numeric ID. The tool will automatically resolve names to IDs via the API.
+For `--upstream` and `--account` flags, you can use either the name (string) or the numeric ID. The tool will automatically resolve names to IDs via the API.
 
 ```bash
 # Both are equivalent
@@ -337,8 +337,8 @@ llmpool-ctl account show --account 1
 export LLMPOOL_ADMIN_URL=http://localhost:19324
 export LLMPOOL_ADMIN_TOKEN=$(llmpool admin create-jwt-token)
 
-# Add an endpoint
-llmpool-ctl endpoint add \
+# Add an upstream
+llmpool-ctl upstream add \
   --name "OpenAI" \
   --api-key sk-xxx \
   --api-base https://api.openai.com/v1

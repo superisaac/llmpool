@@ -13,7 +13,7 @@ use crate::defer::OpenAIEventData;
 use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
 
-/// Handle POST /v1/images/generations endpoint (image generation)
+/// Handle POST /v1/images/generations upstream (image generation)
 pub async fn generate_images(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateImageRequest>,
@@ -53,7 +53,7 @@ pub async fn generate_images(
                     warn!(
                         model = model_name,
                         error = %e,
-                        "Image generation failed, retrying with another endpoint"
+                        "Image generation failed, retrying with another upstream"
                     );
                 } else {
                     eprintln!("Image generation failed after retry: {:?}", e);

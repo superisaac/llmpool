@@ -1,17 +1,17 @@
 # LLMPool
 
-LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It aggregates multiple OpenAI-compatible backend endpoints (e.g., OpenAI, Azure OpenAI, self-hosted LLM services) behind a unified API, with built-in user management, API key authentication, usage tracking, and balance billing.
+LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It aggregates multiple OpenAI-compatible backend upstreams (e.g., OpenAI, Azure OpenAI, self-hosted LLM services) behind a unified API, with built-in user management, API key authentication, usage tracking, and balance billing.
 
 ## Key Features
 
-- **Multi-Endpoint Aggregation** — Register multiple OpenAI-compatible API endpoints with automatic detection of supported models and capabilities (Chat, Embedding, Image Generation, Speech)
-- **Smart Routing & Retry** — Requests are randomly distributed across available endpoints; automatic retry on a different endpoint upon failure
-- **OpenAI-Compatible API** — Standard `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/speech`, and `/v1/models` endpoints
+- **Multi-Upstream Aggregation** — Register multiple OpenAI-compatible API upstreams with automatic detection of supported models and capabilities (Chat, Embedding, Image Generation, Speech)
+- **Smart Routing & Retry** — Requests are randomly distributed across available upstreams; automatic retry on a different upstream upon failure
+- **OpenAI-Compatible API** — Standard `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/speech`, and `/v1/models` upstreams
 - **User & API Key Management** — Create users, generate API keys, and authenticate via Bearer Token
 - **Usage Tracking & Billing** — Automatically records token usage per request, calculates costs based on model pricing, and manages cash balance, credit, and debt
 - **Async Task Queue** — Redis + [Apalis](https://github.com/geofmureithi/apalis)-based async task processing for event logging and balance updates
-- **Admin REST API** — JWT-authenticated RESTful management interface for managing endpoints, models, users, and API keys with paginated responses
-- **API Key Encryption** — OpenAI endpoint API keys are encrypted at rest in the database using AES algorithm; decryption happens transparently at runtime
+- **Admin REST API** — JWT-authenticated RESTful management interface for managing upstreams, models, users, and API keys with paginated responses
+- **API Key Encryption** — OpenAI upstream API keys are encrypted at rest in the database using AES algorithm; decryption happens transparently at runtime
 - **OpenTelemetry Observability** — Built-in OpenTelemetry tracing support
 - **Docker Support** — Includes Dockerfile and docker-compose.yml for one-command development environment setup
 
@@ -132,13 +132,13 @@ llmpool worker
 llmpool worker --concurrency 8
 ```
 
-### Manage OpenAI Endpoints
+### Manage OpenAI Upstreams
 
 ```bash
-# Detect supported models and capabilities of an endpoint
+# Detect supported models and capabilities of an upstream
 llmpool openai detect --api-key sk-xxx --api-base https://api.openai.com/v1
 
-# Add an endpoint (detect and save to database)
+# Add an upstream (detect and save to database)
 llmpool openai add --name "OpenAI" --api-key sk-xxx --api-base https://api.openai.com/v1
 ```
 
@@ -169,8 +169,8 @@ For the `llmpool-ctl` CLI management tool documentation, see the **[llmpool-ctl 
 
 LLMPool provides two sets of APIs:
 
-- **OpenAI-Compatible API** (`/openai/v1/*`) — Standard endpoints for Chat Completions, Embeddings, Image Generation, Speech, and Models. Compatible with any OpenAI SDK.
-- **Admin REST API** (`/api/v1/*`) — JWT-authenticated RESTful interface for managing endpoints, models, users, API keys, and billing (deposits, withdrawals, credits).
+- **OpenAI-Compatible API** (`/openai/v1/*`) — Standard upstreams for Chat Completions, Embeddings, Image Generation, Speech, and Models. Compatible with any OpenAI SDK.
+- **Admin REST API** (`/api/v1/*`) — JWT-authenticated RESTful interface for managing upstreams, models, users, API keys, and billing (deposits, withdrawals, credits).
 
 ## Quick Start
 
@@ -187,7 +187,7 @@ cp llmpool.toml.example llmpool.toml
 # 3. Run database migrations
 ./target/release/llmpool migrate
 
-# 4. Add an OpenAI-compatible endpoint
+# 4. Add an OpenAI-compatible upstream
 ./target/release/llmpool openai add \
   --name "OpenAI" \
   --api-key sk-xxx \
