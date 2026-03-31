@@ -88,6 +88,20 @@ CREATE TABLE IF NOT EXISTS funds (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_account_id ON funds (account_id);
 
+-- Create file_metas table
+CREATE TABLE IF NOT EXISTS file_metas (
+    id BIGSERIAL PRIMARY KEY,
+    file_id VARCHAR NOT NULL,
+    original_file_id VARCHAR NOT NULL DEFAULT '',
+    purpose VARCHAR NOT NULL DEFAULT '',
+    upstream_id INTEGER NOT NULL DEFAULT 0,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_file_metas_file_id ON file_metas (file_id);
+CREATE INDEX IF NOT EXISTS idx_file_metas_original_file_id ON file_metas (original_file_id);
+
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,

@@ -244,3 +244,19 @@ LLMUpstream 增加一个字段： provider, 默认为 "openai", 可以是 "opena
 
 =========
 将openai_proxy.rs 中 /v1/files 的处理逻辑，移动到 src/openai_proxy/files.rs 中; 处理 batches 的逻辑，移动到 src/openai_proxy/batches.rs 中；处理 chat_completions 的逻辑，移动到 src/openai_proxy/chat_completions.rs 中; 处理 speech 的逻辑，移动到 src/openai_proxy/speech.rs 中； images 的逻辑，移动到 src/openai_proxy/images.rs 中, 其他逻辑也依次类推
+
+=========
+实现一个DB model: FileMeta, 表结构如下:
+* id: i64,
+* file_id: string, uuidv7 格式 的唯一值
+* original_file_id: string, upstream 生成的file_id
+* purpose: string,
+* deleted: bool, 标记是否删除
+直接修改过migrations 文件，不用新建migration文件。
+
+创建文件create_file_handler中，生成一个file_id, 将CreateFileResponse 的file_id 设置为original_file_id, 将file_id 存储到file_meta 表中。 
+retrieve_file_handler, delete_file_handler, file_content_handler 中，根据file_id获得original_file_id, 返回response 中再将file_id换回来。
+数据库操作代码写在 db/files.rs 中
+
+file_meta 表中，添加一个字段: upstream_id, 创建文件时，将upstream.id 存储到file_meta 表中。
+retrieve_file_handler, delete_file_handler, file_content_handler， 根据file_meta的upstream_id 获得upstream, 不再使用select_first_upstream.
