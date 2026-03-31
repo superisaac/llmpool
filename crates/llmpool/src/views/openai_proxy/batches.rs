@@ -7,10 +7,67 @@ use axum::{
 };
 use std::sync::Arc;
 use tracing::{info, warn};
+use uuid::Uuid;
 
-use super::helpers::{
-    ACCOUNT, AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
-};
+use super::helpers::{ACCOUNT, AppState, build_client_from_upstream, check_fund_balance};
+use crate::db;
+
+/// Generate a new UUIDv7-based batch_id with a "batch-" prefix.
+fn new_batch_id() -> String {
+    format!("batch-{}", Uuid::now_v7().to_string().replace('-', ""))
+}
+
+/// Look up the upstream for a given upstream_id from the DB.
+/// Returns an error Response if not found or DB error.
+async fn get_upstream_by_id(
+    state: &AppState,
+    upstream_id: i32,
+) -> Result<crate::models::LLMUpstream, Response> {
+    match db::openai::get_upstream(&state.pool, upstream_id).await {
+        Ok(upstream) => Ok(upstream),
+        Err(sqlx::Error::RowNotFound) => Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "error": {
+                    "message": format!("Upstream {} not found.", upstream_id),
+                    "type": "server_error",
+                    "code": "upstream_not_found"
+                }
+            })),
+        )
+            .into_response()),
+        Err(e) => {
+            warn!(upstream_id = %upstream_id, error = %e, "DB error looking up upstream");
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
+}
+
+/// Look up the BatchMeta for a given internal batch_id.
+/// Returns an error Response if not found or DB error.
+async fn resolve_batch_meta(
+    state: &AppState,
+    batch_id: &str,
+) -> Result<db::batches::BatchMeta, Response> {
+    match db::batches::get_batch_meta_by_batch_id(&state.pool, batch_id).await {
+        Ok(Some(meta)) => Ok(meta),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "error": {
+                    "message": format!("Batch '{}' not found.", batch_id),
+                    "type": "invalid_request_error",
+                    "code": "batch_not_found"
+                }
+            })),
+        )
+            .into_response()),
+        Err(e) => {
+            warn!(batch_id = %batch_id, error = %e, "DB error looking up batch meta");
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
+}
 
 /// Handle GET /v1/batches — list batches
 pub async fn list_batches_handler(State(state): State<Arc<AppState>>) -> Response {
@@ -19,9 +76,26 @@ pub async fn list_batches_handler(State(state): State<Arc<AppState>>) -> Respons
         return resp;
     }
 
-    let upstream = match select_first_upstream(&state).await {
-        Ok(ep) => ep,
-        Err(resp) => return resp,
+    // Use the first available upstream for listing
+    let upstream = match db::openai::list_upstreams(&state.pool).await {
+        Ok(upstreams) if !upstreams.is_empty() => upstreams.into_iter().next().unwrap(),
+        Ok(_) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": "No upstream upstreams configured.",
+                        "type": "server_error",
+                        "code": "no_upstream"
+                    }
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to query upstreams for batches proxy");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     let client = build_client_from_upstream(&upstream);
@@ -46,20 +120,79 @@ pub async fn create_batch_handler(
         return resp;
     }
 
-    let upstream = match select_first_upstream(&state).await {
-        Ok(ep) => ep,
+    // Resolve the upstream from the input_file_id's FileMeta
+    let file_meta = match db::files::get_file_meta_by_file_id(&state.pool, &payload.input_file_id)
+        .await
+    {
+        Ok(Some(meta)) => meta,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": format!("File '{}' not found.", payload.input_file_id),
+                        "type": "invalid_request_error",
+                        "code": "file_not_found"
+                    }
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            warn!(file_id = %payload.input_file_id, error = %e, "DB error looking up file meta for batch");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let upstream = match get_upstream_by_id(&state, file_meta.upstream_id).await {
+        Ok(u) => u,
         Err(resp) => return resp,
     };
+
+    // Replace our internal file_id with the upstream's original_file_id before forwarding
+    let mut upstream_payload = payload.clone();
+    upstream_payload.input_file_id = file_meta.original_file_id.clone();
 
     let client = build_client_from_upstream(&upstream);
     info!(
         upstream_name = %upstream.name,
         input_file_id = %payload.input_file_id,
+        original_file_id = %file_meta.original_file_id,
         "Creating batch"
     );
 
-    match client.batches().create(payload).await {
-        Ok(batch) => Json(batch).into_response(),
+    match client.batches().create(upstream_payload).await {
+        Ok(mut batch) => {
+            // Generate our own batch_id and store the mapping
+            let our_batch_id = new_batch_id();
+            let original_batch_id = batch.id.clone();
+
+            match db::batches::create_batch_meta(
+                &state.pool,
+                &our_batch_id,
+                &original_batch_id,
+                upstream.id,
+            )
+            .await
+            {
+                Ok(_) => {
+                    info!(
+                        batch_id = %our_batch_id,
+                        original_batch_id = %original_batch_id,
+                        upstream_id = %upstream.id,
+                        "Batch created and meta stored"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to store batch meta in DB");
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+
+            // Replace the upstream batch_id with our own in the response
+            batch.id = our_batch_id;
+            Json(batch).into_response()
+        }
         Err(e) => {
             warn!(error = %e, "Failed to create batch");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -77,8 +210,13 @@ pub async fn batch_by_id_handler(
         return resp;
     }
 
-    let upstream = match select_first_upstream(&state).await {
-        Ok(ep) => ep,
+    let meta = match resolve_batch_meta(&state, &batch_id).await {
+        Ok(m) => m,
+        Err(resp) => return resp,
+    };
+
+    let upstream = match get_upstream_by_id(&state, meta.upstream_id).await {
+        Ok(u) => u,
         Err(resp) => return resp,
     };
 
@@ -86,11 +224,16 @@ pub async fn batch_by_id_handler(
     info!(
         upstream_name = %upstream.name,
         batch_id = %batch_id,
+        original_batch_id = %meta.original_batch_id,
         "Retrieving batch"
     );
 
-    match client.batches().retrieve(&batch_id).await {
-        Ok(batch) => Json(batch).into_response(),
+    match client.batches().retrieve(&meta.original_batch_id).await {
+        Ok(mut batch) => {
+            // Replace upstream batch_id with our own in the response
+            batch.id = batch_id;
+            Json(batch).into_response()
+        }
         Err(e) => {
             warn!(batch_id = %batch_id, error = %e, "Failed to retrieve batch");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -108,8 +251,13 @@ pub async fn batch_cancel_handler(
         return resp;
     }
 
-    let upstream = match select_first_upstream(&state).await {
-        Ok(ep) => ep,
+    let meta = match resolve_batch_meta(&state, &batch_id).await {
+        Ok(m) => m,
+        Err(resp) => return resp,
+    };
+
+    let upstream = match get_upstream_by_id(&state, meta.upstream_id).await {
+        Ok(u) => u,
         Err(resp) => return resp,
     };
 
@@ -117,11 +265,16 @@ pub async fn batch_cancel_handler(
     info!(
         upstream_name = %upstream.name,
         batch_id = %batch_id,
+        original_batch_id = %meta.original_batch_id,
         "Cancelling batch"
     );
 
-    match client.batches().cancel(&batch_id).await {
-        Ok(batch) => Json(batch).into_response(),
+    match client.batches().cancel(&meta.original_batch_id).await {
+        Ok(mut batch) => {
+            // Replace upstream batch_id with our own in the response
+            batch.id = batch_id;
+            Json(batch).into_response()
+        }
         Err(e) => {
             warn!(batch_id = %batch_id, error = %e, "Failed to cancel batch");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()

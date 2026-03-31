@@ -260,3 +260,18 @@ retrieve_file_handler, delete_file_handler, file_content_handler 中，根据fil
 
 file_meta 表中，添加一个字段: upstream_id, 创建文件时，将upstream.id 存储到file_meta 表中。
 retrieve_file_handler, delete_file_handler, file_content_handler， 根据file_meta的upstream_id 获得upstream, 不再使用select_first_upstream.
+
+=========
+创建一个DB model: BatchMeta, 表结构如下:
+* id: i64,
+* batch_id: string, uuidv7
+* original_batch_id: string, upstream 生成的batch_id
+* upstream_id: i64,
+* status: string, 默认为"pending", 可选值: "pending", "processing", "completed", "canceled"
+* created_at: timestamp,
+
+创建create_batch_handler 中，根据input_file_id, 从file_meta 表中获取upstream_id, 将请求转发到对应的upstream中。生成一个batch_id,  生成一个BatchMeta 记录，将原batch_id作为original_batch_id, 以及upstream_id 存储到BatchMeta 表中。
+
+batch_cancel_handler中，根据batch_id, 从BatchMeta 表中获取upstream_id, 不再使用select_first_upstream. 根据batch_id获得original_batch_id, 返回response 中再将batch_id换回来。
+
+直接修改过migrations 文件，不用新建migration文件。

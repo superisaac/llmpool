@@ -1,5 +1,6 @@
 pub mod account;
 pub mod api;
+pub mod batches;
 pub mod core;
 pub mod files;
 pub mod fund;

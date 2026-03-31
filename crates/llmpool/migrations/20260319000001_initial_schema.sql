@@ -102,6 +102,18 @@ CREATE TABLE IF NOT EXISTS file_metas (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_file_metas_file_id ON file_metas (file_id);
 CREATE INDEX IF NOT EXISTS idx_file_metas_original_file_id ON file_metas (original_file_id);
 
+-- Create batch_metas table
+CREATE TABLE IF NOT EXISTS batch_metas (
+    id BIGSERIAL PRIMARY KEY,
+    batch_id VARCHAR NOT NULL,
+    original_batch_id VARCHAR NOT NULL DEFAULT '',
+    upstream_id INTEGER NOT NULL DEFAULT 0,
+    status VARCHAR NOT NULL DEFAULT 'pending',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_batch_metas_batch_id ON batch_metas (batch_id);
+CREATE INDEX IF NOT EXISTS idx_batch_metas_original_batch_id ON batch_metas (original_batch_id);
+
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
     id SERIAL PRIMARY KEY,
