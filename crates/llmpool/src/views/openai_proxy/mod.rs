@@ -39,20 +39,14 @@ pub fn get_router(
         // Audio-related routes
         .route("/audio/speech", post(speechs::create_speech))
         // Files routes
-        .route(
-            "/files",
-            get(files::list_files_handler).post(files::create_file_handler),
-        )
+        .route("/files", post(files::create_file_handler))
         .route(
             "/files/{file_id}",
             get(files::retrieve_file_handler).delete(files::delete_file_handler),
         )
         .route("/files/{file_id}/content", get(files::file_content_handler))
         // Batches routes
-        .route(
-            "/batches",
-            get(batches::list_batches_handler).post(batches::create_batch_handler),
-        )
+        .route("/batches", post(batches::create_batch_handler))
         .route("/batches/{batch_id}", get(batches::batch_by_id_handler))
         .route(
             "/batches/{batch_id}/cancel",

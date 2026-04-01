@@ -16,7 +16,13 @@ pub struct LLMUpstream {
     pub id: i32,
     pub name: String,
     pub api_base: String,
+    pub encrypted_api_key: String,
+    pub ellipsed_api_key: String,
+    /// Decrypted API key, populated after reading from DB. Not stored in the database.
+    #[sqlx(skip)]
+    #[serde(skip)]
     pub api_key: String,
+
     pub provider: String,
     pub has_responses_api: bool,
     pub tags: Vec<String>,

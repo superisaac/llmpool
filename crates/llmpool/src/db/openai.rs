@@ -9,11 +9,26 @@ pub type DbPool = PgPool;
 // Helper: decrypt api_key in an LLMUpstream after reading from DB
 // ============================================================
 
-/// Decrypt the `api_key` field of an `LLMUpstream`.
+/// Compute the ellipsed representation of an api_key:
+/// first 6 chars + "..." + last 6 chars.
+/// If the key is too short, the full key is returned.
+fn ellipse_api_key(key: &str) -> String {
+    if key.len() <= 12 {
+        key.to_string()
+    } else {
+        format!("{}...{}", &key[..6], &key[key.len() - 6..])
+    }
+}
+
+/// Decrypt the `encrypted_api_key` field of an `LLMUpstream`, populate `api_key` with the
+/// plaintext, and populate `ellipsed_api_key` with the ellipsed representation.
 /// If encryption is not configured, the value is returned as-is.
 fn decrypt_upstream(mut upstream: LLMUpstream) -> Result<LLMUpstream, sqlx::Error> {
-    upstream.api_key = crypto::decrypt_if_configured(&upstream.api_key)
-        .map_err(|e| sqlx::Error::Protocol(format!("Failed to decrypt api_key: {}", e)))?;
+    let plaintext = crypto::decrypt_if_configured(&upstream.encrypted_api_key).map_err(|e| {
+        sqlx::Error::Protocol(format!("Failed to decrypt encrypted_api_key: {}", e))
+    })?;
+    upstream.ellipsed_api_key = ellipse_api_key(&plaintext);
+    upstream.api_key = plaintext;
     Ok(upstream)
 }
 
@@ -35,7 +50,7 @@ pub async fn create_upstream(
 ) -> Result<LLMUpstream, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_upstream.api_key)?;
     let upstream = sqlx::query_as::<_, LLMUpstream>(
-        "INSERT INTO llm_upstreams (name, api_base, api_key, provider, has_responses_api, tags, proxies, status, description)
+        "INSERT INTO llm_upstreams (name, api_base, encrypted_api_key, provider, has_responses_api, tags, proxies, status, description)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *",
     )
@@ -146,7 +161,7 @@ pub async fn update_upstream(
 
     let upstream = sqlx::query_as::<_, LLMUpstream>(
         "UPDATE llm_upstreams
-         SET name = $1, api_base = $2, api_key = $3, provider = $4, has_responses_api = $5, tags = $6, proxies = $7, status = $8, description = $9, updated_at = $10
+         SET name = $1, api_base = $2, encrypted_api_key = $3, provider = $4, has_responses_api = $5, tags = $6, proxies = $7, status = $8, description = $9, updated_at = $10
          WHERE id = $11
          RETURNING *",
     )
@@ -520,7 +535,7 @@ struct ModelUpstreamRow {
     pub ep_id: i32,
     pub ep_name: String,
     pub ep_api_base: String,
-    pub ep_api_key: String,
+    pub ep_encrypted_api_key: String,
     pub ep_provider: String,
     pub ep_has_responses_api: bool,
     pub ep_tags: Vec<String>,
@@ -551,7 +566,9 @@ impl ModelUpstreamRow {
             id: self.ep_id,
             name: self.ep_name,
             api_base: self.ep_api_base,
-            api_key: self.ep_api_key,
+            encrypted_api_key: self.ep_encrypted_api_key,
+            ellipsed_api_key: String::new(), // will be populated by decrypt_upstream
+            api_key: String::new(),          // will be populated by decrypt_upstream
             provider: self.ep_provider,
             has_responses_api: self.ep_has_responses_api,
             tags: self.ep_tags,
@@ -582,7 +599,7 @@ pub async fn find_models_by_name_and_capacity(
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
-                e.api_key AS ep_api_key, e.provider AS ep_provider,
+                e.encrypted_api_key AS ep_encrypted_api_key, e.provider AS ep_provider,
                 e.has_responses_api AS ep_has_responses_api,
                 e.tags AS ep_tags, e.proxies AS ep_proxies,
                 e.status AS ep_status, e.description AS ep_description,

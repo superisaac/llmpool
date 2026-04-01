@@ -149,7 +149,7 @@ async fn proxy_to_upstream(
         }
     }
 
-    // Set Authorization header from upstream's api_key if it's not empty
+    // Set Authorization header from upstream's api_key (decrypted) if it's not empty
     if !upstream.api_key.is_empty() {
         upstream_req = upstream_req.header("Authorization", format!("Bearer {}", upstream.api_key));
     }

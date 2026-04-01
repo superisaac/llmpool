@@ -275,3 +275,8 @@ retrieve_file_handler, delete_file_handler, file_content_handler， 根据file_m
 batch_cancel_handler中，根据batch_id, 从BatchMeta 表中获取upstream_id, 不再使用select_first_upstream. 根据batch_id获得original_batch_id, 返回response 中再将batch_id换回来。
 
 直接修改过migrations 文件，不用新建migration文件。
+
+=========
+LLMUpstream 添加一个字段: ellipsed_api_key, 存储 api_key 的前 6 个字符 + "..." + 最后 6 个字符, 直接修改过migrations 文件，不用新建migration文件。
+
+LLMEndpoint 的 api_key 字段改名为 encrypted_api_key, 直接修改过migrations 文件，不用新建migration文件。
