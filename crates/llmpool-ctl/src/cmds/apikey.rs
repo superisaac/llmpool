@@ -1,7 +1,9 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{LLMAPIKeyResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate};
+use super::{
+    ApiCredentialResponse, PaginatedResponse, print_pagination, resolve_account_id, truncate,
+};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -25,6 +27,16 @@ pub enum ApiKeyAction {
         #[arg(long, default_value = "")]
         label: String,
     },
+    /// Show details of an API key by its key string
+    Show {
+        /// The API key string
+        apikey: String,
+    },
+    /// Deactivate (soft-delete) an API key by its key string
+    Delete {
+        /// The API key string
+        apikey: String,
+    },
 }
 
 // ============================================================
@@ -40,7 +52,7 @@ struct CreateApiKeyRequestBody {
 // Display Helpers
 // ============================================================
 
-fn print_apikeys(keys: &[LLMAPIKeyResponse]) {
+fn print_apikeys(keys: &[ApiCredentialResponse]) {
     if keys.is_empty() {
         println!("No API keys found.");
         return;
@@ -63,10 +75,11 @@ fn print_apikeys(keys: &[LLMAPIKeyResponse]) {
     }
 }
 
-fn print_apikey_detail(ak: &LLMAPIKeyResponse) {
-    println!("API key created successfully!");
-    println!();
+fn print_apikey_detail(ak: &ApiCredentialResponse) {
     println!("  ID:         {}", ak.id);
+    if let Some(account_id) = ak.account_id {
+        println!("  Account ID: {}", account_id);
+    }
     println!("  API Key:    {}", ak.apikey);
     println!("  Label:      {}", ak.label);
     println!("  Active:     {}", if ak.is_active { "yes" } else { "no" });
@@ -95,7 +108,7 @@ pub async fn handle_apikey(
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<LLMAPIKeyResponse> = client
+                let resp: PaginatedResponse<ApiCredentialResponse> = client
                     .get(&format!("/accounts/{}/apikeys", account_id))
                     .await?;
                 print_apikeys(&resp.data);
@@ -111,9 +124,33 @@ pub async fn handle_apikey(
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: LLMAPIKeyResponse = client
+                let resp: ApiCredentialResponse = client
                     .post(&format!("/accounts/{}/apikeys", account_id), &body)
                     .await?;
+                println!("API key created successfully!");
+                println!();
+                print_apikey_detail(&resp);
+            }
+        }
+        ApiKeyAction::Show { apikey } => {
+            if json_output {
+                let raw = client.get_raw(&format!("/apikeys/{}", apikey)).await?;
+                println!("{}", raw);
+            } else {
+                let resp: ApiCredentialResponse =
+                    client.get(&format!("/apikeys/{}", apikey)).await?;
+                print_apikey_detail(&resp);
+            }
+        }
+        ApiKeyAction::Delete { apikey } => {
+            if json_output {
+                let raw = client.delete_raw(&format!("/apikeys/{}", apikey)).await?;
+                println!("{}", raw);
+            } else {
+                let resp: ApiCredentialResponse =
+                    client.delete(&format!("/apikeys/{}", apikey)).await?;
+                println!("API key deactivated successfully!");
+                println!();
                 print_apikey_detail(&resp);
             }
         }

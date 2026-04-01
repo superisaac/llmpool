@@ -87,7 +87,6 @@ fn print_fund_detail(f: &FundResponse) {
     println!("Fund for account ID {}:", f.account_id);
     println!();
     println!("  Cash:       {}", f.cash);
-    println!("  Credit:     {}", f.credit);
     println!("  Debt:       {}", f.debt);
     if !f.created_at.is_empty() {
         println!("  Created At: {}", f.created_at);

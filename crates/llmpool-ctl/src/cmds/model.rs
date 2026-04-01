@@ -38,9 +38,9 @@ struct UpdateModelRequestBody {
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    input_token_price: Option<f64>,
+    input_token_price: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_token_price: Option<f64>,
+    output_token_price: Option<String>,
 }
 
 // ============================================================
@@ -90,14 +90,15 @@ pub async fn handle_model(
             input_token_price,
             output_token_price,
         } => {
-            let input_token_price = input_token_price
-                .map(|s| s.parse::<f64>())
-                .transpose()
-                .map_err(|e| format!("Invalid input_token_price: {}", e))?;
-            let output_token_price = output_token_price
-                .map(|s| s.parse::<f64>())
-                .transpose()
-                .map_err(|e| format!("Invalid output_token_price: {}", e))?;
+            // Validate that prices are valid non-negative decimals if provided
+            if let Some(ref p) = input_token_price {
+                p.parse::<f64>()
+                    .map_err(|e| format!("Invalid input_token_price: {}", e))?;
+            }
+            if let Some(ref p) = output_token_price {
+                p.parse::<f64>()
+                    .map_err(|e| format!("Invalid output_token_price: {}", e))?;
+            }
             let body = UpdateModelRequestBody {
                 description,
                 input_token_price,

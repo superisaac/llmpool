@@ -153,8 +153,8 @@ impl From<Account> for AccountResponse {
 #[derive(Deserialize)]
 struct CreateAccountRequest {
     name: String,
-    /// Optional initial credit amount to add to the account's fund after creation.
-    /// If greater than zero, a credit balance change will be created and enqueued.
+    /// Optional initial deposit amount to add to the account's fund after creation.
+    /// If greater than zero, a deposit balance change will be created and enqueued.
     initial_credit: Option<BigDecimal>,
 }
 
@@ -166,7 +166,6 @@ struct FundResponse {
     id: i32,
     account_id: i32,
     cash: String,
-    credit: String,
     debt: String,
     created_at: String,
     updated_at: String,
@@ -178,7 +177,6 @@ impl From<crate::models::Fund> for FundResponse {
             id: f.id,
             account_id: f.account_id,
             cash: f.cash.to_string(),
-            credit: f.credit.to_string(),
             debt: f.debt.to_string(),
             created_at: f.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: f.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -404,13 +402,13 @@ async fn create_account(
         }
     };
 
-    // If initial_credit is provided and greater than zero, create a credit balance change
+    // If initial_credit is provided and greater than zero, create a deposit balance change
     if let Some(ref initial_credit) = payload.initial_credit {
         if *initial_credit > BigDecimal::from(0) {
-            let content = BalanceChangeContent::Credit {
+            let content = BalanceChangeContent::AddCredit {
                 amount: initial_credit.clone(),
             };
-            let unique_request_id = format!("initial-credit-{}", account.id);
+            let unique_request_id = format!("initial-deposit-{}", account.id);
             let new_change = match NewBalanceChange::from_content(
                 account.id,
                 unique_request_id,
@@ -418,7 +416,7 @@ async fn create_account(
             ) {
                 Ok(change) => change,
                 Err(e) => {
-                    warn!(error = %e, account_id = account.id, "Failed to serialize initial credit content");
+                    warn!(error = %e, account_id = account.id, "Failed to serialize initial deposit content");
                     return (StatusCode::CREATED, Json(AccountResponse::from(account)))
                         .into_response();
                 }
@@ -432,7 +430,7 @@ async fn create_account(
             {
                 Ok(bc) => bc,
                 Err(e) => {
-                    warn!(error = %e, account_id = account.id, "Failed to create initial credit balance change record");
+                    warn!(error = %e, account_id = account.id, "Failed to create initial deposit balance change record");
                     return (StatusCode::CREATED, Json(AccountResponse::from(account)))
                         .into_response();
                 }
@@ -447,7 +445,7 @@ async fn create_account(
                     error = %e,
                     account_id = account.id,
                     balance_change_id = balance_change.id,
-                    "Failed to enqueue initial credit balance change task"
+                    "Failed to enqueue initial deposit balance change task"
                 );
             }
         }
@@ -615,7 +613,6 @@ async fn get_account_fund(
                 id: 0,
                 account_id: account_id,
                 cash: "0".to_string(),
-                credit: "0".to_string(),
                 debt: "0".to_string(),
                 created_at: String::new(),
                 updated_at: String::new(),
@@ -1793,8 +1790,8 @@ async fn create_credit(
         }
     }
 
-    // Create the BalanceChange content
-    let content = BalanceChangeContent::Credit {
+    // Create the BalanceChange content (AddCredit is treated the same as Deposit)
+    let content = BalanceChangeContent::AddCredit {
         amount: payload.amount.clone(),
     };
     let new_change = match NewBalanceChange::from_content(

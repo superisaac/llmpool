@@ -21,7 +21,7 @@ pub struct Fund {
 
 impl Fund {
     pub fn available(&self) -> BigDecimal {
-        self.cash.clone() + self.credit.clone()
+        &self.cash + &self.credit
     }
 }
 
@@ -38,7 +38,6 @@ pub struct NewFund {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateFund {
     pub cash: Option<BigDecimal>,
-    pub credit: Option<BigDecimal>,
     pub debt: Option<BigDecimal>,
     pub updated_at: Option<NaiveDateTime>,
 }
@@ -63,9 +62,16 @@ pub struct SpendToken {
 #[serde(tag = "type")]
 pub enum BalanceChangeContent {
     SpendToken(SpendToken),
-    Deposit { amount: BigDecimal },
-    Withdraw { amount: BigDecimal },
-    Credit { amount: BigDecimal },
+    Deposit {
+        amount: BigDecimal,
+    },
+    Withdraw {
+        amount: BigDecimal,
+    },
+    /// AddCredit is treated the same as Deposit (adds to cash)
+    AddCredit {
+        amount: BigDecimal,
+    },
 }
 
 /// Represents a balance change record

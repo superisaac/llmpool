@@ -1823,14 +1823,14 @@ mod balance_change_tests {
 
     #[tokio::test]
     async fn test_new_balance_change_from_credit_content() {
-        let content = BalanceChangeContent::Credit {
+        let content = BalanceChangeContent::AddCredit {
             amount: BigDecimal::from(200),
         };
 
         let new_bc = NewBalanceChange::from_content(3, "req-credit".to_string(), &content).unwrap();
 
         assert_eq!(new_bc.account_id, 3);
-        assert_eq!(new_bc.content["type"], "Credit");
+        assert_eq!(new_bc.content["type"], "AddCredit");
     }
 }
 

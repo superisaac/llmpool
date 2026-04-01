@@ -17,9 +17,10 @@ pub async fn find_account_fund(
 
 /// Apply a balance change to a user's fund.
 ///
-/// - SpendToken: fund -= (input_spend_amount + output_spend_amount)
-/// - Deposit: if debt > 0, pay off debt first; any remaining amount is added to cash
+/// - SpendToken: fund.cash -= (input_spend_amount + output_spend_amount)
+/// - Deposit / AddCredit: if debt > 0, pay off debt first; any remaining amount is added to cash
 /// - Withdraw: cash -= amount
+/// - Credit: fund.credit += amount
 ///
 /// If cash goes negative after a spend or withdraw, the deficit is added to debt
 /// and cash is set to zero.
@@ -55,7 +56,7 @@ pub async fn apply_balance_change_with_tx(
     let account_fund = match account_fund {
         Some(uf) => uf,
         None => {
-            // Create a new fund record with zero cash, zero credit, and zero debt
+            // Create a new fund record with zero cash, credit and debt
             let new_fund = NewFund {
                 account_id,
                 cash: BigDecimal::from(0),
@@ -78,129 +79,74 @@ pub async fn apply_balance_change_with_tx(
 
     let zero = BigDecimal::from(0);
 
-    let (new_cash, new_credit, new_debt) = match content {
+    // // Handle Credit variant separately since it updates the credit field
+    // if let BalanceChangeContent::Credit { amount } = content {
+    //     let new_credit = &account_fund.credit + amount;
+    //     return sqlx::query_as::<_, Fund>(
+    //         "UPDATE funds SET credit = $1, updated_at = $2
+    //          WHERE id = $3
+    //          RETURNING *",
+    //     )
+    //     .bind(&new_credit)
+    //     .bind(Utc::now().naive_utc())
+    //     .bind(account_fund.id)
+    //     .fetch_one(&mut **tx)
+    //     .await;
+    // }
+
+    let (new_cash, new_debt) = match content {
         BalanceChangeContent::SpendToken(spend) => {
             let spend_amount = &spend.input_spend_amount + &spend.output_spend_amount;
-            // Deduct from credit first
-            let remaining_after_credit = &account_fund.credit - &spend_amount;
-            if remaining_after_credit >= zero {
-                // Credit alone covers the spend
-                (
-                    account_fund.cash.clone(),
-                    remaining_after_credit,
-                    account_fund.debt.clone(),
-                )
+            let remaining = &account_fund.cash - &spend_amount;
+            if remaining >= zero {
+                (remaining, account_fund.debt.clone())
             } else {
-                // Credit is exhausted, deduct remainder from cash
-                let remainder = zero.clone() - &remaining_after_credit;
-                let remaining_after_cash = &account_fund.cash - &remainder;
-                if remaining_after_cash >= zero {
-                    // Cash covers the remainder
-                    (
-                        remaining_after_cash,
-                        zero.clone(),
-                        account_fund.debt.clone(),
-                    )
-                } else {
-                    // Cash is also exhausted, add deficit to debt
-                    let deficit = zero.clone() - &remaining_after_cash;
-                    (zero.clone(), zero.clone(), &account_fund.debt + &deficit)
-                }
+                // Cash exhausted, add deficit to debt
+                let deficit = zero.clone() - &remaining;
+                (zero.clone(), &account_fund.debt + &deficit)
             }
         }
-        BalanceChangeContent::Deposit { amount } => {
-            // Deposit does not change credit
+        BalanceChangeContent::Deposit { amount } | BalanceChangeContent::AddCredit { amount } => {
+            // Both Deposit and AddCredit add to cash (pay off debt first)
             if account_fund.debt > zero {
-                // Pay off debt first, then add remaining to cash
+                // pay off debt
                 let remaining_debt = &account_fund.debt - amount;
                 if remaining_debt > zero {
                     // Deposit is not enough to cover all debt
-                    (
-                        account_fund.cash.clone(),
-                        account_fund.credit.clone(),
-                        remaining_debt,
-                    )
+                    (account_fund.cash.clone(), remaining_debt)
                 } else {
                     // Deposit covers all debt, remainder goes to cash
                     let surplus = zero.clone() - &remaining_debt;
-                    (
-                        &account_fund.cash + &surplus,
-                        account_fund.credit.clone(),
-                        zero,
-                    )
+                    (&account_fund.cash + &surplus, zero)
                 }
             } else {
-                let new_bal = &account_fund.cash + amount;
-                (
-                    new_bal,
-                    account_fund.credit.clone(),
-                    account_fund.debt.clone(),
-                )
+                let new_cash = &account_fund.cash + amount;
+                (new_cash, account_fund.debt.clone())
             }
         }
         BalanceChangeContent::Withdraw { amount } => {
-            // Withdraw does not change credit
             let remaining = &account_fund.cash - amount;
             if remaining < zero {
                 let deficit = zero.clone() - &remaining;
-                (
-                    zero,
-                    account_fund.credit.clone(),
-                    &account_fund.debt + &deficit,
-                )
+                (zero, &account_fund.debt + &deficit)
             } else {
-                (
-                    remaining,
-                    account_fund.credit.clone(),
-                    account_fund.debt.clone(),
-                )
-            }
-        }
-        BalanceChangeContent::Credit { amount } => {
-            // Credit: if debt > 0, pay off debt first; any remaining amount is added to credit
-            if account_fund.debt > zero {
-                let remaining_debt = &account_fund.debt - amount;
-                if remaining_debt > zero {
-                    // Credit is not enough to cover all debt
-                    (
-                        account_fund.cash.clone(),
-                        account_fund.credit.clone(),
-                        remaining_debt,
-                    )
-                } else {
-                    // Credit covers all debt, remainder goes to credit field
-                    let surplus = zero.clone() - &remaining_debt;
-                    (
-                        account_fund.cash.clone(),
-                        &account_fund.credit + &surplus,
-                        zero,
-                    )
-                }
-            } else {
-                let new_credit = &account_fund.credit + amount;
-                (
-                    account_fund.cash.clone(),
-                    new_credit,
-                    account_fund.debt.clone(),
-                )
+                (remaining, account_fund.debt.clone())
             }
         }
     };
 
     let update = UpdateFund {
         cash: Some(new_cash),
-        credit: Some(new_credit),
         debt: Some(new_debt),
         updated_at: Some(Utc::now().naive_utc()),
     };
 
     sqlx::query_as::<_, Fund>(
-        "UPDATE funds SET cash = $1, credit = $2, debt = $3, updated_at = $4
-         WHERE id = $5
+        "UPDATE funds SET cash = $1, debt = $2, updated_at = $3
+         WHERE id = $4
          RETURNING *",
     )
     .bind(&update.cash)
-    .bind(&update.credit)
     .bind(&update.debt)
     .bind(&update.updated_at)
     .bind(account_fund.id)

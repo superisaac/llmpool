@@ -93,7 +93,6 @@ pub struct FundResponse {
     pub id: i32,
     pub account_id: i32,
     pub cash: String,
-    pub credit: String,
     pub debt: String,
     pub created_at: String,
     pub updated_at: String,
@@ -140,7 +139,7 @@ pub struct TagsResponse {
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-pub struct LLMAPIKeyResponse {
+pub struct ApiCredentialResponse {
     pub id: i32,
     pub account_id: Option<i32>,
     pub apikey: String,

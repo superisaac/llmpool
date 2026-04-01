@@ -79,7 +79,7 @@
           "message": {
             "type": "string",
             "description": "Human-readable error message",
-            "example": "Consumer with id 999 not found"
+            "example": "Account with id 999 not found"
           }
         }
       },
@@ -89,6 +89,7 @@
           "id",
           "name",
           "api_base",
+          "provider",
           "has_responses_api",
           "tags",
           "proxies",
@@ -110,6 +111,11 @@
           "api_base": {
             "type": "string",
             "example": "https://api.openai.com/v1"
+          },
+          "provider": {
+            "type": "string",
+            "description": "The provider type for this upstream",
+            "example": "openai"
           },
           "has_responses_api": {
             "type": "boolean",
@@ -180,6 +186,12 @@
             "description": "The base URL of the upstream",
             "example": "https://api.openai.com/v1"
           },
+          "provider": {
+            "type": "string",
+            "description": "The provider type for this upstream",
+            "default": "openai",
+            "example": "openai"
+          },
           "tags": {
             "type": "array",
             "items": {
@@ -206,6 +218,10 @@
           "name": {
             "type": "string",
             "description": "The display name for the upstream"
+          },
+          "provider": {
+            "type": "string",
+            "description": "The provider type for this upstream"
           },
           "tags": {
             "type": "array",
@@ -376,7 +392,7 @@
           }
         }
       },
-      "ConsumerResponse": {
+      "AccountResponse": {
         "type": "object",
         "required": [
           "id",
@@ -411,7 +427,7 @@
           }
         }
       },
-      "CreateConsumerRequest": {
+      "CreateAccountRequest": {
         "type": "object",
         "required": [
           "name"
@@ -419,30 +435,30 @@
         "properties": {
           "name": {
             "type": "string",
-            "description": "The name for the new consumer",
+            "description": "The name for the new account",
             "example": "alice"
           },
           "initial_credit": {
             "type": "string",
-            "description": "Optional initial credit amount to add to the consumer's fund after creation.\nIf greater than zero, a credit balance change will be created and applied asynchronously.\nMust not be negative.\n",
+            "description": "Optional initial credit amount to add to the account's fund after creation.\nIf greater than zero, a credit balance change will be created and applied asynchronously.\nMust not be negative.\n",
             "example": "100.00"
           }
         }
       },
-      "UpdateConsumerRequest": {
+      "UpdateAccountRequest": {
         "type": "object",
         "properties": {
           "name": {
             "type": "string",
-            "description": "New name for the consumer"
+            "description": "New name for the account"
           },
           "is_active": {
             "type": "boolean",
-            "description": "Whether the consumer is active"
+            "description": "Whether the account is active"
           }
         }
       },
-      "PaginatedConsumers": {
+      "PaginatedAccounts": {
         "type": "object",
         "required": [
           "data",
@@ -452,7 +468,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ConsumerResponse"
+              "$ref": "#/components/schemas/AccountResponse"
             }
           },
           "pagination": {
@@ -464,9 +480,8 @@
         "type": "object",
         "required": [
           "id",
-          "consumer_id",
+          "account_id",
           "cash",
-          "credit",
           "debt",
           "created_at",
           "updated_at"
@@ -477,7 +492,7 @@
             "format": "int32",
             "example": 1
           },
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -486,11 +501,6 @@
             "type": "string",
             "description": "Cash balance (decimal string)",
             "example": "100.00"
-          },
-          "credit": {
-            "type": "string",
-            "description": "Credit balance (decimal string)",
-            "example": "50.00"
           },
           "debt": {
             "type": "string",
@@ -509,7 +519,7 @@
           }
         }
       },
-      "LLMAPIKeyResponse": {
+      "ApiCredentialResponse": {
         "type": "object",
         "required": [
           "id",
@@ -525,7 +535,7 @@
             "format": "int32",
             "example": 1
           },
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
             "nullable": true,
@@ -582,7 +592,7 @@
           "data": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/LLMAPIKeyResponse"
+              "$ref": "#/components/schemas/ApiCredentialResponse"
             }
           },
           "pagination": {
@@ -594,7 +604,7 @@
         "type": "object",
         "required": [
           "id",
-          "consumer_id",
+          "account_id",
           "unique_request_id",
           "content",
           "is_applied",
@@ -606,7 +616,7 @@
             "format": "int32",
             "example": 1
           },
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -620,7 +630,7 @@
             "type": "object",
             "description": "JSON object describing the balance change details",
             "example": {
-              "type": "deposit",
+              "type": "Deposit",
               "amount": "100.00"
             }
           },
@@ -639,15 +649,15 @@
       "CreateDepositRequest": {
         "type": "object",
         "required": [
-          "consumer_id",
+          "account_id",
           "unique_request_id",
           "amount"
         ],
         "properties": {
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
-            "description": "The ID of the consumer to deposit to",
+            "description": "The ID of the account to deposit to",
             "example": 1
           },
           "unique_request_id": {
@@ -665,15 +675,15 @@
       "CreateWithdrawRequest": {
         "type": "object",
         "required": [
-          "consumer_id",
+          "account_id",
           "unique_request_id",
           "amount"
         ],
         "properties": {
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
-            "description": "The ID of the consumer to withdraw from",
+            "description": "The ID of the account to withdraw from",
             "example": 1
           },
           "unique_request_id": {
@@ -691,15 +701,15 @@
       "CreateCreditRequest": {
         "type": "object",
         "required": [
-          "consumer_id",
+          "account_id",
           "unique_request_id",
           "amount"
         ],
         "properties": {
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
-            "description": "The ID of the consumer to credit",
+            "description": "The ID of the account to credit",
             "example": 1
           },
           "unique_request_id": {
@@ -832,7 +842,7 @@
           "id",
           "session_id",
           "session_index",
-          "consumer_id",
+          "account_id",
           "model_id",
           "api_key_id",
           "input_token_price",
@@ -857,7 +867,7 @@
             "format": "int32",
             "example": 0
           },
-          "consumer_id": {
+          "account_id": {
             "type": "integer",
             "format": "int32",
             "example": 1
@@ -1667,14 +1677,14 @@
         }
       }
     },
-    "/consumers": {
+    "/accounts": {
       "get": {
         "tags": [
-          "Consumers"
+          "Accounts"
         ],
-        "summary": "List all consumers",
-        "description": "Returns a paginated list of consumers.",
-        "operationId": "listConsumers",
+        "summary": "List all accounts",
+        "description": "Returns a paginated list of accounts.",
+        "operationId": "listAccounts",
         "parameters": [
           {
             "$ref": "#/components/parameters/PageParam"
@@ -1685,11 +1695,11 @@
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of consumers",
+            "description": "Paginated list of accounts",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedConsumers"
+                  "$ref": "#/components/schemas/PaginatedAccounts"
                 }
               }
             }
@@ -1708,28 +1718,28 @@
       },
       "post": {
         "tags": [
-          "Consumers"
+          "Accounts"
         ],
-        "summary": "Create a new consumer",
-        "description": "Creates a new consumer. Optionally, an initial credit amount can be provided\nwhich will be applied asynchronously to the consumer's fund.\n",
-        "operationId": "createConsumer",
+        "summary": "Create a new account",
+        "description": "Creates a new account. Optionally, an initial credit amount can be provided\nwhich will be applied asynchronously to the account's fund.\n",
+        "operationId": "createAccount",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateConsumerRequest"
+                "$ref": "#/components/schemas/CreateAccountRequest"
               }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Consumer created successfully",
+            "description": "Account created successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsumerResponse"
+                  "$ref": "#/components/schemas/AccountResponse"
                 }
               }
             }
@@ -1745,7 +1755,7 @@
             }
           },
           "409": {
-            "description": "A consumer with this name already exists",
+            "description": "An account with this name already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -1767,17 +1777,17 @@
         }
       }
     },
-    "/consumers/{consumer_id}": {
+    "/accounts/{account_id}": {
       "get": {
         "tags": [
-          "Consumers"
+          "Accounts"
         ],
-        "summary": "Get a consumer by ID",
-        "description": "Returns a single consumer by their ID.",
-        "operationId": "getConsumerById",
+        "summary": "Get an account by ID",
+        "description": "Returns a single account by their ID.",
+        "operationId": "getAccountById",
         "parameters": [
           {
-            "name": "consumer_id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1788,17 +1798,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Consumer details",
+            "description": "Account details",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsumerResponse"
+                  "$ref": "#/components/schemas/AccountResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1821,14 +1831,14 @@
       },
       "put": {
         "tags": [
-          "Consumers"
+          "Accounts"
         ],
-        "summary": "Update a consumer",
-        "description": "Updates an existing consumer. Only the provided fields will be updated.\n",
-        "operationId": "updateConsumerById",
+        "summary": "Update an account",
+        "description": "Updates an existing account. Only the provided fields will be updated.\n",
+        "operationId": "updateAccountById",
         "parameters": [
           {
-            "name": "consumer_id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1842,18 +1852,18 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateConsumerRequest"
+                "$ref": "#/components/schemas/UpdateAccountRequest"
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Consumer updated successfully",
+            "description": "Account updated successfully",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsumerResponse"
+                  "$ref": "#/components/schemas/AccountResponse"
                 }
               }
             }
@@ -1869,7 +1879,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1879,7 +1889,7 @@
             }
           },
           "409": {
-            "description": "A consumer with this name already exists",
+            "description": "An account with this name already exists",
             "content": {
               "application/json": {
                 "schema": {
@@ -1901,14 +1911,14 @@
         }
       }
     },
-    "/consumers_by_name/{name}": {
+    "/accounts_by_name/{name}": {
       "get": {
         "tags": [
-          "Consumers"
+          "Accounts"
         ],
-        "summary": "Get a consumer by name",
-        "description": "Returns a single consumer by their name.",
-        "operationId": "getConsumerByName",
+        "summary": "Get an account by name",
+        "description": "Returns a single account by their name.",
+        "operationId": "getAccountByName",
         "parameters": [
           {
             "name": "name",
@@ -1921,17 +1931,17 @@
         ],
         "responses": {
           "200": {
-            "description": "Consumer details",
+            "description": "Account details",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConsumerResponse"
+                  "$ref": "#/components/schemas/AccountResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -1953,17 +1963,17 @@
         }
       }
     },
-    "/consumers/{consumer_id}/fund": {
+    "/accounts/{account_id}/fund": {
       "get": {
         "tags": [
           "Funds"
         ],
-        "summary": "Get a consumer's fund",
-        "description": "Returns the fund (asset) information for a given consumer.\nIf the consumer has no fund record yet, returns a default fund with zero balances.\n",
-        "operationId": "getConsumerFund",
+        "summary": "Get an account's fund",
+        "description": "Returns the fund (asset) information for a given account.\nIf the account has no fund record yet, returns a default fund with zero balances.\n",
+        "operationId": "getAccountFund",
         "parameters": [
           {
-            "name": "consumer_id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -1974,7 +1984,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Fund details for the consumer",
+            "description": "Fund details for the account",
             "content": {
               "application/json": {
                 "schema": {
@@ -1984,7 +1994,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2006,17 +2016,17 @@
         }
       }
     },
-    "/consumers/{consumer_id}/apikeys": {
+    "/accounts/{account_id}/apikeys": {
       "get": {
         "tags": [
           "API Keys"
         ],
-        "summary": "List API keys for a consumer",
-        "description": "Returns a paginated list of API keys for a given consumer.",
-        "operationId": "listConsumerApiKeys",
+        "summary": "List API keys for an account",
+        "description": "Returns a paginated list of API keys for a given account.",
+        "operationId": "listAccountApiKeys",
         "parameters": [
           {
-            "name": "consumer_id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -2043,7 +2053,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2068,12 +2078,12 @@
         "tags": [
           "API Keys"
         ],
-        "summary": "Create an API key for a consumer",
-        "description": "Creates a new API key for the specified consumer.",
-        "operationId": "createConsumerApiKey",
+        "summary": "Create an API key for an account",
+        "description": "Creates a new API key for the specified account.",
+        "operationId": "createAccountApiKey",
         "parameters": [
           {
-            "name": "consumer_id",
+            "name": "account_id",
             "in": "path",
             "required": true,
             "schema": {
@@ -2098,13 +2108,115 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LLMAPIKeyResponse"
+                  "$ref": "#/components/schemas/ApiCredentialResponse"
                 }
               }
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/apikeys/{apikey}": {
+      "get": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Get an API key by its key string",
+        "description": "Returns the API credential info for the given apikey string.",
+        "operationId": "getApiKey",
+        "parameters": [
+          {
+            "name": "apikey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCredentialResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API key not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "API Keys"
+        ],
+        "summary": "Deactivate an API key",
+        "description": "Soft-deletes the API credential by setting `is_active = false`.\nAlso invalidates the Redis cache entry for this apikey.\n",
+        "operationId": "deleteApiKey",
+        "parameters": [
+          {
+            "name": "apikey",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API key deactivated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiCredentialResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API key not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2132,7 +2244,7 @@
           "Balance Changes"
         ],
         "summary": "Create a deposit",
-        "description": "Creates a deposit for a consumer. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Deposits add to the consumer's cash balance.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
+        "description": "Creates a deposit for an account. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Deposits add to the account's cash balance.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
         "operationId": "createDeposit",
         "requestBody": {
           "required": true,
@@ -2166,7 +2278,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2194,7 +2306,7 @@
           "Balance Changes"
         ],
         "summary": "Create a withdrawal",
-        "description": "Creates a withdrawal for a consumer. This first checks that the consumer's fund has\nsufficient cash (cash >= amount). If not, returns an error. Otherwise, creates\na BalanceChange record and enqueues a task to apply it asynchronously.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
+        "description": "Creates a withdrawal for an account. This first checks that the account's fund has\nsufficient cash (cash >= amount). If not, returns an error. Otherwise, creates\na BalanceChange record and enqueues a task to apply it asynchronously.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
         "operationId": "createWithdrawal",
         "requestBody": {
           "required": true,
@@ -2228,7 +2340,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2256,7 +2368,7 @@
           "Balance Changes"
         ],
         "summary": "Create a credit",
-        "description": "Creates a credit for a consumer. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Unlike deposits which add to the cash field,\ncredits add to the credit field of the consumer's fund.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
+        "description": "Creates a credit for an account. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Unlike deposits which add to the cash field,\ncredits add to the credit field of the account's fund.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
         "operationId": "createCredit",
         "requestBody": {
           "required": true,
@@ -2290,7 +2402,7 @@
             }
           },
           "404": {
-            "description": "Consumer not found",
+            "description": "Account not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2452,16 +2564,16 @@
       "description": "Manage OpenAI models"
     },
     {
-      "name": "Consumers",
-      "description": "Manage consumers (users)"
+      "name": "Accounts",
+      "description": "Manage accounts (users)"
     },
     {
       "name": "Funds",
-      "description": "View consumer fund balances"
+      "description": "View account fund balances"
     },
     {
       "name": "API Keys",
-      "description": "Manage consumer API keys"
+      "description": "Manage account API keys"
     },
     {
       "name": "Balance Changes",
