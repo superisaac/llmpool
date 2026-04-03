@@ -44,6 +44,11 @@ fn extract_usage(data: &OpenAIEventData) -> Option<UsageInfo> {
             output_tokens: u.output_tokens as i64,
             total_tokens: u.total_tokens as i64,
         }),
+        OpenAIEventData::Batch(batch) => batch.usage.as_ref().map(|u| UsageInfo {
+            input_tokens: u.input_tokens as i64,
+            output_tokens: u.output_tokens as i64,
+            total_tokens: u.total_tokens as i64,
+        }),
         // Request types and stream done marker don't have usage
         _ => None,
     }

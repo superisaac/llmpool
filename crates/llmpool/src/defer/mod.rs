@@ -2,6 +2,7 @@ pub mod tasks;
 pub mod worker;
 
 use async_openai::{
+    types::batches::{Batch, BatchRequest},
     types::chat::{
         CreateChatCompletionRequest, CreateChatCompletionResponse,
         CreateChatCompletionStreamResponse,
@@ -30,6 +31,9 @@ pub enum OpenAIEventData {
 
     CreateEmbeddingRequest(CreateEmbeddingRequest),
     CreateEmbeddingResponse(CreateEmbeddingResponse),
+
+    BatchRequest(BatchRequest),
+    Batch(Batch),
 }
 
 /// An event entry to be processed asynchronously via the task queue.

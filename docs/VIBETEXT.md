@@ -280,3 +280,6 @@ batch_cancel_handler中，根据batch_id, 从BatchMeta 表中获取upstream_id, 
 LLMUpstream 添加一个字段: ellipsed_api_key, 存储 api_key 的前 6 个字符 + "..." + 最后 6 个字符, 直接修改过migrations 文件，不用新建migration文件。
 
 LLMEndpoint 的 api_key 字段改名为 encrypted_api_key, 直接修改过migrations 文件，不用新建migration文件。
+
+=========
+batch处理的结构 Batch 中有个output_file_id对象，使用uuidv7生成一个新的file_id，将原来的output_file_id编程original_file_id中，并存在file_meta 表中。用新的file_id 填充到返回的Batch结构的output_file_id字段中。 

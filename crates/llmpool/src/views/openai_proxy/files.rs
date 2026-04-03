@@ -30,8 +30,75 @@ fn parse_purpose(s: &str) -> FilePurpose {
 }
 
 /// Generate a new UUIDv7-based file_id with a "file-" prefix.
-fn new_file_id() -> String {
+pub fn new_file_id() -> String {
     format!("file-{}", Uuid::now_v7().to_string().replace('-', ""))
+}
+
+/// Wrap an upstream file_id into an internal `FileMeta`, storing the mapping in the DB.
+/// - If `file_id` is None, returns `Ok(None)` immediately.
+/// - If a mapping already exists for `(original_file_id, upstream_id)`, reuses the existing `FileMeta`.
+/// - Otherwise, generates a new UUIDv7 file_id, stores the mapping, and returns the new `FileMeta`.
+/// - Returns `Err(Response)` on DB error.
+pub async fn wrap_file(
+    state: &AppState,
+    file_id: Option<String>,
+    upstream_id: i32,
+) -> Result<Option<db::files::FileMeta>, Response> {
+    let original_file_id = match file_id {
+        Some(id) => id,
+        None => return Ok(None),
+    };
+
+    match db::files::get_file_meta_by_original_file_id(&state.pool, &original_file_id, upstream_id)
+        .await
+    {
+        Ok(Some(existing)) => {
+            info!(
+                original_file_id = %original_file_id,
+                file_id = %existing.file_id,
+                "Reusing existing file_meta mapping for file_id"
+            );
+            Ok(Some(existing))
+        }
+        Ok(None) => {
+            let our_file_id = new_file_id();
+            match db::files::create_file_meta(
+                &state.pool,
+                &our_file_id,
+                &original_file_id,
+                "batch_output",
+                upstream_id,
+            )
+            .await
+            {
+                Ok(meta) => {
+                    info!(
+                        file_id = %our_file_id,
+                        original_file_id = %original_file_id,
+                        upstream_id = %upstream_id,
+                        "Mapped file_id to new internal file_id"
+                    );
+                    Ok(Some(meta))
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        original_file_id = %original_file_id,
+                        "Failed to store file_meta for file_id"
+                    );
+                    Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = %e,
+                original_file_id = %original_file_id,
+                "DB error looking up file_meta for file_id"
+            );
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
 }
 
 /// Look up the FileMeta for a given internal file_id.

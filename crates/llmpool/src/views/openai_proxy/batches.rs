@@ -1,4 +1,4 @@
-use async_openai::types::batches::BatchRequest;
+use async_openai::types::batches::{Batch, BatchRequest};
 use axum::{
     Json,
     extract::{Path, State},
@@ -9,8 +9,13 @@ use std::sync::Arc;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use super::helpers::{ACCOUNT, AppState, build_client_from_upstream, check_fund_balance};
+use super::files::wrap_file;
+use super::helpers::{
+    ACCOUNT, API_CREDENTIAL, AppState, build_client_from_upstream, check_fund_balance,
+};
 use crate::db;
+use crate::defer::OpenAIEventData;
+use crate::openai::session_tracer::SessionTracer;
 
 /// Generate a new UUIDv7-based batch_id with a "batch-" prefix.
 fn new_batch_id() -> String {
@@ -66,6 +71,18 @@ async fn resolve_batch_meta(
             warn!(batch_id = %batch_id, error = %e, "DB error looking up batch meta");
             Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
         }
+    }
+}
+
+/// Sync the batch status from a Batch object to the batch_meta table.
+async fn sync_batch_status(state: &AppState, batch_id: &str, batch: &Batch) {
+    let status_str = serde_json::to_value(&batch.status)
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_default();
+    if let Err(e) = db::batches::update_batch_meta_status(&state.pool, batch_id, &status_str).await
+    {
+        warn!(batch_id = %batch_id, error = %e, "Failed to sync batch status to batch_meta");
     }
 }
 
@@ -153,6 +170,19 @@ pub async fn create_batch_handler(
     let mut upstream_payload = payload.clone();
     upstream_payload.input_file_id = file_meta.original_file_id.clone();
 
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
+    let mut tracer = SessionTracer::new(
+        state.event_storage.clone(),
+        account_id,
+        upstream.id,
+        api_key_id,
+    );
+
+    // Trace the incoming BatchRequest
+    tracer
+        .add(OpenAIEventData::BatchRequest(payload.clone()))
+        .await;
+
     let client = build_client_from_upstream(&upstream);
     info!(
         upstream_name = %upstream.name,
@@ -190,7 +220,21 @@ pub async fn create_batch_handler(
             }
 
             // Replace the upstream batch_id with our own in the response
-            batch.id = our_batch_id;
+            batch.id = our_batch_id.clone();
+
+            // Sync batch status to batch_meta
+            sync_batch_status(&state, &our_batch_id, &batch).await;
+
+            // Wrap output_file_id if present
+            batch.output_file_id =
+                match wrap_file(&state, batch.output_file_id.clone(), upstream.id).await {
+                    Ok(meta) => meta.map(|m| m.file_id),
+                    Err(resp) => return resp,
+                };
+
+            // Trace the Batch response
+            tracer.add(OpenAIEventData::Batch(batch.clone())).await;
+
             Json(batch).into_response()
         }
         Err(e) => {
@@ -220,6 +264,14 @@ pub async fn batch_by_id_handler(
         Err(resp) => return resp,
     };
 
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
+    let mut tracer = SessionTracer::new(
+        state.event_storage.clone(),
+        account_id,
+        upstream.id,
+        api_key_id,
+    );
+
     let client = build_client_from_upstream(&upstream);
     info!(
         upstream_name = %upstream.name,
@@ -231,7 +283,21 @@ pub async fn batch_by_id_handler(
     match client.batches().retrieve(&meta.original_batch_id).await {
         Ok(mut batch) => {
             // Replace upstream batch_id with our own in the response
-            batch.id = batch_id;
+            batch.id = batch_id.clone();
+
+            // Sync batch status to batch_meta
+            sync_batch_status(&state, &batch_id, &batch).await;
+
+            // Wrap output_file_id if present
+            batch.output_file_id =
+                match wrap_file(&state, batch.output_file_id.clone(), meta.upstream_id).await {
+                    Ok(m) => m.map(|m| m.file_id),
+                    Err(resp) => return resp,
+                };
+
+            // Trace the Batch response
+            tracer.add(OpenAIEventData::Batch(batch.clone())).await;
+
             Json(batch).into_response()
         }
         Err(e) => {
@@ -261,6 +327,14 @@ pub async fn batch_cancel_handler(
         Err(resp) => return resp,
     };
 
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
+    let mut tracer = SessionTracer::new(
+        state.event_storage.clone(),
+        account_id,
+        upstream.id,
+        api_key_id,
+    );
+
     let client = build_client_from_upstream(&upstream);
     info!(
         upstream_name = %upstream.name,
@@ -273,6 +347,17 @@ pub async fn batch_cancel_handler(
         Ok(mut batch) => {
             // Replace upstream batch_id with our own in the response
             batch.id = batch_id;
+
+            // Wrap output_file_id if present
+            batch.output_file_id =
+                match wrap_file(&state, batch.output_file_id.clone(), meta.upstream_id).await {
+                    Ok(m) => m.map(|m| m.file_id),
+                    Err(resp) => return resp,
+                };
+
+            // Trace the cancelled Batch response
+            tracer.add(OpenAIEventData::Batch(batch.clone())).await;
+
             Json(batch).into_response()
         }
         Err(e) => {

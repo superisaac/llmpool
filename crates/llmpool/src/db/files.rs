@@ -51,6 +51,21 @@ pub async fn get_file_meta_by_file_id(
         .await
 }
 
+/// Look up a FileMeta by the upstream's original_file_id and upstream_id.
+pub async fn get_file_meta_by_original_file_id(
+    pool: &DbPool,
+    original_file_id: &str,
+    upstream_id: i32,
+) -> Result<Option<FileMeta>, sqlx::Error> {
+    sqlx::query_as::<_, FileMeta>(
+        "SELECT * FROM file_metas WHERE original_file_id = $1 AND upstream_id = $2 AND deleted = FALSE ORDER BY id DESC LIMIT 1",
+    )
+    .bind(original_file_id)
+    .bind(upstream_id)
+    .fetch_optional(pool)
+    .await
+}
+
 /// Mark a FileMeta as deleted by our internal file_id.
 pub async fn mark_file_meta_deleted(
     pool: &DbPool,
