@@ -20,3 +20,16 @@ url = "redis://127.0.0.1:6379"
 # Generate a key with: openssl rand -hex 32
 # If left empty, API keys will be stored in plaintext (not recommended for production).
 encryption_key = ""
+
+[rate_limit]
+# Whether rate limiting is enabled for /openai/v1 routes (default: false)
+enabled = false
+
+# IP-based rate limiting: maximum requests per window per client IP address
+ip_requests = 100
+ip_window_secs = 60
+
+# Token-based rate limiting: maximum requests per window per Authorization token
+# (keyed on a SHA-256 hash of the Bearer token value)
+token_requests = 200
+token_window_secs = 60

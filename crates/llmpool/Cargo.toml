@@ -28,6 +28,7 @@ uuid.workspace = true
 jsonwebtoken.workspace = true
 apalis.workspace = true
 apalis-redis.workspace = true
+sha2.workspace = true
 bb8.workspace = true
 bb8-redis.workspace = true
 reqwest.workspace = true

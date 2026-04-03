@@ -16,6 +16,8 @@ pub struct AppConfig {
     pub redis: RedisConfig,
     #[serde(default)]
     pub security: SecurityConfig,
+    #[serde(default)]
+    pub rate_limit: RateLimitConfig,
 }
 
 /// Database configuration section.
@@ -48,6 +50,55 @@ pub struct SecurityConfig {
     /// (e.g., OpenAI upstream API keys). Generate with: `openssl rand -hex 32`
     #[serde(default)]
     pub encryption_key: String,
+}
+
+/// Rate limiting configuration section.
+#[derive(Debug, Deserialize, Clone)]
+pub struct RateLimitConfig {
+    /// Whether rate limiting is enabled (default: false)
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Maximum number of requests per window per IP address (default: 100)
+    #[serde(default = "default_ip_requests")]
+    pub ip_requests: u64,
+
+    /// Time window in seconds for IP-based rate limiting (default: 60)
+    #[serde(default = "default_ip_window_secs")]
+    pub ip_window_secs: u64,
+
+    /// Maximum number of requests per window per Authorization token (default: 200)
+    #[serde(default = "default_token_requests")]
+    pub token_requests: u64,
+
+    /// Time window in seconds for token-based rate limiting (default: 60)
+    #[serde(default = "default_token_window_secs")]
+    pub token_window_secs: u64,
+}
+
+fn default_ip_requests() -> u64 {
+    100
+}
+fn default_ip_window_secs() -> u64 {
+    60
+}
+fn default_token_requests() -> u64 {
+    200
+}
+fn default_token_window_secs() -> u64 {
+    60
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            ip_requests: default_ip_requests(),
+            ip_window_secs: default_ip_window_secs(),
+            token_requests: default_token_requests(),
+            token_window_secs: default_token_window_secs(),
+        }
+    }
 }
 
 /// Resolve the config file path.
