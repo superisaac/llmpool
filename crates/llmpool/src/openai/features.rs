@@ -242,6 +242,8 @@ pub async fn detect_and_save_features(
                     has_embedding: Some(mf.has_embedding),
                     input_token_price: None,
                     output_token_price: None,
+                    batch_input_token_price: None,
+                    batch_output_token_price: None,
                     description: None,
                     updated_at: Some(Utc::now().naive_utc()),
                 };
@@ -258,7 +260,9 @@ pub async fn detect_and_save_features(
                     has_chat_completion: mf.has_chat_completion,
                     has_embedding: mf.has_embedding,
                     input_token_price: default_token_price.clone(),
-                    output_token_price: default_token_price,
+                    output_token_price: default_token_price.clone(),
+                    batch_input_token_price: default_token_price.clone(),
+                    batch_output_token_price: default_token_price,
                 };
                 db::openai::create_model(pool, &new_model).await?;
             }

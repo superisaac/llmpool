@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS llm_models (
     has_embedding BOOLEAN NOT NULL DEFAULT FALSE,
     input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     output_token_price NUMERIC NOT NULL DEFAULT 0.000001,
+    batch_input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
+    batch_output_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     description VARCHAR NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()

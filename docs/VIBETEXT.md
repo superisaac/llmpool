@@ -283,3 +283,7 @@ LLMEndpoint 的 api_key 字段改名为 encrypted_api_key, 直接修改过migrat
 
 =========
 batch处理的结构 Batch 中有个output_file_id对象，使用uuidv7生成一个新的file_id，将原来的output_file_id编程original_file_id中，并存在file_meta 表中。用新的file_id 填充到返回的Batch结构的output_file_id字段中。 
+
+==========
+LLMModel 增加两个字段 batch_input_token_price 和batch_output_token_price, 缺省价格和原来的价格一致。直接修改migrations文件，不需要新建migration文件。
+UsageInfo 增加一个is_batch字段，默认为false。生成SpendToken的时候，如果usage.is_batch 则价格使用 batch_output_token_price和batch_input_token_price

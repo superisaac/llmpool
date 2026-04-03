@@ -197,8 +197,8 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sql
 /// Create a new OpenAI model
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
@@ -209,6 +209,8 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .bind(new_model.has_embedding)
     .bind(&new_model.input_token_price)
     .bind(&new_model.output_token_price)
+    .bind(&new_model.batch_input_token_price)
+    .bind(&new_model.batch_output_token_price)
     .fetch_one(pool)
     .await
 }
@@ -291,6 +293,14 @@ pub async fn update_model(
         .output_token_price
         .as_ref()
         .unwrap_or(&current.output_token_price);
+    let batch_input_token_price = update
+        .batch_input_token_price
+        .as_ref()
+        .unwrap_or(&current.batch_input_token_price);
+    let batch_output_token_price = update
+        .batch_output_token_price
+        .as_ref()
+        .unwrap_or(&current.batch_output_token_price);
     let description = update
         .description
         .as_deref()
@@ -301,8 +311,9 @@ pub async fn update_model(
         "UPDATE llm_models
          SET model_id = $1, has_image_generation = $2, has_speech = $3, has_chat_completion = $4,
              has_embedding = $5, input_token_price = $6, output_token_price = $7,
-             description = $8, updated_at = $9
-         WHERE id = $10
+             batch_input_token_price = $8, batch_output_token_price = $9,
+             description = $10, updated_at = $11
+         WHERE id = $12
          RETURNING *",
     )
     .bind(model_id)
@@ -312,6 +323,8 @@ pub async fn update_model(
     .bind(has_embedding)
     .bind(input_token_price)
     .bind(output_token_price)
+    .bind(batch_input_token_price)
+    .bind(batch_output_token_price)
     .bind(description)
     .bind(updated_at)
     .bind(model_pk)
@@ -528,6 +541,8 @@ struct ModelUpstreamRow {
     pub has_embedding: bool,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
+    pub batch_input_token_price: bigdecimal::BigDecimal,
+    pub batch_output_token_price: bigdecimal::BigDecimal,
     pub description: String,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
@@ -558,6 +573,8 @@ impl ModelUpstreamRow {
             has_embedding: self.has_embedding,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
+            batch_input_token_price: self.batch_input_token_price,
+            batch_output_token_price: self.batch_output_token_price,
             description: self.description,
             created_at: self.created_at,
             updated_at: self.updated_at,
@@ -597,6 +614,7 @@ pub async fn find_models_by_name_and_capacity(
     let mut sql = String::from(
         "SELECT m.id, m.upstream_id, m.model_id, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
+                m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
                 e.encrypted_api_key AS ep_encrypted_api_key, e.provider AS ep_provider,

@@ -15,6 +15,8 @@ struct UsageInfo {
     input_tokens: i64,
     output_tokens: i64,
     total_tokens: i64,
+    /// Whether this usage came from a batch request (uses batch pricing)
+    is_batch: bool,
 }
 
 /// Extract usage information from a OpenAIEventData if available
@@ -25,6 +27,7 @@ fn extract_usage(data: &OpenAIEventData) -> Option<UsageInfo> {
                 input_tokens: u.prompt_tokens as i64,
                 output_tokens: u.completion_tokens as i64,
                 total_tokens: u.total_tokens as i64,
+                is_batch: false,
             })
         }
         OpenAIEventData::CreateChatCompletionStreamResponse(resp) => {
@@ -32,22 +35,26 @@ fn extract_usage(data: &OpenAIEventData) -> Option<UsageInfo> {
                 input_tokens: u.prompt_tokens as i64,
                 output_tokens: u.completion_tokens as i64,
                 total_tokens: u.total_tokens as i64,
+                is_batch: false,
             })
         }
         OpenAIEventData::CreateEmbeddingResponse(resp) => Some(UsageInfo {
             input_tokens: resp.usage.prompt_tokens as i64,
             output_tokens: 0,
             total_tokens: resp.usage.total_tokens as i64,
+            is_batch: false,
         }),
         OpenAIEventData::ImagesResponse(resp) => resp.usage.as_ref().map(|u| UsageInfo {
             input_tokens: u.input_tokens as i64,
             output_tokens: u.output_tokens as i64,
             total_tokens: u.total_tokens as i64,
+            is_batch: false,
         }),
         OpenAIEventData::Batch(batch) => batch.usage.as_ref().map(|u| UsageInfo {
             input_tokens: u.input_tokens as i64,
             output_tokens: u.output_tokens as i64,
             total_tokens: u.total_tokens as i64,
+            is_batch: true,
         }),
         // Request types and stream done marker don't have usage
         _ => None,
@@ -154,15 +161,28 @@ pub async fn handle_openai_event(
 
     // 2. If there's usage info and model is available, create a balance change
     if let (Some(usage), Some(model)) = (usage, model) {
-        let input_spend_amount = &model.input_token_price * BigDecimal::from(usage.input_tokens);
-        let output_spend_amount = &model.output_token_price * BigDecimal::from(usage.output_tokens);
+        // Use batch prices if this is a batch request, otherwise use regular prices
+        let (input_token_price, output_token_price) = if usage.is_batch {
+            (
+                model.batch_input_token_price.clone(),
+                model.batch_output_token_price.clone(),
+            )
+        } else {
+            (
+                model.input_token_price.clone(),
+                model.output_token_price.clone(),
+            )
+        };
+
+        let input_spend_amount = &input_token_price * BigDecimal::from(usage.input_tokens);
+        let output_spend_amount = &output_token_price * BigDecimal::from(usage.output_tokens);
 
         let spend_token = SpendToken {
             input_tokens: usage.input_tokens,
-            input_token_price: model.input_token_price.clone(),
+            input_token_price,
             input_spend_amount,
             output_tokens: usage.output_tokens,
-            output_token_price: model.output_token_price.clone(),
+            output_token_price,
             output_spend_amount,
             total_tokens: usage.total_tokens,
             event_id: event.id,

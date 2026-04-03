@@ -83,6 +83,8 @@ pub struct LLMModel {
     pub has_embedding: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
+    pub batch_input_token_price: BigDecimal,
+    pub batch_output_token_price: BigDecimal,
     pub description: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -99,6 +101,8 @@ pub struct NewLLMModel {
     pub has_embedding: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
+    pub batch_input_token_price: BigDecimal,
+    pub batch_output_token_price: BigDecimal,
 }
 
 /// Options for filtering models by their capabilities.
@@ -121,6 +125,8 @@ pub struct UpdateLLMModel {
     pub has_embedding: Option<bool>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
+    pub batch_input_token_price: Option<BigDecimal>,
+    pub batch_output_token_price: Option<BigDecimal>,
     pub description: Option<String>,
     pub updated_at: Option<NaiveDateTime>,
 }

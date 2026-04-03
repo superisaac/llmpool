@@ -975,6 +975,8 @@ struct ModelResponse {
     has_speech: bool,
     input_token_price: String,
     output_token_price: String,
+    batch_input_token_price: String,
+    batch_output_token_price: String,
     description: String,
     created_at: String,
     updated_at: String,
@@ -992,6 +994,8 @@ impl From<crate::models::LLMModel> for ModelResponse {
             has_speech: m.has_speech,
             input_token_price: m.input_token_price.to_string(),
             output_token_price: m.output_token_price.to_string(),
+            batch_input_token_price: m.batch_input_token_price.to_string(),
+            batch_output_token_price: m.batch_output_token_price.to_string(),
             description: m.description,
             created_at: m.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: m.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -1385,6 +1389,8 @@ struct UpdateModelRequest {
     description: Option<String>,
     input_token_price: Option<BigDecimal>,
     output_token_price: Option<BigDecimal>,
+    batch_input_token_price: Option<BigDecimal>,
+    batch_output_token_price: Option<BigDecimal>,
 }
 
 /// PUT /api/v1/models/:model_id
@@ -1395,6 +1401,8 @@ struct UpdateModelRequest {
 /// - `description` (optional): Description of the model
 /// - `input_token_price` (optional): Price per input token
 /// - `output_token_price` (optional): Price per output token
+/// - `batch_input_token_price` (optional): Price per input token for batch requests
+/// - `batch_output_token_price` (optional): Price per output token for batch requests
 async fn update_model_by_id(
     State(state): State<Arc<AppState>>,
     Path(model_id): Path<i32>,
@@ -1419,6 +1427,24 @@ async fn update_model_by_id(
             );
         }
     }
+    if let Some(ref price) = payload.batch_input_token_price {
+        if *price < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "batch_input_token_price must not be negative",
+            );
+        }
+    }
+    if let Some(ref price) = payload.batch_output_token_price {
+        if *price < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "batch_output_token_price must not be negative",
+            );
+        }
+    }
 
     let update = crate::models::UpdateLLMModel {
         model_id: None,
@@ -1428,6 +1454,8 @@ async fn update_model_by_id(
         has_embedding: None,
         input_token_price: payload.input_token_price,
         output_token_price: payload.output_token_price,
+        batch_input_token_price: payload.batch_input_token_price,
+        batch_output_token_price: payload.batch_output_token_price,
         description: payload.description,
         updated_at: Some(chrono::Utc::now().naive_utc()),
     };
