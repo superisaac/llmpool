@@ -15,8 +15,9 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::helpers::{ACCOUNT, API_CREDENTIAL, AppState, check_fund_balance, select_model_clients};
+use super::helpers::{AppState, check_fund_balance, select_model_clients};
 use crate::defer::OpenAIEventData;
+use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
 

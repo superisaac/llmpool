@@ -12,9 +12,10 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::helpers::{
-    ACCOUNT, AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
+    AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
 };
 use crate::db;
+use crate::middlewares::api_auth::ACCOUNT;
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

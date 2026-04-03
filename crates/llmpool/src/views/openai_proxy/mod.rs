@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use crate::db::{DbPool, RedisPool};
 use crate::defer::OpenAIEventTask;
-use helpers::auth_openai_api;
+use crate::middlewares::api_auth::auth_openai_api;
 
 pub fn get_router(
     pool: DbPool,

@@ -10,11 +10,10 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::files::wrap_file;
-use super::helpers::{
-    ACCOUNT, API_CREDENTIAL, AppState, build_client_from_upstream, check_fund_balance,
-};
+use super::helpers::{AppState, build_client_from_upstream, check_fund_balance};
 use crate::db;
 use crate::defer::OpenAIEventData;
+use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 use crate::openai::session_tracer::SessionTracer;
 
 /// Generate a new UUIDv7-based batch_id with a "batch-" prefix.

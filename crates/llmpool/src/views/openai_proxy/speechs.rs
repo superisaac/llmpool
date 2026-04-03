@@ -6,7 +6,8 @@ use axum::{
 };
 use std::sync::Arc;
 
-use super::helpers::{ACCOUNT, AppState, check_fund_balance, select_model_clients};
+use super::helpers::{AppState, check_fund_balance, select_model_clients};
+use crate::middlewares::api_auth::ACCOUNT;
 use crate::models::CapacityOption;
 
 /// Handle POST /v1/audio/speech upstream (text-to-speech)
