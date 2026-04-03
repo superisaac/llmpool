@@ -48,6 +48,11 @@ pub enum UpstreamAction {
         /// Comma-separated proxies
         #[arg(long)]
         proxies: Option<String>,
+        /// Probe each model for supported features (chat, embedding, image, speech).
+        /// When omitted (default), models are saved with all feature flags set to false
+        /// without making any additional requests to the upstream.
+        #[arg(long, default_value_t = false)]
+        detect: bool,
     },
     /// Update an existing upstream
     Update {
@@ -113,6 +118,7 @@ struct CreateUpstreamRequest {
     tags: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     proxies: Vec<String>,
+    detect: bool,
 }
 
 #[derive(Serialize)]
@@ -291,6 +297,7 @@ pub async fn handle_upstream(
             description: _description,
             tags,
             proxies,
+            detect,
         } => {
             let body = CreateUpstreamRequest {
                 name,
@@ -299,6 +306,7 @@ pub async fn handle_upstream(
                 provider,
                 tags: tags.map(|t| parse_comma_list(&t)).unwrap_or_default(),
                 proxies: proxies.map(|p| parse_comma_list(&p)).unwrap_or_default(),
+                detect,
             };
             if json_output {
                 let raw = client.post_raw("/upstreams", &body).await?;

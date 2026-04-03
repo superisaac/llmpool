@@ -273,6 +273,88 @@ pub async fn detect_and_save_features(
     Ok(())
 }
 
+/// Fetch the model list from the upstream and save each model to the database without
+/// performing any feature detection. All feature flags are set to `false`.
+/// This will upsert the upstream (by api_base) and insert any new models (by upstream_id + model_id).
+pub async fn list_and_save_without_detect(
+    pool: &DbPool,
+    name: &str,
+    api_key: &str,
+    api_base: &str,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // 1. Fetch the model list from the remote API (no feature probing)
+    let config = async_openai::config::OpenAIConfig::new()
+        .with_api_key(api_key.to_string())
+        .with_api_base(api_base.to_string());
+    let client = Client::with_config(config);
+
+    let response = client.models().list().await?;
+    let mut models = response.data;
+    models.sort_by(|a, b| a.id.cmp(&b.id));
+
+    // 2. Upsert the LLMUpstream (has_responses_api stays false when not detecting)
+    let upstream = match db::openai::get_upstream_by_api_base(pool, api_base).await {
+        Ok(existing) => {
+            let update = UpdateLLMUpstream {
+                name: Some(name.to_string()),
+                api_base: None,
+                api_key: Some(api_key.to_string()),
+                provider: None,
+                has_responses_api: None,
+                tags: None,
+                proxies: None,
+                status: None,
+                description: None,
+                updated_at: Some(Utc::now().naive_utc()),
+            };
+            db::openai::update_upstream(pool, existing.id, &update).await?
+        }
+        Err(sqlx::Error::RowNotFound) => {
+            let new_upstream = NewLLMUpstream {
+                name: name.to_string(),
+                api_base: api_base.to_string(),
+                api_key: api_key.to_string(),
+                provider: "openai".to_string(),
+                has_responses_api: false,
+                tags: vec![],
+                proxies: vec![],
+                status: "online".to_string(),
+                description: String::new(),
+            };
+            db::openai::create_upstream(pool, &new_upstream).await?
+        }
+        Err(e) => return Err(Box::new(e)),
+    };
+
+    // 3. For each model, insert a record with all features set to false (skip if already exists)
+    let default_token_price = BigDecimal::from_str("0.000001").unwrap();
+    for model in &models {
+        match db::openai::find_model_by_upstream_and_model_id(pool, upstream.id, &model.id).await {
+            Ok(_existing) => {
+                // Model already exists — leave it untouched so existing feature flags are preserved
+            }
+            Err(sqlx::Error::RowNotFound) => {
+                let new_model = NewLLMModel {
+                    upstream_id: upstream.id,
+                    model_id: model.id.clone(),
+                    has_image_generation: false,
+                    has_speech: false,
+                    has_chat_completion: false,
+                    has_embedding: false,
+                    input_token_price: default_token_price.clone(),
+                    output_token_price: default_token_price.clone(),
+                    batch_input_token_price: default_token_price.clone(),
+                    batch_output_token_price: default_token_price.clone(),
+                };
+                db::openai::create_model(pool, &new_model).await?;
+            }
+            Err(e) => return Err(Box::new(e)),
+        }
+    }
+
+    Ok(())
+}
+
 /// Helper function: Determine if error indicates feature is truly unavailable
 fn is_unsupported_error(e: &OpenAIError) -> bool {
     let err_str = e.to_string().to_lowercase();

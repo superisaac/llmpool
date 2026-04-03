@@ -209,6 +209,12 @@
             },
             "default": [],
             "example": []
+          },
+          "detect": {
+            "type": "boolean",
+            "description": "Whether to probe each model for supported features (chat completion, embedding, image generation, speech).\nIf `false` (the default), models are saved immediately with all feature flags set to `false` without making any additional requests to the upstream.\nIf `true`, each model is probed individually to determine its capabilities.\n",
+            "default": false,
+            "example": false
           }
         }
       },

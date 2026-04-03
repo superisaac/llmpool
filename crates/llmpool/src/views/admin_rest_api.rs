@@ -950,6 +950,11 @@ struct CreateUpstreamRequest {
     tags: Vec<String>,
     #[serde(default)]
     proxies: Vec<String>,
+    /// Whether to probe each model for supported features.
+    /// If `false` (the default), models are saved with all feature flags set to `false`
+    /// without making any additional requests to the upstream.
+    #[serde(default)]
+    detect: bool,
 }
 
 fn default_provider() -> String {
@@ -1065,17 +1070,30 @@ async fn create_upstream(
         );
     }
 
-    // Detect features from the remote API and save to database
-    match crate::openai::features::detect_and_save_features(
-        &state.pool,
-        payload.name.trim(),
-        payload.api_key.trim(),
-        payload.api_base.trim(),
-    )
-    .await
-    {
+    // Save the upstream and its models to the database.
+    // When detect=true, probe each model for supported features.
+    // When detect=false (default), save all models with all feature flags set to false.
+    let save_result = if payload.detect {
+        crate::openai::features::detect_and_save_features(
+            &state.pool,
+            payload.name.trim(),
+            payload.api_key.trim(),
+            payload.api_base.trim(),
+        )
+        .await
+    } else {
+        crate::openai::features::list_and_save_without_detect(
+            &state.pool,
+            payload.name.trim(),
+            payload.api_key.trim(),
+            payload.api_base.trim(),
+        )
+        .await
+    };
+
+    match save_result {
         Ok(()) => {
-            // Fetch the saved upstream and update tags if provided
+            // Fetch the saved upstream and update tags/provider/proxies if provided
             match db::openai::get_upstream_by_api_base(&state.pool, payload.api_base.trim()).await {
                 Ok(upstream) => {
                     // Update provider, tags and proxies if the request included them
@@ -1106,7 +1124,7 @@ async fn create_upstream(
                         match db::openai::update_upstream(&state.pool, upstream.id, &update).await {
                             Ok(ep) => ep,
                             Err(e) => {
-                                warn!(error = %e, "Failed to update upstream tags");
+                                warn!(error = %e, "Failed to update upstream provider/tags/proxies");
                                 upstream
                             }
                         }
@@ -1150,11 +1168,11 @@ async fn create_upstream(
             }
         }
         Err(e) => {
-            warn!(error = %e, "Failed to detect and save upstream features");
+            warn!(error = %e, "Failed to save upstream");
             error_response(
                 StatusCode::BAD_GATEWAY,
-                "detection_error",
-                &format!("Failed to detect and save upstream features: {}", e),
+                "upstream_error",
+                &format!("Failed to save upstream: {}", e),
             )
         }
     }
