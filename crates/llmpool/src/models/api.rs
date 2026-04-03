@@ -11,6 +11,12 @@ use sqlx::FromRow;
 pub struct ApiCredential {
     pub id: i32,
     pub account_id: Option<i32>,
+    pub encrypted_api_key: String,
+    pub ellipsed_api_key: String,
+    pub api_key_hash: String,
+    /// Decrypted API key, populated after reading from DB. Not stored in the database.
+    #[sqlx(skip)]
+    #[serde(skip)]
     pub apikey: String,
     pub label: String,
     pub is_active: bool,

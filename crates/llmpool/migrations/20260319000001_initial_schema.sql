@@ -51,15 +51,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_name ON accounts (name);
 CREATE TABLE IF NOT EXISTS api_credentials (
     id SERIAL PRIMARY KEY,
     account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
-    apikey VARCHAR NOT NULL,
+    encrypted_api_key VARCHAR NOT NULL DEFAULT '',
+    ellipsed_api_key VARCHAR NOT NULL DEFAULT '',
+    api_key_hash VARCHAR NOT NULL DEFAULT '',
     label VARCHAR NOT NULL DEFAULT '',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     expires_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_credentials_apikey ON api_credential (apikey);
-CREATE INDEX IF NOT EXISTS idx_api_credentials_account_id ON api_credential (account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_credentials_api_key_hash ON api_credentials (api_key_hash);
+CREATE INDEX IF NOT EXISTS idx_api_credentials_account_id ON api_credentials (account_id);
 
 -- Create session_events table (unlogged for performance)
 CREATE UNLOGGED TABLE IF NOT EXISTS session_events (

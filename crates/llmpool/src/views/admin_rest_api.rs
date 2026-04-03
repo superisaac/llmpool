@@ -19,7 +19,7 @@ use crate::middlewares::admin_auth;
 use crate::models::{Account, NewAccount, UpdateAccount};
 use crate::models::{BalanceChangeContent, NewBalanceChange};
 use crate::redis_utils::caches::account as account_cache;
-use crate::redis_utils::caches::apikey::{self as redis_cache, ApiKeyInfo};
+use crate::redis_utils::caches::api_key::{self as redis_cache, ApiKeyInfo};
 
 // --- Server State ---
 
@@ -186,11 +186,13 @@ impl From<crate::models::Fund> for FundResponse {
 
 // --- ApiCredential Response DTO ---
 
-/// Response DTO for an API key
+/// Response DTO for an API key (shows ellipsed key; plaintext only on creation)
 #[derive(Serialize)]
 struct ApiCredentialResponse {
     id: i32,
     account_id: Option<i32>,
+    /// Ellipsed representation of the API key (e.g. "lpx-ab...cd").
+    /// Only populated with the full plaintext key immediately after creation.
     apikey: String,
     label: String,
     is_active: bool,
@@ -204,7 +206,41 @@ impl From<crate::models::ApiCredential> for ApiCredentialResponse {
         Self {
             id: ak.id,
             account_id: ak.account_id,
-            apikey: ak.apikey,
+            apikey: ak.ellipsed_api_key.clone(),
+            label: ak.label,
+            is_active: ak.is_active,
+            expires_at: ak
+                .expires_at
+                .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            created_at: ak.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            updated_at: ak.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+/// Response DTO returned only on API key creation — includes the full plaintext key.
+#[derive(Serialize)]
+struct ApiCredentialCreatedResponse {
+    id: i32,
+    account_id: Option<i32>,
+    /// Full plaintext API key. Only returned once at creation time; store it securely.
+    apikey: String,
+    /// Ellipsed representation for display purposes.
+    ellipsed_apikey: String,
+    label: String,
+    is_active: bool,
+    expires_at: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<crate::models::ApiCredential> for ApiCredentialCreatedResponse {
+    fn from(ak: crate::models::ApiCredential) -> Self {
+        Self {
+            id: ak.id,
+            account_id: ak.account_id,
+            apikey: ak.apikey.clone(),
+            ellipsed_apikey: ak.ellipsed_api_key.clone(),
             label: ak.label,
             is_active: ak.is_active,
             expires_at: ak
@@ -764,20 +800,26 @@ async fn create_account_apikey(
     match db::api::create_api_credential_for_account(&state.pool, account_id, &payload.label).await
     {
         Ok(key) => {
-            // Cache the new apikey info in Redis
+            // Cache the new apikey info in Redis, keyed by api_key_hash
             let info = ApiKeyInfo {
                 id: key.id,
                 account_id: key.account_id,
-                apikey: key.apikey.clone(),
+                api_key_hash: key.api_key_hash.clone(),
                 label: key.label.clone(),
                 is_active: key.is_active,
                 account_is_active: account.is_active,
             };
-            if let Err(e) = redis_cache::set_apikey_info(&state.redis_pool, &key.apikey, info).await
+            if let Err(e) =
+                redis_cache::set_apikey_info(&state.redis_pool, &key.api_key_hash, info).await
             {
-                warn!(error = %e, apikey = %key.apikey, "Failed to cache new apikey info in Redis");
+                warn!(error = %e, api_key_hash = %key.api_key_hash, "Failed to cache new apikey info in Redis");
             }
-            (StatusCode::CREATED, Json(ApiCredentialResponse::from(key))).into_response()
+            // Return the full plaintext key only on creation
+            (
+                StatusCode::CREATED,
+                Json(ApiCredentialCreatedResponse::from(key)),
+            )
+                .into_response()
         }
         Err(e) => {
             warn!(error = %e, "Failed to create API key for account");
@@ -821,9 +863,9 @@ async fn get_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<Strin
 async fn delete_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<String>) -> Response {
     match db::api::deactivate_api_credential(&state.pool, &apikey).await {
         Ok(key) => {
-            // Invalidate the Redis cache for this apikey
-            if let Err(e) = redis_cache::delete_apikey(&state.redis_pool, &apikey).await {
-                warn!(error = %e, apikey = %apikey, "Failed to delete apikey cache from Redis");
+            // Invalidate the Redis cache using the api_key_hash (not the plaintext key)
+            if let Err(e) = redis_cache::delete_apikey(&state.redis_pool, &key.api_key_hash).await {
+                warn!(error = %e, api_key_hash = %key.api_key_hash, "Failed to delete apikey cache from Redis");
             }
             Json(ApiCredentialResponse::from(key)).into_response()
         }

@@ -82,7 +82,10 @@ async fn check_rate_limit(
     // Step 2: Add the current request with a unique member (timestamp + random u64)
     let rand_suffix: u64 = rand::rng().random();
     let member = format!("{}-{}", now_ms, rand_suffix);
-    if let Err(e) = conn.zadd::<_, _, _, ()>(&key, member.as_str(), now_ms).await {
+    if let Err(e) = conn
+        .zadd::<_, _, _, ()>(&key, member.as_str(), now_ms)
+        .await
+    {
         warn!(
             error = %e,
             key = %key,
