@@ -83,7 +83,7 @@ pub async fn check_fund_balance(state: &AppState, account_id: i32) -> Result<(),
 pub(super) async fn select_first_upstream(
     state: &AppState,
 ) -> Result<crate::models::LLMUpstream, Response> {
-    match db::openai::list_upstreams(&state.pool).await {
+    match db::llm::list_upstreams(&state.pool).await {
         Ok(upstreams) if !upstreams.is_empty() => Ok(upstreams.into_iter().next().unwrap()),
         Ok(_) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
@@ -198,7 +198,7 @@ pub(super) async fn select_model_clients(
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let models =
-        match db::openai::find_models_by_name_and_capacity(db_pool, model_name, capacity).await {
+        match db::llm::find_models_by_name_and_capacity(db_pool, model_name, capacity).await {
             Ok(models) if !models.is_empty() => models,
             Ok(_) => {
                 warn!(

@@ -211,7 +211,7 @@ async fn passthrough_by_tag_handler(
     req: Request,
 ) -> Response {
     // 1. Find upstreams by tag
-    let upstreams = match db::openai::find_upstreams_by_tag(&state.pool, &tag).await {
+    let upstreams = match db::llm::find_upstreams_by_tag(&state.pool, &tag).await {
         Ok(eps) => eps,
         Err(e) => {
             warn!(tag = %tag, error = %e, "Failed to query upstreams by tag");
@@ -255,7 +255,7 @@ async fn passthrough_by_upstream_id_handler(
     req: Request,
 ) -> Response {
     // 1. Find upstream by ID
-    let upstream = match db::openai::get_upstream(&state.pool, upstream_id).await {
+    let upstream = match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(ep) => ep,
         Err(sqlx::Error::RowNotFound) => {
             return error_response(

@@ -77,6 +77,7 @@ pub struct LLMModel {
     pub id: i32,
     pub upstream_id: i32,
     pub model_id: String,
+    pub is_active: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
     pub has_chat_completion: bool,
@@ -119,6 +120,7 @@ pub struct CapacityOption {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateLLMModel {
     pub model_id: Option<String>,
+    pub is_active: Option<bool>,
     pub has_image_generation: Option<bool>,
     pub has_speech: Option<bool>,
     pub has_chat_completion: Option<bool>,

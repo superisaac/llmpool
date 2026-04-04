@@ -296,6 +296,7 @@
           "id",
           "upstream_id",
           "model_id",
+          "is_active",
           "has_chat_completion",
           "has_embedding",
           "has_image_generation",
@@ -320,6 +321,11 @@
           "model_id": {
             "type": "string",
             "example": "gpt-4o"
+          },
+          "is_active": {
+            "type": "boolean",
+            "description": "Whether the model is active and available for use",
+            "example": true
           },
           "has_chat_completion": {
             "type": "boolean",
@@ -366,6 +372,10 @@
       "UpdateModelRequest": {
         "type": "object",
         "properties": {
+          "is_active": {
+            "type": "boolean",
+            "description": "Whether the model is active and available for use"
+          },
           "description": {
             "type": "string",
             "description": "Description of the model"
@@ -377,6 +387,14 @@
           "output_token_price": {
             "type": "string",
             "description": "Price per output token (decimal string, must not be negative)"
+          },
+          "batch_input_token_price": {
+            "type": "string",
+            "description": "Price per input token for batch requests (decimal string, must not be negative)"
+          },
+          "batch_output_token_price": {
+            "type": "string",
+            "description": "Price per output token for batch requests (decimal string, must not be negative)"
           }
         }
       },

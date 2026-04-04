@@ -193,7 +193,7 @@ pub async fn detect_and_save_features(
     let api_features = detect_features(api_key, api_base).await?;
 
     // 2. Upsert the LLMUpstream
-    let upstream = match db::openai::get_upstream_by_api_base(pool, api_base).await {
+    let upstream = match db::llm::get_upstream_by_api_base(pool, api_base).await {
         Ok(existing) => {
             // Update existing upstream
             let update = UpdateLLMUpstream {
@@ -208,7 +208,7 @@ pub async fn detect_and_save_features(
                 description: None,
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            db::openai::update_upstream(pool, existing.id, &update).await?
+            db::llm::update_upstream(pool, existing.id, &update).await?
         }
         Err(sqlx::Error::RowNotFound) => {
             // Insert new upstream
@@ -223,19 +223,20 @@ pub async fn detect_and_save_features(
                 status: "online".to_string(),
                 description: String::new(),
             };
-            db::openai::create_upstream(pool, &new_upstream).await?
+            db::llm::create_upstream(pool, &new_upstream).await?
         }
         Err(e) => return Err(Box::new(e)),
     };
 
     // 3. Upsert each model
     for mf in &api_features.model_features {
-        match db::openai::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await
+        match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await
         {
             Ok(existing_model) => {
                 // Update existing model
                 let update = UpdateLLMModel {
                     model_id: None,
+                    is_active: None,
                     has_image_generation: Some(mf.has_image_generation),
                     has_speech: Some(mf.has_speech),
                     has_chat_completion: Some(mf.has_chat_completion),
@@ -247,7 +248,7 @@ pub async fn detect_and_save_features(
                     description: None,
                     updated_at: Some(Utc::now().naive_utc()),
                 };
-                db::openai::update_model(pool, existing_model.id, &update).await?;
+                db::llm::update_model(pool, existing_model.id, &update).await?;
             }
             Err(sqlx::Error::RowNotFound) => {
                 // Insert new model
@@ -264,7 +265,7 @@ pub async fn detect_and_save_features(
                     batch_input_token_price: default_token_price.clone(),
                     batch_output_token_price: default_token_price,
                 };
-                db::openai::create_model(pool, &new_model).await?;
+                db::llm::create_model(pool, &new_model).await?;
             }
             Err(e) => return Err(Box::new(e)),
         }
@@ -293,7 +294,7 @@ pub async fn list_and_save_without_detect(
     models.sort_by(|a, b| a.id.cmp(&b.id));
 
     // 2. Upsert the LLMUpstream (has_responses_api stays false when not detecting)
-    let upstream = match db::openai::get_upstream_by_api_base(pool, api_base).await {
+    let upstream = match db::llm::get_upstream_by_api_base(pool, api_base).await {
         Ok(existing) => {
             let update = UpdateLLMUpstream {
                 name: Some(name.to_string()),
@@ -307,7 +308,7 @@ pub async fn list_and_save_without_detect(
                 description: None,
                 updated_at: Some(Utc::now().naive_utc()),
             };
-            db::openai::update_upstream(pool, existing.id, &update).await?
+            db::llm::update_upstream(pool, existing.id, &update).await?
         }
         Err(sqlx::Error::RowNotFound) => {
             let new_upstream = NewLLMUpstream {
@@ -321,7 +322,7 @@ pub async fn list_and_save_without_detect(
                 status: "online".to_string(),
                 description: String::new(),
             };
-            db::openai::create_upstream(pool, &new_upstream).await?
+            db::llm::create_upstream(pool, &new_upstream).await?
         }
         Err(e) => return Err(Box::new(e)),
     };
@@ -329,7 +330,7 @@ pub async fn list_and_save_without_detect(
     // 3. For each model, insert a record with all features set to false (skip if already exists)
     let default_token_price = BigDecimal::from_str("0.000001").unwrap();
     for model in &models {
-        match db::openai::find_model_by_upstream_and_model_id(pool, upstream.id, &model.id).await {
+        match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &model.id).await {
             Ok(_existing) => {
                 // Model already exists — leave it untouched so existing feature flags are preserved
             }
@@ -346,7 +347,7 @@ pub async fn list_and_save_without_detect(
                     batch_input_token_price: default_token_price.clone(),
                     batch_output_token_price: default_token_price.clone(),
                 };
-                db::openai::create_model(pool, &new_model).await?;
+                db::llm::create_model(pool, &new_model).await?;
             }
             Err(e) => return Err(Box::new(e)),
         }
@@ -363,10 +364,10 @@ pub async fn detect_and_update_model_features(
     model_pk: i32,
 ) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
     // 1. Fetch the model record
-    let model = db::openai::get_model(pool, model_pk).await?;
+    let model = db::llm::get_model(pool, model_pk).await?;
 
     // 2. Fetch the upstream to get api_key and api_base
-    let upstream = db::openai::get_upstream(pool, model.upstream_id).await?;
+    let upstream = db::llm::get_upstream(pool, model.upstream_id).await?;
 
     // 3. Build the OpenAI client
     let config = async_openai::config::OpenAIConfig::new()
@@ -388,6 +389,7 @@ pub async fn detect_and_update_model_features(
     // 6. Update only the feature flags in the database
     let update = UpdateLLMModel {
         model_id: None,
+        is_active: None,
         has_image_generation: Some(features.has_image_generation),
         has_speech: Some(features.has_speech),
         has_chat_completion: Some(features.has_chat_completion),
@@ -399,7 +401,7 @@ pub async fn detect_and_update_model_features(
         description: None,
         updated_at: Some(Utc::now().naive_utc()),
     };
-    let updated_model = db::openai::update_model(pool, model_pk, &update).await?;
+    let updated_model = db::llm::update_model(pool, model_pk, &update).await?;
     Ok(updated_model)
 }
 

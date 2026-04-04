@@ -271,7 +271,7 @@ async fn list_upstreams(
     let offset = (page - 1) * page_size;
 
     // Get total count
-    let total = match db::openai::count_upstreams(&state.pool).await {
+    let total = match db::llm::count_upstreams(&state.pool).await {
         Ok(count) => count,
         Err(e) => {
             warn!(error = %e, "Failed to count upstreams");
@@ -284,7 +284,7 @@ async fn list_upstreams(
     };
 
     // Get paginated upstreams
-    let upstreams = match db::openai::list_upstreams_paginated(&state.pool, offset, page_size).await
+    let upstreams = match db::llm::list_upstreams_paginated(&state.pool, offset, page_size).await
     {
         Ok(eps) => eps,
         Err(e) => {
@@ -925,14 +925,14 @@ async fn list_models(
     let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
     let offset = (page - 1) * page_size;
 
-    let filter = db::openai::ListModelsFilter {
+    let filter = db::llm::ListModelsFilter {
         upstream_id: params.upstream_id,
         upstream_name: params.upstream_name,
         name: params.name,
     };
 
     // Get total count
-    let total = match db::openai::count_models_filtered(&state.pool, &filter).await {
+    let total = match db::llm::count_models_filtered(&state.pool, &filter).await {
         Ok(count) => count,
         Err(e) => {
             warn!(error = %e, "Failed to count models");
@@ -946,7 +946,7 @@ async fn list_models(
 
     // Get paginated models
     let models =
-        match db::openai::list_models_filtered_paginated(&state.pool, &filter, offset, page_size)
+        match db::llm::list_models_filtered_paginated(&state.pool, &filter, offset, page_size)
             .await
         {
             Ok(models) => models,
@@ -1016,6 +1016,7 @@ struct ModelResponse {
     id: i32,
     upstream_id: i32,
     model_id: String,
+    is_active: bool,
     has_chat_completion: bool,
     has_embedding: bool,
     has_image_generation: bool,
@@ -1035,6 +1036,7 @@ impl From<crate::models::LLMModel> for ModelResponse {
             id: m.id,
             upstream_id: m.upstream_id,
             model_id: m.model_id,
+            is_active: m.is_active,
             has_chat_completion: m.has_chat_completion,
             has_embedding: m.has_embedding,
             has_image_generation: m.has_image_generation,
@@ -1136,7 +1138,7 @@ async fn create_upstream(
     match save_result {
         Ok(()) => {
             // Fetch the saved upstream and update tags/provider/proxies if provided
-            match db::openai::get_upstream_by_api_base(&state.pool, payload.api_base.trim()).await {
+            match db::llm::get_upstream_by_api_base(&state.pool, payload.api_base.trim()).await {
                 Ok(upstream) => {
                     // Update provider, tags and proxies if the request included them
                     let upstream = if payload.provider != "openai"
@@ -1163,7 +1165,7 @@ async fn create_upstream(
                             description: None,
                             updated_at: None,
                         };
-                        match db::openai::update_upstream(&state.pool, upstream.id, &update).await {
+                        match db::llm::update_upstream(&state.pool, upstream.id, &update).await {
                             Ok(ep) => ep,
                             Err(e) => {
                                 warn!(error = %e, "Failed to update upstream provider/tags/proxies");
@@ -1175,7 +1177,7 @@ async fn create_upstream(
                     };
                     // Also fetch the models for this upstream
                     let models =
-                        match db::openai::list_models_by_upstream(&state.pool, upstream.id).await {
+                        match db::llm::list_models_by_upstream(&state.pool, upstream.id).await {
                             Ok(models) => models,
                             Err(e) => {
                                 warn!(error = %e, "Failed to list models for upstream");
@@ -1355,7 +1357,7 @@ async fn get_upstream_by_name(
     State(state): State<Arc<AppState>>,
     Path(name): Path<String>,
 ) -> Response {
-    match db::openai::get_upstream_by_name(&state.pool, &name).await {
+    match db::llm::get_upstream_by_name(&state.pool, &name).await {
         Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -1380,7 +1382,7 @@ async fn get_upstream_by_id(
     State(state): State<Arc<AppState>>,
     Path(upstream_id): Path<i32>,
 ) -> Response {
-    match db::openai::get_upstream(&state.pool, upstream_id).await {
+    match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -1463,7 +1465,7 @@ async fn update_upstream_by_id(
         updated_at: Some(chrono::Utc::now().naive_utc()),
     };
 
-    match db::openai::update_upstream(&state.pool, upstream_id, &update).await {
+    match db::llm::update_upstream(&state.pool, upstream_id, &update).await {
         Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -1491,7 +1493,7 @@ async fn get_model_by_upstream_and_name(
     State(state): State<Arc<AppState>>,
     Path((upstream_name, model_name)): Path<(String, String)>,
 ) -> Response {
-    match db::openai::find_model_by_upstream_name_and_model_id(
+    match db::llm::find_model_by_upstream_name_and_model_id(
         &state.pool,
         &upstream_name,
         &model_name,
@@ -1525,7 +1527,7 @@ async fn get_model_by_id(
     State(state): State<Arc<AppState>>,
     Path(model_id): Path<i32>,
 ) -> Response {
-    match db::openai::get_model(&state.pool, model_id).await {
+    match db::llm::get_model(&state.pool, model_id).await {
         Ok(model) => Json(ModelResponse::from(model)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -1546,6 +1548,7 @@ async fn get_model_by_id(
 /// Request body for updating an OpenAI model
 #[derive(Deserialize)]
 struct UpdateModelRequest {
+    is_active: Option<bool>,
     description: Option<String>,
     input_token_price: Option<BigDecimal>,
     output_token_price: Option<BigDecimal>,
@@ -1608,6 +1611,7 @@ async fn update_model_by_id(
 
     let update = crate::models::UpdateLLMModel {
         model_id: None,
+        is_active: payload.is_active,
         has_image_generation: None,
         has_speech: None,
         has_chat_completion: None,
@@ -1620,7 +1624,7 @@ async fn update_model_by_id(
         updated_at: Some(chrono::Utc::now().naive_utc()),
     };
 
-    match db::openai::update_model(&state.pool, model_id, &update).await {
+    match db::llm::update_model(&state.pool, model_id, &update).await {
         Ok(model) => Json(ModelResponse::from(model)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -2059,7 +2063,7 @@ async fn list_upstream_tags(
     State(state): State<Arc<AppState>>,
     Path(upstream_id): Path<i32>,
 ) -> Response {
-    match db::openai::get_upstream_tags(&state.pool, upstream_id).await {
+    match db::llm::get_upstream_tags(&state.pool, upstream_id).await {
         Ok(tags) => Json(TagsResponse { upstream_id, tags }).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(
             StatusCode::NOT_FOUND,
@@ -2098,7 +2102,7 @@ async fn add_upstream_tag(
 
     let tag = payload.tag.trim();
 
-    match db::openai::add_upstream_tag(&state.pool, upstream_id, tag).await {
+    match db::llm::add_upstream_tag(&state.pool, upstream_id, tag).await {
         Ok(upstream) => (
             StatusCode::OK,
             Json(TagsResponse {
@@ -2130,7 +2134,7 @@ async fn remove_upstream_tag(
     State(state): State<Arc<AppState>>,
     Path((upstream_id, tag)): Path<(i32, String)>,
 ) -> Response {
-    match db::openai::remove_upstream_tag(&state.pool, upstream_id, &tag).await {
+    match db::llm::remove_upstream_tag(&state.pool, upstream_id, &tag).await {
         Ok(upstream) => Json(TagsResponse {
             upstream_id,
             tags: upstream.tags,

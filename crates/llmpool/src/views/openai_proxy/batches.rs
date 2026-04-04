@@ -27,7 +27,7 @@ async fn get_upstream_by_id(
     state: &AppState,
     upstream_id: i32,
 ) -> Result<crate::models::LLMUpstream, Response> {
-    match db::openai::get_upstream(&state.pool, upstream_id).await {
+    match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Ok(upstream),
         Err(sqlx::Error::RowNotFound) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
@@ -93,7 +93,7 @@ pub async fn list_batches_handler(State(state): State<Arc<AppState>>) -> Respons
     }
 
     // Use the first available upstream for listing
-    let upstream = match db::openai::list_upstreams(&state.pool).await {
+    let upstream = match db::llm::list_upstreams(&state.pool).await {
         Ok(upstreams) if !upstreams.is_empty() => upstreams.into_iter().next().unwrap(),
         Ok(_) => {
             return (

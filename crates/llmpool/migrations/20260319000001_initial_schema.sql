@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
     id SERIAL PRIMARY KEY,
     upstream_id INTEGER NOT NULL REFERENCES llm_upstreams(id) ON DELETE CASCADE,
     model_id VARCHAR NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE;
     has_image_generation BOOLEAN NOT NULL DEFAULT FALSE,
     has_speech BOOLEAN NOT NULL DEFAULT FALSE,
     has_chat_completion BOOLEAN NOT NULL DEFAULT FALSE,

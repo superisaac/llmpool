@@ -63,19 +63,30 @@ pub struct UpstreamResponse {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct ModelResponse {
     pub id: i32,
     pub upstream_id: i32,
     pub model_id: String,
+    pub is_active: bool,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
     pub input_token_price: String,
     pub output_token_price: String,
+    pub batch_input_token_price: String,
+    pub batch_output_token_price: String,
     pub description: String,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModelTestResult {
+    pub model_id: i32,
+    pub model: Option<ModelResponse>,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

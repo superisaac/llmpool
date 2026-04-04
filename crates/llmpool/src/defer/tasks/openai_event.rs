@@ -111,7 +111,7 @@ pub async fn handle_openai_event(
     };
 
     // Look up the model to get token prices (needed for both session event and balance change)
-    let model: Option<LLMModel> = match db::openai::get_model_with_tx(&mut tx, model_id).await {
+    let model: Option<LLMModel> = match db::llm::get_model_with_tx(&mut tx, model_id).await {
         Ok(model) => Some(model),
         Err(e) => {
             warn!(

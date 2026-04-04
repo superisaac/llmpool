@@ -294,6 +294,7 @@ pub async fn update_model(
     let current = get_model(pool, model_pk).await?;
 
     let model_id = update.model_id.as_deref().unwrap_or(&current.model_id);
+    let is_active = update.is_active.unwrap_or(current.is_active);
     let has_image_generation = update
         .has_image_generation
         .unwrap_or(current.has_image_generation);
@@ -326,14 +327,15 @@ pub async fn update_model(
 
     sqlx::query_as::<_, LLMModel>(
         "UPDATE llm_models
-         SET model_id = $1, has_image_generation = $2, has_speech = $3, has_chat_completion = $4,
-             has_embedding = $5, input_token_price = $6, output_token_price = $7,
-             batch_input_token_price = $8, batch_output_token_price = $9,
-             description = $10, updated_at = $11
-         WHERE id = $12
+         SET model_id = $1, is_active = $2, has_image_generation = $3, has_speech = $4,
+             has_chat_completion = $5, has_embedding = $6, input_token_price = $7,
+             output_token_price = $8, batch_input_token_price = $9, batch_output_token_price = $10,
+             description = $11, updated_at = $12
+         WHERE id = $13
          RETURNING *",
     )
     .bind(model_id)
+    .bind(is_active)
     .bind(has_image_generation)
     .bind(has_speech)
     .bind(has_chat_completion)
@@ -552,6 +554,7 @@ struct ModelUpstreamRow {
     pub id: i32,
     pub upstream_id: i32,
     pub model_id: String,
+    pub is_active: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
     pub has_chat_completion: bool,
@@ -584,6 +587,7 @@ impl ModelUpstreamRow {
             id: self.id,
             upstream_id: self.upstream_id,
             model_id: self.model_id,
+            is_active: self.is_active,
             has_image_generation: self.has_image_generation,
             has_speech: self.has_speech,
             has_chat_completion: self.has_chat_completion,
@@ -629,7 +633,7 @@ pub async fn find_models_by_name_and_capacity(
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
-        "SELECT m.id, m.upstream_id, m.model_id, m.has_image_generation, m.has_speech,
+        "SELECT m.id, m.upstream_id, m.model_id, m.is_active, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
@@ -641,7 +645,8 @@ pub async fn find_models_by_name_and_capacity(
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
          FROM llm_models m
          INNER JOIN llm_upstreams e ON m.upstream_id = e.id
-         WHERE m.model_id = $1",
+         WHERE m.model_id = $1
+                AND m.is_active = true ",
     );
 
     let mut param_idx = 2u32;

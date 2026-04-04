@@ -134,7 +134,7 @@ async fn get_upstream_by_id(
     state: &AppState,
     upstream_id: i32,
 ) -> Result<crate::models::LLMUpstream, Response> {
-    match db::openai::get_upstream(&state.pool, upstream_id).await {
+    match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Ok(upstream),
         Err(sqlx::Error::RowNotFound) => Err((
             StatusCode::SERVICE_UNAVAILABLE,
