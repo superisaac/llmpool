@@ -767,6 +767,46 @@
           }
         }
       },
+      "TestModelsRequest": {
+        "type": "object",
+        "required": [
+          "model_ids"
+        ],
+        "properties": {
+          "model_ids": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int32"
+            },
+            "description": "List of model database IDs to test",
+            "example": [1, 2, 3]
+          }
+        }
+      },
+      "ModelTestResult": {
+        "type": "object",
+        "required": [
+          "model_id"
+        ],
+        "properties": {
+          "model_id": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The database ID of the model that was tested",
+            "example": 1
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelResponse",
+            "description": "The updated model with refreshed feature flags. Present on success."
+          },
+          "error": {
+            "type": "string",
+            "description": "Error message if the test failed for this model. Present on failure.",
+            "example": "Row not found"
+          }
+        }
+      },
       "TestUpstreamRequest": {
         "type": "object",
         "required": [
@@ -1491,6 +1531,51 @@
         }
       }
     },
+    "/models-tests": {
+      "post": {
+        "tags": [
+          "Model Tests"
+        ],
+        "summary": "Test model features",
+        "description": "Tests the features of the specified models (by their database IDs) and updates\nthe feature flags (`has_chat_completion`, `has_embedding`, `has_image_generation`, `has_speech`)\nin the LLMModel table. All other fields (prices, description, etc.) remain unchanged.\nEach model is tested independently; partial failures are tolerated.\n",
+        "operationId": "testModels",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestModelsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Array of per-model test results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ModelTestResult"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (empty model_ids)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/models": {
       "get": {
         "tags": [
@@ -1542,6 +1627,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PaginatedModels"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/models/{upstream_name}/{model_name}": {
+      "get": {
+        "tags": [
+          "Models"
+        ],
+        "summary": "Get a model by upstream name and model name",
+        "description": "Returns a single model identified by its upstream name and model name (model_id).\nThe `model_name` path segment is a wildcard that supports model names containing slashes.\n",
+        "operationId": "getModelByUpstreamAndName",
+        "parameters": [
+          {
+            "name": "upstream_name",
+            "in": "path",
+            "description": "The name of the upstream",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "OpenAI"
+          },
+          {
+            "name": "model_name",
+            "in": "path",
+            "description": "The model name (model_id). May contain slashes.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "example": "gpt-4o"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Model details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Model not found in the specified upstream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2564,6 +2713,10 @@
     {
       "name": "Upstream Tests",
       "description": "Test upstream feature detection without saving"
+    },
+    {
+      "name": "Model Tests",
+      "description": "Test model feature detection and update the LLMModel table"
     },
     {
       "name": "Models",

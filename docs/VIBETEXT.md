@@ -287,3 +287,8 @@ batch处理的结构 Batch 中有个output_file_id对象，使用uuidv7生成一
 ==========
 LLMModel 增加两个字段 batch_input_token_price 和batch_output_token_price, 缺省价格和原来的价格一致。直接修改migrations文件，不需要新建migration文件。
 UsageInfo 增加一个is_batch字段，默认为false。生成SpendToken的时候，如果usage.is_batch 则价格使用 batch_output_token_price和batch_input_token_price
+
+==========
+实现admin API,  /api/v1/models/path/{upstream_name}/{*model_name} 根据path("{upstream_name}/{model_name}") 显示model的详情
+
+实现 admin API, POST /api/v1/models-tests, 参数 {"model_ids": Vec[i32]}, 对model_ids 指定的model 测试其features 并更新到LLMModel表，不更改其它字段。

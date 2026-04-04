@@ -133,6 +133,19 @@ curl -X POST http://localhost:19324/api/v1/upstream-tests \
   }'
 ```
 
+### Model Testing
+
+```bash
+# Test features of specific models by their database IDs and update the LLMModel table
+curl -X POST http://localhost:19324/api/v1/models-tests \
+  -H "x-admin-token: <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"model_ids": [1, 2, 3]}'
+```
+
+The response is an array of per-model results. Each entry contains either the updated model
+object (with refreshed feature flags) or an error message if the test failed for that model.
+
 ### Models
 
 ```bash
@@ -149,6 +162,10 @@ curl "http://localhost:19324/api/v1/models?upstream_name=OpenAI&name=gpt-4o" \
 
 # Get a model by ID
 curl http://localhost:19324/api/v1/models/1 \
+  -H "x-admin-token: <jwt-token>"
+
+# Get a model by upstream name and model name
+curl http://localhost:19324/api/v1/models/OpenAI/gpt-4o \
   -H "x-admin-token: <jwt-token>"
 
 # Update a model's description
@@ -278,9 +295,11 @@ The session events list upstream uses cursor-based pagination. The response incl
 | `GET` | `/api/v1/upstreams` | List all OpenAI upstreams (paginated) |
 | `POST` | `/api/v1/upstreams` | Create a new upstream (auto-detects features) |
 | `POST` | `/api/v1/upstream-tests` | Test an upstream without saving |
+| `POST` | `/api/v1/models-tests` | Test model features and update the LLMModel table |
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
 | `GET` | `/api/v1/models/:model_id` | Get a model by ID |
 | `PUT` | `/api/v1/models/:model_id` | Update a model (description) |
+| `GET` | `/api/v1/models/:upstream_name/*model_name` | Get a model by upstream name and model name |
 | `GET` | `/api/v1/consumers` | List all consumers (paginated) |
 | `POST` | `/api/v1/consumers` | Create a new consumer (with optional `initial_credit`) |
 | `GET` | `/api/v1/consumers/:consumer_id` | Get a consumer by ID |

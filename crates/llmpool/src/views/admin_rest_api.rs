@@ -1220,6 +1220,71 @@ async fn create_upstream(
     }
 }
 
+// --- Model Test Handler ---
+
+/// Request body for testing model features
+#[derive(Deserialize)]
+struct TestModelsRequest {
+    model_ids: Vec<i32>,
+}
+
+/// Response DTO for a single model test result
+#[derive(Serialize)]
+struct ModelTestResult {
+    model_id: i32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<ModelResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<String>,
+}
+
+/// POST /api/v1/models-tests
+///
+/// Tests the features of the specified models (by their database IDs) and updates
+/// the feature flags (has_chat_completion, has_embedding, has_image_generation, has_speech)
+/// in the LLMModel table. All other fields remain unchanged.
+///
+/// Request body (JSON):
+/// - `model_ids` (required): List of model database IDs to test
+async fn test_models(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<TestModelsRequest>,
+) -> Response {
+    if payload.model_ids.is_empty() {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "model_ids cannot be empty",
+        );
+    }
+
+    let mut results: Vec<ModelTestResult> = Vec::new();
+
+    for model_id in &payload.model_ids {
+        match crate::openai::features::detect_and_update_model_features(&state.pool, *model_id)
+            .await
+        {
+            Ok(updated_model) => {
+                results.push(ModelTestResult {
+                    model_id: *model_id,
+                    model: Some(ModelResponse::from(updated_model)),
+                    error: None,
+                });
+            }
+            Err(e) => {
+                warn!(error = %e, model_id = model_id, "Failed to test model features");
+                results.push(ModelTestResult {
+                    model_id: *model_id,
+                    model: None,
+                    error: Some(e.to_string()),
+                });
+            }
+        }
+    }
+
+    Json(results).into_response()
+}
+
 // --- Upstream Test Handler ---
 
 /// POST /api/v1/upstreams-tests
@@ -1417,6 +1482,41 @@ async fn update_upstream_by_id(
 }
 
 // --- Model Get/Update Handlers ---
+
+/// GET /api/v1/models/{upstream_name}/{*model_name}
+///
+/// Returns a single model by upstream name and model name (model_id).
+/// The model_name segment is a wildcard to support model names containing slashes.
+async fn get_model_by_upstream_and_name(
+    State(state): State<Arc<AppState>>,
+    Path((upstream_name, model_name)): Path<(String, String)>,
+) -> Response {
+    match db::openai::find_model_by_upstream_name_and_model_id(
+        &state.pool,
+        &upstream_name,
+        &model_name,
+    )
+    .await
+    {
+        Ok(Some(model)) => Json(ModelResponse::from(model)).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!(
+                "Model '{}' not found in upstream '{}'",
+                model_name, upstream_name
+            ),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get model by upstream name and model name");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query model",
+            )
+        }
+    }
+}
 
 /// GET /api/v1/models/:model_id
 ///
@@ -2222,6 +2322,10 @@ pub fn get_router(
             "/models/{model_id}",
             get(get_model_by_id).put(update_model_by_id),
         )
+        .route(
+            "/models/path/{upstream_name}/{*model_name}",
+            get(get_model_by_upstream_and_name),
+        )
         .route("/accounts", get(list_accounts).post(create_account))
         .route(
             "/accounts/{account_id}",
@@ -2243,6 +2347,7 @@ pub fn get_router(
             delete(remove_upstream_tag),
         )
         .route("/upstream-tests", post(test_upstream))
+        .route("/models-tests", post(test_models))
         .route("/session-events", get(list_session_events))
         .route("/session-events/{event_id}", get(get_session_event_by_id))
         .route("/deposits", post(create_deposit))

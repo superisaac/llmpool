@@ -267,6 +267,23 @@ pub async fn find_model_by_upstream_and_model_id(
     .await
 }
 
+/// Find a model by upstream name and model_id string
+pub async fn find_model_by_upstream_name_and_model_id(
+    pool: &DbPool,
+    upstream_name: &str,
+    model_id_str: &str,
+) -> Result<Option<LLMModel>, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>(
+        "SELECT m.* FROM llm_models m
+         INNER JOIN llm_upstreams e ON m.upstream_id = e.id
+         WHERE e.name = $1 AND m.model_id = $2",
+    )
+    .bind(upstream_name)
+    .bind(model_id_str)
+    .fetch_optional(pool)
+    .await
+}
+
 /// Update an OpenAI model
 pub async fn update_model(
     pool: &DbPool,

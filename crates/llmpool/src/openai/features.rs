@@ -355,6 +355,54 @@ pub async fn list_and_save_without_detect(
     Ok(())
 }
 
+/// Detect features for a single model given its upstream credentials, and update the database.
+/// Only the feature flags (has_image_generation, has_speech, has_chat_completion, has_embedding)
+/// are updated; all other fields remain unchanged.
+pub async fn detect_and_update_model_features(
+    pool: &DbPool,
+    model_pk: i32,
+) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
+    // 1. Fetch the model record
+    let model = db::openai::get_model(pool, model_pk).await?;
+
+    // 2. Fetch the upstream to get api_key and api_base
+    let upstream = db::openai::get_upstream(pool, model.upstream_id).await?;
+
+    // 3. Build the OpenAI client
+    let config = async_openai::config::OpenAIConfig::new()
+        .with_api_key(upstream.api_key.clone())
+        .with_api_base(upstream.api_base.clone());
+    let client = Client::with_config(config);
+
+    // 4. Build a minimal Model struct for feature detection
+    let model_info = async_openai::types::models::Model {
+        id: model.model_id.clone(),
+        created: 0,
+        object: "model".to_string(),
+        owned_by: String::new(),
+    };
+
+    // 5. Detect features
+    let features = detect_model_features(&client, &model_info).await;
+
+    // 6. Update only the feature flags in the database
+    let update = UpdateLLMModel {
+        model_id: None,
+        has_image_generation: Some(features.has_image_generation),
+        has_speech: Some(features.has_speech),
+        has_chat_completion: Some(features.has_chat_completion),
+        has_embedding: Some(features.has_embedding),
+        input_token_price: None,
+        output_token_price: None,
+        batch_input_token_price: None,
+        batch_output_token_price: None,
+        description: None,
+        updated_at: Some(Utc::now().naive_utc()),
+    };
+    let updated_model = db::openai::update_model(pool, model_pk, &update).await?;
+    Ok(updated_model)
+}
+
 /// Helper function: Determine if error indicates feature is truly unavailable
 fn is_unsupported_error(e: &OpenAIError) -> bool {
     let err_str = e.to_string().to_lowercase();

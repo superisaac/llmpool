@@ -55,9 +55,9 @@ enum Commands {
 enum AdminCommands {
     /// Generate a JWT token for admin API authentication
     CreateJwtToken {
-        /// Token expiration time in seconds (e.g., 3600 for 1 hour). If not specified, the token will not expire.
-        #[arg(long)]
-        expire: Option<u64>,
+        /// Token expiration time in seconds (e.g., 3600 for 1 hour). Defaults to 2592000 (30 days / 1 month).
+        #[arg(long, default_value = "2592000")]
+        expire: u64,
         /// Subject claim for the JWT token
         #[arg(long, default_value = "admin")]
         subject: String,
@@ -209,7 +209,7 @@ async fn main() {
                     .expect("Time went backwards")
                     .as_secs();
 
-                let exp = expire.map(|seconds| now + seconds);
+                let exp = Some(now + expire);
 
                 let claims = AdminClaims {
                     sub: subject,
@@ -229,11 +229,7 @@ async fn main() {
                 });
 
                 println!("{}", token);
-                if let Some(seconds) = expire {
-                    eprintln!("Token expires in {} seconds", seconds);
-                } else {
-                    eprintln!("Token does not expire");
-                }
+                eprintln!("Token expires in {} seconds", expire);
             }
             AdminCommands::CreateApiKey { name } => {
                 let pool = db::create_pool_from_config().await;
