@@ -303,6 +303,8 @@
           "has_speech",
           "input_token_price",
           "output_token_price",
+          "batch_input_token_price",
+          "batch_output_token_price",
           "description",
           "created_at",
           "updated_at"
@@ -352,6 +354,16 @@
             "type": "string",
             "description": "Price per output token (decimal string)",
             "example": "0.000015"
+          },
+          "batch_input_token_price": {
+            "type": "string",
+            "description": "Price per input token for batch requests (decimal string)",
+            "example": "0.0000025"
+          },
+          "batch_output_token_price": {
+            "type": "string",
+            "description": "Price per output token for batch requests (decimal string)",
+            "example": "0.0000075"
           },
           "description": {
             "type": "string",
@@ -461,11 +473,6 @@
             "type": "string",
             "description": "The name for the new account",
             "example": "alice"
-          },
-          "initial_credit": {
-            "type": "string",
-            "description": "Optional initial credit amount to add to the account's fund after creation.\nIf greater than zero, a credit balance change will be created and applied asynchronously.\nMust not be negative.\n",
-            "example": "100.00"
           }
         }
       },
@@ -505,8 +512,7 @@
         "required": [
           "id",
           "account_id",
-          "cash",
-          "debt",
+          "balance",
           "created_at",
           "updated_at"
         ],
@@ -521,15 +527,10 @@
             "format": "int32",
             "example": 1
           },
-          "cash": {
+          "balance": {
             "type": "string",
-            "description": "Cash balance (decimal string)",
+            "description": "Balance (decimal string). Negative value indicates debt.",
             "example": "100.00"
-          },
-          "debt": {
-            "type": "string",
-            "description": "Debt balance (decimal string)",
-            "example": "0"
           },
           "created_at": {
             "type": "string",
@@ -567,7 +568,68 @@
           },
           "apikey": {
             "type": "string",
-            "example": "sk-llmpool-abc123..."
+            "description": "Ellipsed representation of the API key (e.g. `lpx-ab...cd`). Full plaintext key is only returned once at creation time via ApiCredentialCreatedResponse.",
+            "example": "lpx-ab...cd"
+          },
+          "label": {
+            "type": "string",
+            "example": "production key"
+          },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2027-01-01T00:00:00"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-19T12:00:00"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-19T12:00:00"
+          }
+        }
+      },
+      "ApiCredentialCreatedResponse": {
+        "type": "object",
+        "description": "Returned only on API key creation. Contains the full plaintext key — store it securely as it will not be shown again.",
+        "required": [
+          "id",
+          "apikey",
+          "ellipsed_apikey",
+          "label",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32",
+            "example": 1
+          },
+          "account_id": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 1
+          },
+          "apikey": {
+            "type": "string",
+            "description": "Full plaintext API key. Only returned once at creation time; store it securely.",
+            "example": "lpx-abcdefghijklmnopqrstuvwxyz123456"
+          },
+          "ellipsed_apikey": {
+            "type": "string",
+            "description": "Ellipsed representation for display purposes.",
+            "example": "lpx-ab...cd"
           },
           "label": {
             "type": "string",
@@ -1662,7 +1724,7 @@
         }
       }
     },
-    "/models/{upstream_name}/{model_name}": {
+    "/models/path/{upstream_name}/{model_name}": {
       "get": {
         "tags": [
           "Models"
@@ -2277,11 +2339,11 @@
         },
         "responses": {
           "201": {
-            "description": "API key created successfully",
+            "description": "API key created successfully. The full plaintext key is included in the response and will not be shown again.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ApiCredentialResponse"
+                  "$ref": "#/components/schemas/ApiCredentialCreatedResponse"
                 }
               }
             }

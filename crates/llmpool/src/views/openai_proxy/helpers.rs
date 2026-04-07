@@ -61,7 +61,7 @@ pub async fn check_fund_balance(state: &AppState, account_id: i32) -> Result<(),
         },
     };
 
-    if fund.cash.clone() <= BigDecimal::from(0) {
+    if fund.balance.clone() <= BigDecimal::from(0) {
         return Err((
             StatusCode::PAYMENT_REQUIRED,
             Json(serde_json::json!({

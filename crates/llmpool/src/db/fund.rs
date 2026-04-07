@@ -17,13 +17,11 @@ pub async fn find_account_fund(
 
 /// Apply a balance change to a user's fund.
 ///
-/// - SpendToken: fund.cash -= (input_spend_amount + output_spend_amount)
-/// - Deposit / AddCredit: if debt > 0, pay off debt first; any remaining amount is added to cash
-/// - Withdraw: cash -= amount
-/// - Credit: fund.credit += amount
+/// - SpendToken: fund.balance -= (input_spend_amount + output_spend_amount)
+/// - Deposit / AddCredit: fund.balance += amount
+/// - Withdraw: fund.balance -= amount
 ///
-/// If cash goes negative after a spend or withdraw, the deficit is added to debt
-/// and cash is set to zero.
+/// balance can be negative (indicating debt).
 ///
 /// If the account has no existing fund record, one is created automatically.
 #[allow(dead_code)]
@@ -56,98 +54,46 @@ pub async fn apply_balance_change_with_tx(
     let account_fund = match account_fund {
         Some(uf) => uf,
         None => {
-            // Create a new fund record with zero cash, credit and debt
+            // Create a new fund record with zero balance
             let new_fund = NewFund {
                 account_id,
-                cash: BigDecimal::from(0),
-                credit: BigDecimal::from(0),
-                debt: BigDecimal::from(0),
+                balance: BigDecimal::from(0),
             };
             sqlx::query_as::<_, Fund>(
-                "INSERT INTO funds (account_id, cash, credit, debt)
-                 VALUES ($1, $2, $3, $4)
+                "INSERT INTO funds (account_id, balance)
+                 VALUES ($1, $2)
                  RETURNING *",
             )
             .bind(new_fund.account_id)
-            .bind(&new_fund.cash)
-            .bind(&new_fund.credit)
-            .bind(&new_fund.debt)
+            .bind(&new_fund.balance)
             .fetch_one(&mut **tx)
             .await?
         }
     };
 
-    let zero = BigDecimal::from(0);
-
-    // // Handle Credit variant separately since it updates the credit field
-    // if let BalanceChangeContent::Credit { amount } = content {
-    //     let new_credit = &account_fund.credit + amount;
-    //     return sqlx::query_as::<_, Fund>(
-    //         "UPDATE funds SET credit = $1, updated_at = $2
-    //          WHERE id = $3
-    //          RETURNING *",
-    //     )
-    //     .bind(&new_credit)
-    //     .bind(Utc::now().naive_utc())
-    //     .bind(account_fund.id)
-    //     .fetch_one(&mut **tx)
-    //     .await;
-    // }
-
-    let (new_cash, new_debt) = match content {
+    // Compute new balance; balance can be negative (debt)
+    let new_balance = match content {
         BalanceChangeContent::SpendToken(spend) => {
             let spend_amount = &spend.input_spend_amount + &spend.output_spend_amount;
-            let remaining = &account_fund.cash - &spend_amount;
-            if remaining >= zero {
-                (remaining, account_fund.debt.clone())
-            } else {
-                // Cash exhausted, add deficit to debt
-                let deficit = zero.clone() - &remaining;
-                (zero.clone(), &account_fund.debt + &deficit)
-            }
+            &account_fund.balance - &spend_amount
         }
         BalanceChangeContent::Deposit { amount } | BalanceChangeContent::AddCredit { amount } => {
-            // Both Deposit and AddCredit add to cash (pay off debt first)
-            if account_fund.debt > zero {
-                // pay off debt
-                let remaining_debt = &account_fund.debt - amount;
-                if remaining_debt > zero {
-                    // Deposit is not enough to cover all debt
-                    (account_fund.cash.clone(), remaining_debt)
-                } else {
-                    // Deposit covers all debt, remainder goes to cash
-                    let surplus = zero.clone() - &remaining_debt;
-                    (&account_fund.cash + &surplus, zero)
-                }
-            } else {
-                let new_cash = &account_fund.cash + amount;
-                (new_cash, account_fund.debt.clone())
-            }
+            &account_fund.balance + amount
         }
-        BalanceChangeContent::Withdraw { amount } => {
-            let remaining = &account_fund.cash - amount;
-            if remaining < zero {
-                let deficit = zero.clone() - &remaining;
-                (zero, &account_fund.debt + &deficit)
-            } else {
-                (remaining, account_fund.debt.clone())
-            }
-        }
+        BalanceChangeContent::Withdraw { amount } => &account_fund.balance - amount,
     };
 
     let update = UpdateFund {
-        cash: Some(new_cash),
-        debt: Some(new_debt),
+        balance: Some(new_balance),
         updated_at: Some(Utc::now().naive_utc()),
     };
 
     sqlx::query_as::<_, Fund>(
-        "UPDATE funds SET cash = $1, debt = $2, updated_at = $3
-         WHERE id = $4
+        "UPDATE funds SET balance = $1, updated_at = $2
+         WHERE id = $3
          RETURNING *",
     )
-    .bind(&update.cash)
-    .bind(&update.debt)
+    .bind(&update.balance)
     .bind(&update.updated_at)
     .bind(account_fund.id)
     .fetch_one(&mut **tx)

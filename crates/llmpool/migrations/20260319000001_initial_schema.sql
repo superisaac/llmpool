@@ -86,8 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (sess
 CREATE TABLE IF NOT EXISTS funds (
     id SERIAL PRIMARY KEY,
     account_id INT NOT NULL REFERENCES accounts(id),
-    cash DECIMAL NOT NULL DEFAULT 0,
-    debt DECIMAL NOT NULL DEFAULT 0,
+    balance DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

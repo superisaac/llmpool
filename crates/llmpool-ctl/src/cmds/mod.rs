@@ -103,8 +103,7 @@ pub struct AccountResponse {
 pub struct FundResponse {
     pub id: i32,
     pub account_id: i32,
-    pub cash: String,
-    pub debt: String,
+    pub balance: String,
     pub created_at: String,
     pub updated_at: String,
 }

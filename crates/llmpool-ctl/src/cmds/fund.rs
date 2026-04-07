@@ -40,12 +40,12 @@ pub enum FundAction {
         #[arg(long)]
         request_id: String,
     },
-    /// Add credit to an account's fund
+    /// Add a credit to an account's fund
     Credit {
         /// Account name or account ID
         #[arg(long)]
         account: String,
-        /// Amount of credit to add
+        /// Amount to credit
         #[arg(long)]
         amount: String,
         /// Unique request ID for idempotency
@@ -86,8 +86,7 @@ struct CreateCreditRequest {
 fn print_fund_detail(f: &FundResponse) {
     println!("Fund for account ID {}:", f.account_id);
     println!();
-    println!("  Cash:       {}", f.cash);
-    println!("  Debt:       {}", f.debt);
+    println!("  Balance:    {}", f.balance);
     if !f.created_at.is_empty() {
         println!("  Created At: {}", f.created_at);
         println!("  Updated At: {}", f.updated_at);

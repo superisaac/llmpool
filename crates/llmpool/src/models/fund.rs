@@ -12,33 +12,22 @@ use sqlx::FromRow;
 pub struct Fund {
     pub id: i32,
     pub account_id: i32,
-    pub cash: BigDecimal,
-    pub credit: BigDecimal,
-    pub debt: BigDecimal,
+    pub balance: BigDecimal,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
-}
-
-impl Fund {
-    pub fn available(&self) -> BigDecimal {
-        &self.cash + &self.credit
-    }
 }
 
 /// Used to insert a new fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewFund {
     pub account_id: i32,
-    pub cash: BigDecimal,
-    pub credit: BigDecimal,
-    pub debt: BigDecimal,
+    pub balance: BigDecimal,
 }
 
 /// Used to update an existing fund
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateFund {
-    pub cash: Option<BigDecimal>,
-    pub debt: Option<BigDecimal>,
+    pub balance: Option<BigDecimal>,
     pub updated_at: Option<NaiveDateTime>,
 }
 

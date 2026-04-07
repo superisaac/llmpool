@@ -1,7 +1,9 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{ModelResponse, ModelTestResult, PaginatedResponse, bool_mark, print_models, print_pagination};
+use super::{
+    ModelResponse, ModelTestResult, PaginatedResponse, bool_mark, print_models, print_pagination,
+};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -86,9 +88,15 @@ pub fn print_model_full(m: &ModelResponse, title: &str) {
     println!("  Upstream ID:              {}", m.upstream_id);
     println!("  Model ID:                 {}", m.model_id);
     println!("  Active:                   {}", bool_mark(m.is_active));
-    println!("  Chat Completion:          {}", bool_mark(m.has_chat_completion));
+    println!(
+        "  Chat Completion:          {}",
+        bool_mark(m.has_chat_completion)
+    );
     println!("  Embedding:                {}", bool_mark(m.has_embedding));
-    println!("  Image Generation:         {}", bool_mark(m.has_image_generation));
+    println!(
+        "  Image Generation:         {}",
+        bool_mark(m.has_image_generation)
+    );
     println!("  Speech:                   {}", bool_mark(m.has_speech));
     println!("  Input Token Price:        {}", m.input_token_price);
     println!("  Output Token Price:       {}", m.output_token_price);
@@ -157,8 +165,14 @@ pub async fn handle_model(
             for (name, price) in [
                 ("input_token_price", input_token_price.as_deref()),
                 ("output_token_price", output_token_price.as_deref()),
-                ("batch_input_token_price", batch_input_token_price.as_deref()),
-                ("batch_output_token_price", batch_output_token_price.as_deref()),
+                (
+                    "batch_input_token_price",
+                    batch_input_token_price.as_deref(),
+                ),
+                (
+                    "batch_output_token_price",
+                    batch_output_token_price.as_deref(),
+                ),
             ] {
                 if let Some(p) = price {
                     p.parse::<f64>()
@@ -228,9 +242,12 @@ async fn resolve_model_id(model: &str, client: &ApiClient) -> Result<i32, String
 
     // Otherwise treat it as a path: upstream_name/model_name
     // Split on the first '/' to get upstream_name and model_name
-    let slash_pos = model
-        .find('/')
-        .ok_or_else(|| format!("'{}' is not a valid model ID or path (expected integer or upstream_name/model_name)", model))?;
+    let slash_pos = model.find('/').ok_or_else(|| {
+        format!(
+            "'{}' is not a valid model ID or path (expected integer or upstream_name/model_name)",
+            model
+        )
+    })?;
 
     let upstream_name = &model[..slash_pos];
     let model_name = &model[slash_pos + 1..];

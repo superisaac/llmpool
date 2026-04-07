@@ -121,8 +121,7 @@ pub async fn settle_balance_change(
             info!(
                 balance_change_id = balance_change_id,
                 account_id = balance_change.account_id,
-                cash = %updated_balance.cash,
-                debt = %updated_balance.debt,
+                balance = %updated_balance.balance,
                 "Successfully applied balance change"
             );
 

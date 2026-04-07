@@ -153,9 +153,6 @@ impl From<Account> for AccountResponse {
 #[derive(Deserialize)]
 struct CreateAccountRequest {
     name: String,
-    /// Optional initial deposit amount to add to the account's fund after creation.
-    /// If greater than zero, a deposit balance change will be created and enqueued.
-    initial_credit: Option<BigDecimal>,
 }
 
 // --- Fund Response DTO ---
@@ -165,8 +162,7 @@ struct CreateAccountRequest {
 struct FundResponse {
     id: i32,
     account_id: i32,
-    cash: String,
-    debt: String,
+    balance: String,
     created_at: String,
     updated_at: String,
 }
@@ -176,8 +172,7 @@ impl From<crate::models::Fund> for FundResponse {
         Self {
             id: f.id,
             account_id: f.account_id,
-            cash: f.cash.to_string(),
-            debt: f.debt.to_string(),
+            balance: f.balance.to_string(),
             created_at: f.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: f.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
         }
@@ -284,8 +279,7 @@ async fn list_upstreams(
     };
 
     // Get paginated upstreams
-    let upstreams = match db::llm::list_upstreams_paginated(&state.pool, offset, page_size).await
-    {
+    let upstreams = match db::llm::list_upstreams_paginated(&state.pool, offset, page_size).await {
         Ok(eps) => eps,
         Err(e) => {
             warn!(error = %e, "Failed to list upstreams");
@@ -387,8 +381,6 @@ async fn list_accounts(
 ///
 /// Request body (JSON):
 /// - `name` (required): The name for the new account
-/// - `initial_credit` (optional): Initial credit amount to add to the account's fund.
-///   If greater than zero, a credit balance change will be created and applied asynchronously.
 async fn create_account(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<CreateAccountRequest>,
@@ -399,17 +391,6 @@ async fn create_account(
             "validation_error",
             "Name cannot be empty",
         );
-    }
-
-    // Validate initial_credit if provided
-    if let Some(ref initial_credit) = payload.initial_credit {
-        if *initial_credit < BigDecimal::from(0) {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "validation_error",
-                "initial_credit must not be negative",
-            );
-        }
     }
 
     let new_account = NewAccount {
@@ -437,55 +418,6 @@ async fn create_account(
             );
         }
     };
-
-    // If initial_credit is provided and greater than zero, create a deposit balance change
-    if let Some(ref initial_credit) = payload.initial_credit {
-        if *initial_credit > BigDecimal::from(0) {
-            let content = BalanceChangeContent::AddCredit {
-                amount: initial_credit.clone(),
-            };
-            let unique_request_id = format!("initial-deposit-{}", account.id);
-            let new_change = match NewBalanceChange::from_content(
-                account.id,
-                unique_request_id,
-                &content,
-            ) {
-                Ok(change) => change,
-                Err(e) => {
-                    warn!(error = %e, account_id = account.id, "Failed to serialize initial deposit content");
-                    return (StatusCode::CREATED, Json(AccountResponse::from(account)))
-                        .into_response();
-                }
-            };
-
-            let balance_change = match db::session_event::create_balance_change(
-                &state.pool,
-                &new_change,
-            )
-            .await
-            {
-                Ok(bc) => bc,
-                Err(e) => {
-                    warn!(error = %e, account_id = account.id, "Failed to create initial deposit balance change record");
-                    return (StatusCode::CREATED, Json(AccountResponse::from(account)))
-                        .into_response();
-                }
-            };
-
-            let task = BalanceChangeTask {
-                balance_change_id: balance_change.id as i64,
-            };
-            let mut storage = state.balance_change_storage.clone();
-            if let Err(e) = storage.push(task).await {
-                warn!(
-                    error = %e,
-                    account_id = account.id,
-                    balance_change_id = balance_change.id,
-                    "Failed to enqueue initial deposit balance change task"
-                );
-            }
-        }
-    }
 
     (StatusCode::CREATED, Json(AccountResponse::from(account))).into_response()
 }
@@ -648,8 +580,7 @@ async fn get_account_fund(
             Json(FundResponse {
                 id: 0,
                 account_id: account_id,
-                cash: "0".to_string(),
-                debt: "0".to_string(),
+                balance: "0".to_string(),
                 created_at: String::new(),
                 updated_at: String::new(),
             })
@@ -945,20 +876,24 @@ async fn list_models(
     };
 
     // Get paginated models
-    let models =
-        match db::llm::list_models_filtered_paginated(&state.pool, &filter, offset, page_size)
-            .await
-        {
-            Ok(models) => models,
-            Err(e) => {
-                warn!(error = %e, "Failed to list models");
-                return error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "database_error",
-                    "Failed to query models",
-                );
-            }
-        };
+    let models = match db::llm::list_models_filtered_paginated(
+        &state.pool,
+        &filter,
+        offset,
+        page_size,
+    )
+    .await
+    {
+        Ok(models) => models,
+        Err(e) => {
+            warn!(error = %e, "Failed to list models");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query models",
+            );
+        }
+    };
 
     let total_pages = if total == 0 {
         0
@@ -1842,27 +1777,27 @@ async fn create_withdraw(
         }
     }
 
-    // Check that the account's fund has sufficient cash
+    // Check that the account's fund has sufficient balance
     match db::fund::find_account_fund(&state.pool, payload.account_id).await {
         Ok(Some(fund)) => {
-            if fund.cash < payload.amount {
+            if fund.balance < payload.amount {
                 return error_response(
                     StatusCode::BAD_REQUEST,
                     "insufficient_funds",
                     &format!(
-                        "Insufficient cash balance. Available: {}, requested: {}",
-                        fund.cash, payload.amount
+                        "Insufficient balance. Available: {}, requested: {}",
+                        fund.balance, payload.amount
                     ),
                 );
             }
         }
         Ok(None) => {
-            // Account has no fund record, so cash is effectively 0
+            // Account has no fund record, so balance is effectively 0
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "insufficient_funds",
                 &format!(
-                    "Insufficient cash balance. Available: 0, requested: {}",
+                    "Insufficient balance. Available: 0, requested: {}",
                     payload.amount
                 ),
             );

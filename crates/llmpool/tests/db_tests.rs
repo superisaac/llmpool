@@ -1117,20 +1117,16 @@ mod fund_tests {
         let account = create_test_account(&mut tx, "fund_account").await;
 
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO funds (account_id, balance) VALUES ($1, $2) RETURNING *",
         )
         .bind(account.id)
         .bind(BigDecimal::from(100))
-        .bind(BigDecimal::from(50))
-        .bind(BigDecimal::from(0))
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
         assert_eq!(fund.account_id, account.id);
-        assert_eq!(fund.cash, BigDecimal::from(100));
-        assert_eq!(fund.credit, BigDecimal::from(50));
-        assert_eq!(fund.debt, BigDecimal::from(0));
+        assert_eq!(fund.balance, BigDecimal::from(100));
 
         tx.rollback().await.unwrap();
     }
@@ -1142,18 +1138,17 @@ mod fund_tests {
 
         let account = create_test_account(&mut tx, "fund_dup_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
+        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
         // Duplicate account_id should fail (unique index)
-        let result =
-            sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
-                .bind(account.id)
-                .execute(&mut *tx)
-                .await;
+        let result = sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
+            .bind(account.id)
+            .execute(&mut *tx)
+            .await;
 
         assert!(result.is_err(), "Duplicate account_id in funds should fail");
 
@@ -1167,7 +1162,7 @@ mod fund_tests {
 
         let account = create_test_account(&mut tx, "find_fund_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 200, 100, 0)")
+        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 200)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
@@ -1181,8 +1176,7 @@ mod fund_tests {
 
         assert!(found.is_some());
         let fund = found.unwrap();
-        assert_eq!(fund.cash, BigDecimal::from(200));
-        assert_eq!(fund.credit, BigDecimal::from(100));
+        assert_eq!(fund.balance, BigDecimal::from(200));
 
         tx.rollback().await.unwrap();
     }
@@ -1211,7 +1205,7 @@ mod fund_tests {
         let account = create_test_account(&mut tx, "update_fund_account").await;
 
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 100, 50, 0) RETURNING *",
+            "INSERT INTO funds (account_id, balance) VALUES ($1, 100) RETURNING *",
         )
         .bind(account.id)
         .fetch_one(&mut *tx)
@@ -1219,52 +1213,45 @@ mod fund_tests {
         .unwrap();
 
         let updated = sqlx::query_as::<_, Fund>(
-            "UPDATE funds SET cash = $1, credit = $2, debt = $3, updated_at = NOW() WHERE id = $4 RETURNING *",
+            "UPDATE funds SET balance = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
         )
         .bind(BigDecimal::from(80))
-        .bind(BigDecimal::from(30))
-        .bind(BigDecimal::from(10))
         .bind(fund.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        assert_eq!(updated.cash, BigDecimal::from(80));
-        assert_eq!(updated.credit, BigDecimal::from(30));
-        assert_eq!(updated.debt, BigDecimal::from(10));
+        assert_eq!(updated.balance, BigDecimal::from(80));
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_fund_available() {
+    async fn test_fund_balance_positive() {
         let fund = Fund {
             id: 1,
             account_id: 1,
-            cash: BigDecimal::from(100),
-            credit: BigDecimal::from(50),
-            debt: BigDecimal::from(20),
+            balance: BigDecimal::from(150),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        // available = cash + credit
-        assert_eq!(fund.available(), BigDecimal::from(150));
+        assert_eq!(fund.balance, BigDecimal::from(150));
+        assert!(fund.balance > BigDecimal::from(0));
     }
 
     #[tokio::test]
-    async fn test_fund_available_zero() {
+    async fn test_fund_balance_negative() {
+        // Negative balance represents debt
         let fund = Fund {
             id: 1,
             account_id: 1,
-            cash: BigDecimal::from(0),
-            credit: BigDecimal::from(0),
-            debt: BigDecimal::from(100),
+            balance: BigDecimal::from(-20),
             created_at: chrono::Utc::now().naive_utc(),
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        assert_eq!(fund.available(), BigDecimal::from(0));
+        assert!(fund.balance < BigDecimal::from(0));
     }
 }
 
@@ -1851,7 +1838,7 @@ mod integration_tests {
 
         // Create fund for account
         let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 1000, 500, 0) RETURNING *",
+            "INSERT INTO funds (account_id, balance) VALUES ($1, 1500) RETURNING *",
         )
         .bind(account.id)
         .fetch_one(&mut *tx)
@@ -1859,7 +1846,7 @@ mod integration_tests {
         .unwrap();
 
         assert_eq!(fund.account_id, account.id);
-        assert_eq!(fund.available(), BigDecimal::from(1500));
+        assert_eq!(fund.balance, BigDecimal::from(1500));
 
         // Create API key for account
         let api_key = sqlx::query_as::<_, ApiCredential>(
@@ -1958,7 +1945,7 @@ mod integration_tests {
         let account = create_test_account(&mut tx, "workflow_account").await;
 
         // Create fund
-        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 0, 0, 0)")
+        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
@@ -1983,7 +1970,7 @@ mod integration_tests {
         assert!(!bc.is_applied);
 
         // Simulate applying the balance change: update fund
-        sqlx::query("UPDATE funds SET cash = cash + 500 WHERE account_id = $1")
+        sqlx::query("UPDATE funds SET balance = balance + 500 WHERE account_id = $1")
             .bind(account.id)
             .execute(&mut *tx)
             .await
@@ -2003,7 +1990,7 @@ mod integration_tests {
             .await
             .unwrap();
 
-        assert_eq!(fund.cash, BigDecimal::from(500));
+        assert_eq!(fund.balance, BigDecimal::from(500));
 
         let bc_updated =
             sqlx::query_as::<_, BalanceChange>("SELECT * FROM balance_changes WHERE id = $1")
@@ -2024,7 +2011,7 @@ mod integration_tests {
 
         let account = create_test_account(&mut tx, "cascade_fund_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, cash, credit, debt) VALUES ($1, 100, 0, 0)")
+        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 100)")
             .bind(account.id)
             .execute(&mut *tx)
             .await

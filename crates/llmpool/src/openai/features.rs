@@ -230,8 +230,7 @@ pub async fn detect_and_save_features(
 
     // 3. Upsert each model
     for mf in &api_features.model_features {
-        match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await
-        {
+        match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await {
             Ok(existing_model) => {
                 // Update existing model
                 let update = UpdateLLMModel {
