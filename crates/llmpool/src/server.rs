@@ -10,6 +10,7 @@ use tokio::net::TcpListener;
 use crate::middlewares::rate_limit::{RateLimitState, rate_limit_middleware};
 use crate::telemetry;
 use crate::views::admin_rest_api;
+use crate::views::anthropic_proxy;
 use crate::views::openai_proxy;
 use crate::views::passthrough;
 
@@ -27,6 +28,8 @@ pub async fn serve(bind: &str) {
         redis_pool: redis_pool.clone(),
     });
 
+    let anthropic_router =
+        anthropic_proxy::get_router(pool.clone(), redis_pool.clone(), event_storage.clone());
     let openai_router = openai_proxy::get_router(pool.clone(), redis_pool.clone(), event_storage);
     let admin_rest_router =
         admin_rest_api::get_router(pool.clone(), redis_pool, balance_change_storage);
@@ -34,6 +37,10 @@ pub async fn serve(bind: &str) {
 
     // Route configuration
     let app = Router::new()
+        .nest(
+            "/anthropic/v1",
+            anthropic_router.layer(CorsLayer::very_permissive()),
+        )
         .nest(
             "/openai/v1",
             openai_router
