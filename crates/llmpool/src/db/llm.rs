@@ -653,10 +653,12 @@ impl ModelUpstreamRow {
 /// along with their associated upstream information (api_key, api_base).
 ///
 /// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
+/// If `provider` is `Some(...)`, only upstreams with that provider value will be included.
 pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
     capacity: &CapacityOption,
+    provider: Option<&str>,
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
@@ -680,6 +682,10 @@ pub async fn find_models_by_name_and_capacity(
     let mut param_idx = 2u32;
     let mut conditions = Vec::new();
 
+    if provider.is_some() {
+        conditions.push(format!("e.provider = ${}", param_idx));
+        param_idx += 1;
+    }
     if capacity.has_chat_completion == Some(true) {
         conditions.push(format!("m.has_chat_completion = ${}", param_idx));
         param_idx += 1;
@@ -704,6 +710,10 @@ pub async fn find_models_by_name_and_capacity(
 
     let mut query = sqlx::query_as::<_, ModelUpstreamRow>(&sql).bind(model_name);
 
+    // Bind the provider filter value if provided
+    if let Some(p) = provider {
+        query = query.bind(p);
+    }
     // Bind the `true` values for each capacity filter
     if capacity.has_chat_completion == Some(true) {
         query = query.bind(true);

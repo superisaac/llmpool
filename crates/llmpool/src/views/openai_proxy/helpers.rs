@@ -203,25 +203,28 @@ pub(super) async fn select_model_clients(
 ) -> Vec<UpstreamClient> {
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
-    let models =
-        match db::llm::find_models_by_name_and_capacity(db_pool, model_name, capacity).await {
-            Ok(models) if !models.is_empty() => models,
-            Ok(_) => {
-                warn!(
-                    model = model_name,
-                    "No models found in DB for the requested capacity"
-                );
-                return vec![];
-            }
-            Err(e) => {
-                warn!(
-                    model = model_name,
-                    error = %e,
-                    "DB query failed when looking up models"
-                );
-                return vec![];
-            }
-        };
+    let models = match db::llm::find_models_by_name_and_capacity(
+        db_pool, model_name, capacity, None,
+    )
+    .await
+    {
+        Ok(models) if !models.is_empty() => models,
+        Ok(_) => {
+            warn!(
+                model = model_name,
+                "No models found in DB for the requested capacity"
+            );
+            return vec![];
+        }
+        Err(e) => {
+            warn!(
+                model = model_name,
+                error = %e,
+                "DB query failed when looking up models"
+            );
+            return vec![];
+        }
+    };
 
     // Fetch output token usage from Redis for all models in a single MGET, then sort ascending
     // and take the `count` with the lowest usage.

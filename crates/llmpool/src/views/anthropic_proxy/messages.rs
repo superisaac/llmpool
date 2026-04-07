@@ -6,84 +6,38 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures::stream::{Stream, StreamExt};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::client::AnthropicUpstreamClient;
+use super::anthropic_api::{
+    AnthropicApiClient, AnthropicApiError, CompletionRequest, CountMessageTokensParams,
+    CreateMessageParams,
+};
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 
 // ---------------------------------------------------------------------------
-// Anthropic Messages API request/response types
+// Helper: build an AnthropicApiClient from an AnthropicUpstreamClient
 // ---------------------------------------------------------------------------
 
-/// A single content block in a message (text, image, tool_use, tool_result, etc.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum ContentBlock {
-    /// Simple string shorthand
-    Text(String),
-    /// Structured content block
-    Block(Value),
-}
-
-/// A single message in the conversation
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MessageParam {
-    pub role: String,
-    pub content: ContentBlock,
-}
-
-/// The full request body for POST /v1/messages
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateMessageRequest {
-    /// The model to use (e.g. "claude-3-5-sonnet-20241022")
-    pub model: String,
-    /// The conversation messages
-    pub messages: Vec<MessageParam>,
-    /// Maximum tokens to generate
-    pub max_tokens: u32,
-    /// Optional system prompt (string or array of content blocks)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub system: Option<Value>,
-    /// Whether to stream the response
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
-    /// Sampling temperature
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    /// Top-p nucleus sampling
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
-    /// Top-k sampling
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_k: Option<u32>,
-    /// Stop sequences
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop_sequences: Option<Vec<String>>,
-    /// Tool definitions
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tools: Option<Value>,
-    /// Tool choice
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_choice: Option<Value>,
-    /// Metadata
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+fn make_api_client(upstream: &super::client::AnthropicUpstreamClient) -> AnthropicApiClient {
+    AnthropicApiClient::with_http_client(
+        upstream.http_client.clone(),
+        upstream.api_key.clone(),
+        upstream.api_base.clone(),
+    )
 }
 
 // ---------------------------------------------------------------------------
-// Handler
+// POST /v1/messages — Create a Message
 // ---------------------------------------------------------------------------
 
 /// POST /v1/messages — proxy to the configured Anthropic upstream
 pub async fn create_message(
     State(state): State<Arc<AnthropicAppState>>,
-    Json(payload): Json<CreateMessageRequest>,
+    Json(payload): Json<CreateMessageParams>,
 ) -> Response {
     let model_name = payload.model.clone();
     let account_id = ACCOUNT.with(|u| u.id);
@@ -113,18 +67,44 @@ pub async fn create_message(
     let is_stream = payload.stream.unwrap_or(false);
 
     for (i, upstream_client) in clients.iter().enumerate() {
-        match create_message_with_client(
-            upstream_client,
-            account_id,
-            api_key_id,
-            &payload,
-            is_stream,
-        )
-        .await
-        {
+        let api_client = make_api_client(upstream_client);
+        let model_db_id = upstream_client.model_db_id;
+
+        let result = if is_stream {
+            // Use create_message_raw for streaming
+            match api_client.create_message_raw(&payload).await {
+                Ok(resp) => {
+                    let byte_stream = resp.bytes_stream();
+                    let event_stream = transform_anthropic_stream(
+                        byte_stream,
+                        account_id,
+                        model_db_id,
+                        api_key_id,
+                    );
+                    Ok(Sse::new(event_stream)
+                        .keep_alive(KeepAlive::default())
+                        .into_response())
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            match api_client.create_message(&payload).await {
+                Ok(message) => {
+                    info!(
+                        input_tokens = message.usage.input_tokens,
+                        output_tokens = message.usage.output_tokens,
+                        model_db_id = model_db_id,
+                        "Anthropic message usage"
+                    );
+                    Ok(Json(message).into_response())
+                }
+                Err(e) => Err(e),
+            }
+        };
+
+        match result {
             Ok(response) => return response,
             Err(e) => {
-                // Check if it's a network/connection error → mark upstream offline
                 if is_network_error(&e) {
                     let pool = state.pool.clone();
                     let upstream_id = upstream_client.upstream_id;
@@ -173,107 +153,203 @@ pub async fn create_message(
 }
 
 // ---------------------------------------------------------------------------
-// Internal helpers
+// POST /v1/complete — Legacy Text Completions
 // ---------------------------------------------------------------------------
 
-/// Errors that can occur when calling the upstream Anthropic API
-#[derive(Debug)]
-pub enum AnthropicProxyError {
-    /// A reqwest/network-level error
-    Network(reqwest::Error),
-    /// The upstream returned a non-2xx HTTP status
-    Upstream { status: u16, body: String },
-}
+/// POST /v1/complete — proxy legacy text completions to the configured Anthropic upstream
+pub async fn create_completion(
+    State(state): State<Arc<AnthropicAppState>>,
+    Json(payload): Json<CompletionRequest>,
+) -> Response {
+    let model_name = payload.model.clone();
+    let account_id = ACCOUNT.with(|u| u.id);
 
-impl std::fmt::Display for AnthropicProxyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            AnthropicProxyError::Network(e) => write!(f, "network error: {}", e),
-            AnthropicProxyError::Upstream { status, body } => {
-                write!(f, "upstream error (HTTP {}): {}", status, body)
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
+        return resp;
+    }
+
+    let clients = select_anthropic_clients(&state.pool, &state.redis_pool, &model_name, 2).await;
+    if clients.is_empty() {
+        warn!(model = %model_name, "No anthropic upstream client found for model (completion)");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "type": "error",
+                "error": {
+                    "type": "overloaded_error",
+                    "message": "No upstream available for the requested model."
+                }
+            })),
+        )
+            .into_response();
+    }
+
+    let is_stream = payload.stream.unwrap_or(false);
+    let api_key_id = API_CREDENTIAL.with(|k| k.id);
+
+    for (i, upstream_client) in clients.iter().enumerate() {
+        let api_client = make_api_client(upstream_client);
+        let model_db_id = upstream_client.model_db_id;
+
+        let result = if is_stream {
+            match api_client.create_completion_raw(&payload).await {
+                Ok(resp) => {
+                    let byte_stream = resp.bytes_stream();
+                    let event_stream = transform_anthropic_stream(
+                        byte_stream,
+                        account_id,
+                        model_db_id,
+                        api_key_id,
+                    );
+                    Ok(Sse::new(event_stream)
+                        .keep_alive(KeepAlive::default())
+                        .into_response())
+                }
+                Err(e) => Err(e),
+            }
+        } else {
+            match api_client.create_completion(&payload).await {
+                Ok(completion) => {
+                    info!(
+                        model_db_id = model_db_id,
+                        "Anthropic completion response received"
+                    );
+                    Ok(Json(completion).into_response())
+                }
+                Err(e) => Err(e),
+            }
+        };
+
+        match result {
+            Ok(response) => return response,
+            Err(e) => {
+                if is_network_error(&e) {
+                    let pool = state.pool.clone();
+                    let upstream_id = upstream_client.upstream_id;
+                    tokio::spawn(async move {
+                        if let Err(db_err) =
+                            db::llm::mark_upstream_offline(&pool, upstream_id).await
+                        {
+                            warn!(
+                                upstream_id = upstream_id,
+                                error = %db_err,
+                                "Failed to mark anthropic upstream as offline"
+                            );
+                        } else {
+                            warn!(
+                                upstream_id = upstream_id,
+                                "Marked anthropic upstream as offline due to network error"
+                            );
+                        }
+                    });
+                }
+
+                if i < clients.len() - 1 {
+                    warn!(
+                        model = %model_name,
+                        error = %e,
+                        "Anthropic completion failed, retrying with another upstream"
+                    );
+                } else {
+                    warn!(model = %model_name, error = %e, "Anthropic completion failed after all retries");
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({
+                            "type": "error",
+                            "error": {
+                                "type": "api_error",
+                                "message": "Internal server error while proxying to upstream."
+                            }
+                        })),
+                    )
+                        .into_response();
+                }
             }
         }
     }
+    unreachable!()
 }
 
-fn is_network_error(e: &AnthropicProxyError) -> bool {
-    matches!(e, AnthropicProxyError::Network(_))
-}
+// ---------------------------------------------------------------------------
+// POST /v1/messages/count_tokens — Count tokens
+// ---------------------------------------------------------------------------
 
-/// Execute a single messages request against the given upstream client.
-/// Returns Ok(Response) on success, Err(AnthropicProxyError) on failure.
-async fn create_message_with_client(
-    upstream: &AnthropicUpstreamClient,
-    account_id: i32,
-    api_key_id: i32,
-    payload: &CreateMessageRequest,
-    is_stream: bool,
-) -> Result<Response, AnthropicProxyError> {
-    let url = format!("{}/v1/messages", upstream.api_base);
+/// POST /v1/messages/count_tokens — count tokens for a message without creating it
+pub async fn count_message_tokens(
+    State(state): State<Arc<AnthropicAppState>>,
+    Json(payload): Json<CountMessageTokensParams>,
+) -> Response {
+    let model_name = payload.model.clone();
+    let account_id = ACCOUNT.with(|u| u.id);
 
-    // Build the outgoing request body — always set stream explicitly
-    let mut body = serde_json::to_value(payload).expect("payload serialization failed");
-    body["stream"] = Value::Bool(is_stream);
-
-    let req = upstream
-        .http_client
-        .post(&url)
-        .header("x-api-key", &upstream.api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&body);
-
-    let resp = req.send().await.map_err(AnthropicProxyError::Network)?;
-
-    let status = resp.status();
-
-    if !status.is_success() {
-        let status_u16 = status.as_u16();
-        let body_text = resp.text().await.unwrap_or_default();
-        warn!(
-            upstream_url = %url,
-            http_status = status_u16,
-            body = %body_text,
-            "Anthropic upstream returned non-2xx response"
-        );
-        return Err(AnthropicProxyError::Upstream {
-            status: status_u16,
-            body: body_text,
-        });
+    if let Err(resp) = check_fund_balance(&state, account_id).await {
+        return resp;
     }
 
-    let model_db_id = upstream.model_db_id;
+    let clients = select_anthropic_clients(&state.pool, &state.redis_pool, &model_name, 1).await;
+    if clients.is_empty() {
+        warn!(model = %model_name, "No anthropic upstream client found for model (count_tokens)");
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({
+                "type": "error",
+                "error": {
+                    "type": "overloaded_error",
+                    "message": "No upstream available for the requested model."
+                }
+            })),
+        )
+            .into_response();
+    }
 
-    if is_stream {
-        // Stream the SSE response back to the client
-        let byte_stream = resp.bytes_stream();
-        let event_stream =
-            transform_anthropic_stream(byte_stream, account_id, model_db_id, api_key_id);
-        Ok(Sse::new(event_stream)
-            .keep_alive(KeepAlive::default())
-            .into_response())
-    } else {
-        // Parse the JSON response and forward it
-        let response_body: Value = resp.json().await.map_err(AnthropicProxyError::Network)?;
+    let upstream_client = &clients[0];
+    let api_client = make_api_client(upstream_client);
 
-        // Log token usage if present
-        if let Some(usage) = response_body.get("usage") {
+    match api_client.count_message_tokens(&payload).await {
+        Ok(result) => {
             info!(
-                input_tokens = usage
-                    .get("input_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0),
-                output_tokens = usage
-                    .get("output_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0),
-                model_db_id = model_db_id,
-                "Anthropic message usage"
+                input_tokens = result.input_tokens,
+                model = %model_name,
+                "Anthropic count_tokens result"
             );
+            Json(result).into_response()
         }
-
-        Ok(Json(response_body).into_response())
+        Err(e) => {
+            if is_network_error(&e) {
+                let pool = state.pool.clone();
+                let upstream_id = upstream_client.upstream_id;
+                tokio::spawn(async move {
+                    if let Err(db_err) = db::llm::mark_upstream_offline(&pool, upstream_id).await {
+                        warn!(
+                            upstream_id = upstream_id,
+                            error = %db_err,
+                            "Failed to mark anthropic upstream as offline"
+                        );
+                    }
+                });
+            }
+            warn!(model = %model_name, error = %e, "Anthropic count_tokens failed");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({
+                    "type": "error",
+                    "error": {
+                        "type": "api_error",
+                        "message": "Internal server error while counting tokens."
+                    }
+                })),
+            )
+                .into_response()
+        }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+fn is_network_error(e: &AnthropicApiError) -> bool {
+    matches!(e, AnthropicApiError::Network(_))
 }
 
 /// Transform the raw byte stream from the upstream Anthropic SSE response into
@@ -284,17 +360,6 @@ fn transform_anthropic_stream(
     model_db_id: i32,
     _api_key_id: i32,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
-    // We accumulate bytes into lines and forward SSE events.
-    // Anthropic SSE format:
-    //   event: message_start
-    //   data: {...}
-    //
-    //   event: content_block_start
-    //   data: {...}
-    //   ...
-    //   event: message_stop
-    //   data: {...}
-
     async_stream::stream! {
         let mut buffer = String::new();
         let mut current_event_type: Option<String> = None;
@@ -330,7 +395,7 @@ fn transform_anthropic_stream(
                             if let Some(data) = line.strip_prefix("data: ") {
                                 // Log usage from message_delta events
                                 if current_event_type.as_deref() == Some("message_delta") {
-                                    if let Ok(parsed) = serde_json::from_str::<Value>(data) {
+                                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
                                         if let Some(usage) = parsed.get("usage") {
                                             info!(
                                                 output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
