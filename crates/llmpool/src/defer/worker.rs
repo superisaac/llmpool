@@ -1,8 +1,14 @@
 use apalis::prelude::*;
+use apalis_cron::CronStream;
+use cron::Schedule;
+use std::str::FromStr;
 use tracing::info;
 
 use crate::db;
 use crate::telemetry;
+
+/// Cron expression: every 5 minutes
+const UPSTREAM_HEALTH_CHECK_CRON: &str = "0 */5 * * * *";
 
 /// Start the deferred task queue worker with the given concurrency level.
 pub async fn run_worker(concurrency: usize) {
@@ -23,9 +29,14 @@ pub async fn run_worker(concurrency: usize) {
     // "worker is still active within threshold" errors on restart
     super::cleanup_stale_workers(&["event-worker", "balance-change-worker"]).await;
 
+    let schedule = Schedule::from_str(UPSTREAM_HEALTH_CHECK_CRON)
+        .expect("Invalid cron expression for upstream health check");
+
     let pool_clone = pool.clone();
     let redis_pool_clone = redis_pool.clone();
     let balance_change_storage_clone = balance_change_storage.clone();
+    let health_check_pool = pool.clone();
+
     Monitor::new()
         .register(move |_| {
             WorkerBuilder::new("event-worker")
@@ -43,6 +54,12 @@ pub async fn run_worker(concurrency: usize) {
                 .data(redis_pool_clone.clone())
                 .concurrency(concurrency)
                 .build(super::tasks::settle_balance_change)
+        })
+        .register(move |_| {
+            WorkerBuilder::new("upstream-health-worker")
+                .backend(CronStream::new(schedule.clone()))
+                .data(health_check_pool.clone())
+                .build(super::tasks::check_offline_upstreams)
         })
         .run()
         .await

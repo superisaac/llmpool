@@ -16,6 +16,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::helpers::{AppState, check_fund_balance, select_model_clients};
+use crate::db;
 use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 use crate::models::CapacityOption;
@@ -46,16 +47,39 @@ pub async fn chat_completions(
 
     let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
-    for (i, (client, model_db_id)) in clients.iter().enumerate() {
+    for (i, upstream_client) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
             account_id,
-            *model_db_id,
+            upstream_client.model_db_id,
             api_key_id,
         );
-        match chat_completions_with_client(client, &mut tracer, payload.clone()).await {
+        match chat_completions_with_client(&upstream_client.client, &mut tracer, payload.clone())
+            .await
+        {
             Ok(response) => return response,
             Err(e) => {
+                // On network errors, mark the upstream as offline
+                if is_network_error(&e) {
+                    let pool = state.pool.clone();
+                    let upstream_id = upstream_client.upstream_id;
+                    tokio::spawn(async move {
+                        if let Err(db_err) =
+                            db::llm::mark_upstream_offline(&pool, upstream_id).await
+                        {
+                            warn!(
+                                upstream_id = upstream_id,
+                                error = %db_err,
+                                "Failed to mark upstream as offline"
+                            );
+                        } else {
+                            warn!(
+                                upstream_id = upstream_id,
+                                "Marked upstream as offline due to network error"
+                            );
+                        }
+                    });
+                }
                 if i < clients.len() - 1 {
                     warn!(
                         model = model_name,
@@ -70,6 +94,11 @@ pub async fn chat_completions(
         }
     }
     unreachable!()
+}
+
+/// Returns true if the OpenAI error is a network/reqwest error.
+fn is_network_error(e: &async_openai::error::OpenAIError) -> bool {
+    matches!(e, async_openai::error::OpenAIError::Reqwest(_))
 }
 
 /// Execute a chat completion request using the specified client.

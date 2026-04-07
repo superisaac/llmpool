@@ -40,14 +40,16 @@ pub async fn generate_images(
 
     let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
-    for (i, (client, model_db_id)) in clients.iter().enumerate() {
+    for (i, upstream_client) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
             account_id,
-            *model_db_id,
+            upstream_client.model_db_id,
             api_key_id,
         );
-        match generate_images_with_client(client, &mut tracer, payload.clone()).await {
+        match generate_images_with_client(&upstream_client.client, &mut tracer, payload.clone())
+            .await
+        {
             Ok(response) => return response,
             Err(e) => {
                 if i < clients.len() - 1 {

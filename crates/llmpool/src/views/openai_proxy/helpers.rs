@@ -183,7 +183,16 @@ pub(super) fn build_client_from_model_upstream(
     (client, model.id)
 }
 
-/// Returns up to `count` (Client, model_db_id) pairs selected by lowest current-hour output
+/// A selected upstream client with associated IDs for tracking and error handling.
+pub(super) struct UpstreamClient {
+    pub client: async_openai::Client<async_openai::config::OpenAIConfig>,
+    /// The LLMModel primary key
+    pub model_db_id: i32,
+    /// The LLMUpstream primary key (used to mark upstream offline on network errors)
+    pub upstream_id: i32,
+}
+
+/// Returns up to `count` UpstreamClient entries selected by lowest current-hour output
 /// token usage from Redis. If a model has no Redis key, its usage defaults to 0.
 pub(super) async fn select_model_clients(
     db_pool: &DbPool,
@@ -191,10 +200,7 @@ pub(super) async fn select_model_clients(
     model_name: &str,
     capacity: &crate::models::CapacityOption,
     count: usize,
-) -> Vec<(
-    async_openai::Client<async_openai::config::OpenAIConfig>,
-    i32,
-)> {
+) -> Vec<UpstreamClient> {
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let models =
@@ -238,7 +244,12 @@ pub(super) async fn select_model_clients(
                 output_token_usage = usage,
                 "Selected upstream candidate by lowest output token usage"
             );
-            build_client_from_model_upstream(model, upstream)
+            let (client, model_db_id) = build_client_from_model_upstream(model, upstream);
+            UpstreamClient {
+                client,
+                model_db_id,
+                upstream_id: upstream.id,
+            }
         })
         .collect()
 }

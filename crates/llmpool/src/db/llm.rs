@@ -181,6 +181,33 @@ pub async fn update_upstream(
     decrypt_upstream(upstream)
 }
 
+/// Mark an upstream as offline by setting its status to "offline"
+pub async fn mark_upstream_offline(pool: &DbPool, upstream_id: i32) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE llm_upstreams SET status = 'offline', updated_at = NOW() WHERE id = $1")
+        .bind(upstream_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// Mark an upstream as online by setting its status to "online"
+pub async fn mark_upstream_online(pool: &DbPool, upstream_id: i32) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE llm_upstreams SET status = 'online', updated_at = NOW() WHERE id = $1")
+        .bind(upstream_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
+/// List all upstreams with status = 'offline'
+pub async fn list_offline_upstreams(pool: &DbPool) -> Result<Vec<LLMUpstream>, sqlx::Error> {
+    let upstreams =
+        sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE status = 'offline'")
+            .fetch_all(pool)
+            .await?;
+    upstreams.into_iter().map(decrypt_upstream).collect()
+}
+
 /// Delete an OpenAI upstream
 pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM llm_upstreams WHERE id = $1")
@@ -646,6 +673,7 @@ pub async fn find_models_by_name_and_capacity(
          FROM llm_models m
          INNER JOIN llm_upstreams e ON m.upstream_id = e.id
          WHERE m.model_id = $1
+                AND e.status = 'online'
                 AND m.is_active = true ",
     );
 

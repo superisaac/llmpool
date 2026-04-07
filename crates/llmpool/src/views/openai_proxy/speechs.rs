@@ -5,8 +5,10 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
+use tracing::warn;
 
 use super::helpers::{AppState, check_fund_balance, select_model_clients};
+use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
 use crate::models::CapacityOption;
 
@@ -29,31 +31,51 @@ pub async fn create_speech(
     };
     let clients =
         select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 1).await;
-    if let Some((client, _model_db_id)) = clients.first() {
-        return create_speech_with_client(client, payload).await;
-    } else {
+    if clients.is_empty() {
         eprintln!("No client for speech model {model_name}");
-        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let upstream_client = &clients[0];
+    match create_speech_with_client(&upstream_client.client, payload).await {
+        Ok(response) => response,
+        Err(e) => {
+            // On network errors, mark the upstream as offline
+            if matches!(e, async_openai::error::OpenAIError::Reqwest(_)) {
+                let pool = state.pool.clone();
+                let upstream_id = upstream_client.upstream_id;
+                tokio::spawn(async move {
+                    if let Err(db_err) = db::llm::mark_upstream_offline(&pool, upstream_id).await {
+                        warn!(
+                            upstream_id = upstream_id,
+                            error = %db_err,
+                            "Failed to mark upstream as offline"
+                        );
+                    } else {
+                        warn!(
+                            upstream_id = upstream_id,
+                            "Marked upstream as offline due to network error"
+                        );
+                    }
+                });
+            }
+            eprintln!("Speech Generation Error: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }
 
-/// Execute a speech request using the specified client
+/// Execute a speech request using the specified client.
+/// Returns Ok(Response) on success, Err(OpenAIError) on failure.
 async fn create_speech_with_client(
     client: &Client<OpenAIConfig>,
     payload: CreateSpeechRequest,
-) -> Response {
-    let res = client.audio().speech().create(payload).await;
-
-    match res {
-        Ok(resp) => Response::builder()
-            .header("Content-Type", "audio/mpeg")
-            .body(axum::body::Body::from(resp.bytes))
-            .unwrap(),
-        Err(e) => {
-            eprintln!("Speech Generation Error: {:?}", e);
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
-    }
+) -> Result<Response, async_openai::error::OpenAIError> {
+    let resp = client.audio().speech().create(payload).await?;
+    Ok(Response::builder()
+        .header("Content-Type", "audio/mpeg")
+        .body(axum::body::Body::from(resp.bytes))
+        .unwrap())
 }
 
 /// Convert SpeechModel enum to string
