@@ -7,7 +7,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::anthropic_api::{AnthropicApiError, CreateMessageBatchParams};
+use super::client::{AnthropicApiError, CreateMessageBatchParams};
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
@@ -128,7 +128,7 @@ pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -
     let upstream_client = &clients[0];
     let api_client = &upstream_client.client;
 
-    let params = super::anthropic_api::ListMessageBatchesParams::default();
+    let params = super::client::ListMessageBatchesParams::default();
     match api_client.list_message_batches(&params).await {
         Ok(list) => Json(list).into_response(),
         Err(e) => {

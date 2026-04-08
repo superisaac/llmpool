@@ -12,7 +12,7 @@ use crate::models::{CapacityOption, LLMModel, LLMUpstream};
 
 use crate::defer::OpenAIEventTask;
 
-use super::anthropic_api::AnthropicApiClient;
+use super::client::AnthropicApiClient;
 
 // --- Upstream client for Anthropic ---
 

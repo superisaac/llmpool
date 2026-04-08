@@ -10,7 +10,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::anthropic_api::{
+use super::client::{
     AnthropicApiError, CompletionRequest, CountMessageTokensParams, CreateMessageParams,
 };
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};

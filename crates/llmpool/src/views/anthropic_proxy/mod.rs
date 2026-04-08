@@ -1,5 +1,5 @@
-pub mod anthropic_api;
 pub mod batches;
+pub mod client;
 pub mod helpers;
 pub mod messages;
 
