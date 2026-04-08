@@ -828,6 +828,8 @@ struct ListModelsParams {
     upstream_name: Option<String>,
     /// Filter by model name (model_id)
     name: Option<String>,
+    /// Filter by active status
+    is_active: Option<bool>,
     /// Page number (1-based), defaults to 1
     #[serde(default = "default_page")]
     page: i64,
@@ -846,6 +848,7 @@ struct ListModelsParams {
 /// - `upstream_id` (optional): Filter by upstream ID
 /// - `upstream_name` (optional): Filter by upstream name
 /// - `name` (optional): Filter by model name (model_id)
+/// - `is_active` (optional): Filter by active status (true/false)
 /// - `page` (optional, default: 1): Page number (1-based)
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
 async fn list_models(
@@ -860,6 +863,7 @@ async fn list_models(
         upstream_id: params.upstream_id,
         upstream_name: params.upstream_name,
         name: params.name,
+        is_active: params.is_active,
     };
 
     // Get total count
@@ -927,11 +931,6 @@ struct CreateUpstreamRequest {
     tags: Vec<String>,
     #[serde(default)]
     proxies: Vec<String>,
-    /// Whether to probe each model for supported features.
-    /// If `false` (the default), models are saved with all feature flags set to `false`
-    /// without making any additional requests to the upstream.
-    #[serde(default)]
-    detect: bool,
 }
 
 fn default_provider() -> String {
@@ -1050,25 +1049,14 @@ async fn create_upstream(
     }
 
     // Save the upstream and its models to the database.
-    // When detect=true, probe each model for supported features.
-    // When detect=false (default), save all models with all feature flags set to false.
-    let save_result = if payload.detect {
-        crate::openai::features::detect_and_save_features(
-            &state.pool,
-            payload.name.trim(),
-            payload.api_key.trim(),
-            payload.api_base.trim(),
-        )
-        .await
-    } else {
-        crate::openai::features::list_and_save_without_detect(
-            &state.pool,
-            payload.name.trim(),
-            payload.api_key.trim(),
-            payload.api_base.trim(),
-        )
-        .await
-    };
+    // Models are saved with all feature flags set to false without making any additional requests.
+    let save_result = crate::openai::features::list_and_save_without_detect(
+        &state.pool,
+        payload.name.trim(),
+        payload.api_key.trim(),
+        payload.api_base.trim(),
+    )
+    .await;
 
     match save_result {
         Ok(()) => {

@@ -160,6 +160,10 @@ curl "http://localhost:19324/api/v1/models?upstream_id=1" \
 curl "http://localhost:19324/api/v1/models?upstream_name=OpenAI&name=gpt-4o" \
   -H "x-admin-token: <jwt-token>"
 
+# Filter models by active status
+curl "http://localhost:19324/api/v1/models?is_active=true" \
+  -H "x-admin-token: <jwt-token>"
+
 # Get a model by ID
 curl http://localhost:19324/api/v1/models/1 \
   -H "x-admin-token: <jwt-token>"

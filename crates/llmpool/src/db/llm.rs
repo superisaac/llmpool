@@ -398,6 +398,7 @@ pub struct ListModelsFilter {
     pub upstream_id: Option<i32>,
     pub upstream_name: Option<String>,
     pub name: Option<String>,
+    pub is_active: Option<bool>,
 }
 
 /// Count models matching the given filters
@@ -423,6 +424,10 @@ pub async fn count_models_filtered(
         param_idx += 1;
         sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
     }
+    if filter.is_active.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.is_active = ${}", param_idx));
+    }
     let _ = param_idx;
 
     let mut query = sqlx::query_as::<_, (i64,)>(&sql);
@@ -434,6 +439,9 @@ pub async fn count_models_filtered(
     }
     if let Some(ref name) = filter.name {
         query = query.bind(name);
+    }
+    if let Some(ref is_active) = filter.is_active {
+        query = query.bind(is_active);
     }
     let row = query.fetch_one(pool).await?;
     Ok(row.0)
@@ -464,6 +472,10 @@ pub async fn list_models_filtered_paginated(
         param_idx += 1;
         sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
     }
+    if filter.is_active.is_some() {
+        param_idx += 1;
+        sql.push_str(&format!(" AND m.is_active = ${}", param_idx));
+    }
     param_idx += 1;
     let limit_idx = param_idx;
     param_idx += 1;
@@ -482,6 +494,9 @@ pub async fn list_models_filtered_paginated(
     }
     if let Some(ref name) = filter.name {
         query = query.bind(name);
+    }
+    if let Some(ref is_active) = filter.is_active {
+        query = query.bind(is_active);
     }
     query = query.bind(limit).bind(offset);
     query.fetch_all(pool).await

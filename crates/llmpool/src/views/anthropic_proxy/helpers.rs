@@ -77,30 +77,25 @@ pub async fn select_anthropic_clients(
         ..Default::default()
     };
 
-    let models = match db::llm::find_models_by_name_and_capacity(
-        db_pool,
-        model_name,
-        &capacity,
-    )
-    .await
-    {
-        Ok(models) if !models.is_empty() => models,
-        Ok(_) => {
-            warn!(
-                model = model_name,
-                "No models found in DB for the requested capacity (anthropic)"
-            );
-            return vec![];
-        }
-        Err(e) => {
-            warn!(
-                model = model_name,
-                error = %e,
-                "DB query failed when looking up models (anthropic)"
-            );
-            return vec![];
-        }
-    };
+    let models =
+        match db::llm::find_models_by_name_and_capacity(db_pool, model_name, &capacity).await {
+            Ok(models) if !models.is_empty() => models,
+            Ok(_) => {
+                warn!(
+                    model = model_name,
+                    "No models found in DB for the requested capacity (anthropic)"
+                );
+                return vec![];
+            }
+            Err(e) => {
+                warn!(
+                    model = model_name,
+                    error = %e,
+                    "DB query failed when looking up models (anthropic)"
+                );
+                return vec![];
+            }
+        };
 
     let model_ids: Vec<i32> = models.iter().map(|(m, _)| m.id).collect();
     let usages = get_output_token_usage_batch(redis_pool, &model_ids).await;

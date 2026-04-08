@@ -13,7 +13,11 @@ use crate::client::ApiClient;
 #[derive(Subcommand)]
 pub enum ModelAction {
     /// List all models
-    List,
+    List {
+        /// Filter by active status (true or false)
+        #[arg(long)]
+        is_active: Option<bool>,
+    },
     /// Show details of a specific model
     Show {
         /// Model path (upstream_name/model_name) or model database ID
@@ -132,12 +136,16 @@ pub async fn handle_model(
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        ModelAction::List => {
+        ModelAction::List { is_active } => {
+            let path = match is_active {
+                Some(v) => format!("/models?is_active={}", v),
+                None => "/models".to_string(),
+            };
             if json_output {
-                let raw = client.get_raw("/models").await?;
+                let raw = client.get_raw(&path).await?;
                 println!("{}", raw);
             } else {
-                let resp: PaginatedResponse<ModelResponse> = client.get("/models").await?;
+                let resp: PaginatedResponse<ModelResponse> = client.get(&path).await?;
                 print_models(&resp.data);
                 print_pagination(&resp.pagination);
             }

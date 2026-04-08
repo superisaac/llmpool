@@ -54,8 +54,7 @@ pub async fn detect_and_update_model_features(
     let upstream = db::llm::get_upstream(pool, model.upstream_id).await?;
 
     // 3. Detect has_messages
-    let has_messages =
-        check_messages_api_support(&upstream.api_key, &upstream.api_base).await;
+    let has_messages = check_messages_api_support(&upstream.api_key, &upstream.api_base).await;
 
     // 4. Update only has_messages in the database
     let update = UpdateLLMModel {
