@@ -82,6 +82,8 @@ pub struct LLMModel {
     pub has_speech: bool,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
+    /// Whether the model supports the Anthropic /v1/messages API
+    pub has_messages: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -100,6 +102,9 @@ pub struct NewLLMModel {
     pub has_speech: bool,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
+    /// Whether the model supports the Anthropic /v1/messages API
+    #[serde(default)]
+    pub has_messages: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -114,6 +119,8 @@ pub struct CapacityOption {
     pub has_embedding: Option<bool>,
     pub has_image_generation: Option<bool>,
     pub has_speech: Option<bool>,
+    /// Whether the model supports the Anthropic /v1/messages API
+    pub has_messages: Option<bool>,
 }
 
 /// Used to update an existing OpenAI model
@@ -125,6 +132,8 @@ pub struct UpdateLLMModel {
     pub has_speech: Option<bool>,
     pub has_chat_completion: Option<bool>,
     pub has_embedding: Option<bool>,
+    /// Whether the model supports the Anthropic /v1/messages API
+    pub has_messages: Option<bool>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
     pub batch_input_token_price: Option<BigDecimal>,

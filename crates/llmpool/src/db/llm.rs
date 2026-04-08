@@ -224,8 +224,8 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sql
 /// Create a new OpenAI model
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
@@ -234,6 +234,7 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .bind(new_model.has_speech)
     .bind(new_model.has_chat_completion)
     .bind(new_model.has_embedding)
+    .bind(new_model.has_messages)
     .bind(&new_model.input_token_price)
     .bind(&new_model.output_token_price)
     .bind(&new_model.batch_input_token_price)
@@ -330,6 +331,7 @@ pub async fn update_model(
         .has_chat_completion
         .unwrap_or(current.has_chat_completion);
     let has_embedding = update.has_embedding.unwrap_or(current.has_embedding);
+    let has_messages = update.has_messages.unwrap_or(current.has_messages);
     let input_token_price = update
         .input_token_price
         .as_ref()
@@ -355,10 +357,11 @@ pub async fn update_model(
     sqlx::query_as::<_, LLMModel>(
         "UPDATE llm_models
          SET model_id = $1, is_active = $2, has_image_generation = $3, has_speech = $4,
-             has_chat_completion = $5, has_embedding = $6, input_token_price = $7,
-             output_token_price = $8, batch_input_token_price = $9, batch_output_token_price = $10,
-             description = $11, updated_at = $12
-         WHERE id = $13
+             has_chat_completion = $5, has_embedding = $6, has_messages = $7,
+             input_token_price = $8, output_token_price = $9,
+             batch_input_token_price = $10, batch_output_token_price = $11,
+             description = $12, updated_at = $13
+         WHERE id = $14
          RETURNING *",
     )
     .bind(model_id)
@@ -367,6 +370,7 @@ pub async fn update_model(
     .bind(has_speech)
     .bind(has_chat_completion)
     .bind(has_embedding)
+    .bind(has_messages)
     .bind(input_token_price)
     .bind(output_token_price)
     .bind(batch_input_token_price)
@@ -586,6 +590,7 @@ struct ModelUpstreamRow {
     pub has_speech: bool,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
+    pub has_messages: bool,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
     pub batch_input_token_price: bigdecimal::BigDecimal,
@@ -619,6 +624,7 @@ impl ModelUpstreamRow {
             has_speech: self.has_speech,
             has_chat_completion: self.has_chat_completion,
             has_embedding: self.has_embedding,
+            has_messages: self.has_messages,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
             batch_input_token_price: self.batch_input_token_price,
@@ -653,17 +659,15 @@ impl ModelUpstreamRow {
 /// along with their associated upstream information (api_key, api_base).
 ///
 /// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
-/// If `provider` is `Some(...)`, only upstreams with that provider value will be included.
 pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
     capacity: &CapacityOption,
-    provider: Option<&str>,
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
         "SELECT m.id, m.upstream_id, m.model_id, m.is_active, m.has_image_generation, m.has_speech,
-                m.has_chat_completion, m.has_embedding, m.input_token_price, m.output_token_price,
+                m.has_chat_completion, m.has_embedding, m.has_messages, m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
@@ -682,10 +686,6 @@ pub async fn find_models_by_name_and_capacity(
     let mut param_idx = 2u32;
     let mut conditions = Vec::new();
 
-    if provider.is_some() {
-        conditions.push(format!("e.provider = ${}", param_idx));
-        param_idx += 1;
-    }
     if capacity.has_chat_completion == Some(true) {
         conditions.push(format!("m.has_chat_completion = ${}", param_idx));
         param_idx += 1;
@@ -700,6 +700,10 @@ pub async fn find_models_by_name_and_capacity(
     }
     if capacity.has_speech == Some(true) {
         conditions.push(format!("m.has_speech = ${}", param_idx));
+        param_idx += 1;
+    }
+    if capacity.has_messages == Some(true) {
+        conditions.push(format!("m.has_messages = ${}", param_idx));
         let _ = param_idx; // suppress unused warning
     }
 
@@ -710,10 +714,6 @@ pub async fn find_models_by_name_and_capacity(
 
     let mut query = sqlx::query_as::<_, ModelUpstreamRow>(&sql).bind(model_name);
 
-    // Bind the provider filter value if provided
-    if let Some(p) = provider {
-        query = query.bind(p);
-    }
     // Bind the `true` values for each capacity filter
     if capacity.has_chat_completion == Some(true) {
         query = query.bind(true);
@@ -725,6 +725,9 @@ pub async fn find_models_by_name_and_capacity(
         query = query.bind(true);
     }
     if capacity.has_speech == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_messages == Some(true) {
         query = query.bind(true);
     }
 

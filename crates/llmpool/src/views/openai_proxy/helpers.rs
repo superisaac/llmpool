@@ -204,7 +204,7 @@ pub(super) async fn select_model_clients(
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let models = match db::llm::find_models_by_name_and_capacity(
-        db_pool, model_name, capacity, None,
+        db_pool, model_name, capacity,
     )
     .await
     {

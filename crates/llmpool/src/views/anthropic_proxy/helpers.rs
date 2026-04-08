@@ -73,7 +73,7 @@ pub async fn select_anthropic_clients(
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let capacity = CapacityOption {
-        has_chat_completion: Some(true),
+        has_messages: Some(true),
         ..Default::default()
     };
 
@@ -81,7 +81,6 @@ pub async fn select_anthropic_clients(
         db_pool,
         model_name,
         &capacity,
-        Some("anthropic"),
     )
     .await
     {

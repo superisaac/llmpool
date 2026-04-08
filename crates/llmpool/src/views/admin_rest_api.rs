@@ -1551,6 +1551,7 @@ async fn update_model_by_id(
         has_speech: None,
         has_chat_completion: None,
         has_embedding: None,
+        has_messages: None,
         input_token_price: payload.input_token_price,
         output_token_price: payload.output_token_price,
         batch_input_token_price: payload.batch_input_token_price,
