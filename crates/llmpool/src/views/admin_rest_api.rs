@@ -816,8 +816,6 @@ async fn delete_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<St
     }
 }
 
-// --- Upstream Test DTOs ---
-
 // --- Model List Query Params ---
 
 #[derive(Debug, Deserialize)]
@@ -937,13 +935,6 @@ fn default_provider() -> String {
     "openai".to_string()
 }
 
-/// Request body for testing an OpenAI upstream
-#[derive(Deserialize)]
-struct TestUpstreamRequest {
-    api_key: String,
-    api_base: String,
-}
-
 /// Response DTO for a saved model
 #[derive(Serialize)]
 struct ModelResponse {
@@ -991,24 +982,6 @@ impl From<crate::models::LLMModel> for ModelResponse {
 struct UpstreamWithModelsResponse {
     upstream: UpstreamResponse,
     models: Vec<ModelResponse>,
-}
-
-/// Response DTO for a model's detected features
-#[derive(Serialize)]
-struct ModelFeaturesResponse {
-    model_id: String,
-    owned_by: String,
-    has_chat_completion: bool,
-    has_embedding: bool,
-    has_image_generation: bool,
-    has_speech: bool,
-}
-
-/// Response DTO for upstream feature detection results
-#[derive(Serialize)]
-struct TestUpstreamResponse {
-    has_responses_api: bool,
-    models: Vec<ModelFeaturesResponse>,
 }
 
 // --- Upstream Create Handler ---
@@ -1208,64 +1181,6 @@ async fn test_models(
     }
 
     Json(results).into_response()
-}
-
-// --- Upstream Test Handler ---
-
-/// POST /api/v1/upstreams-tests
-///
-/// Tests an OpenAI-compatible upstream by detecting its supported features.
-/// This does NOT save anything to the database — it only probes the remote API.
-///
-/// Request body (JSON):
-/// - `api_key` (required): The API key for the upstream
-/// - `api_base` (required): The base URL of the upstream
-async fn test_upstream(Json(payload): Json<TestUpstreamRequest>) -> Response {
-    if payload.api_key.trim().is_empty() {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "validation_error",
-            "api_key cannot be empty",
-        );
-    }
-    if payload.api_base.trim().is_empty() {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "validation_error",
-            "api_base cannot be empty",
-        );
-    }
-
-    match crate::openai::features::detect_features(&payload.api_key, &payload.api_base).await {
-        Ok(api_features) => {
-            let models: Vec<ModelFeaturesResponse> = api_features
-                .model_features
-                .into_iter()
-                .map(|mf| ModelFeaturesResponse {
-                    model_id: mf.model.id,
-                    owned_by: mf.model.owned_by,
-                    has_chat_completion: mf.has_chat_completion,
-                    has_embedding: mf.has_embedding,
-                    has_image_generation: mf.has_image_generation,
-                    has_speech: mf.has_speech,
-                })
-                .collect();
-
-            Json(TestUpstreamResponse {
-                has_responses_api: api_features.has_responses_api,
-                models,
-            })
-            .into_response()
-        }
-        Err(e) => {
-            warn!(error = %e, "Failed to detect upstream features");
-            error_response(
-                StatusCode::BAD_GATEWAY,
-                "detection_error",
-                &format!("Failed to detect upstream features: {}", e),
-            )
-        }
-    }
 }
 
 // --- Upstream Get/Update Handlers ---
@@ -2274,7 +2189,6 @@ pub fn get_router(
             "/upstreams/{upstream_id}/tags/{tag}",
             delete(remove_upstream_tag),
         )
-        .route("/upstream-tests", post(test_upstream))
         .route("/models-tests", post(test_models))
         .route("/session-events", get(list_session_events))
         .route("/session-events/{event_id}", get(get_session_event_by_id))

@@ -2,7 +2,6 @@ use llmpool::config;
 use llmpool::db;
 use llmpool::defer;
 use llmpool::models;
-use llmpool::openai;
 use llmpool::server;
 
 use clap::{Parser, Subcommand};
@@ -28,11 +27,6 @@ enum Commands {
         /// Bind address in HOST:PORT format
         #[arg(long, default_value = "127.0.0.1:19324")]
         bind: String,
-    },
-    /// OpenAI upstream management
-    Openai {
-        #[command(subcommand)]
-        command: OpenaiCommands,
     },
     /// Admin operations
     Admin {
@@ -81,31 +75,6 @@ struct AdminClaims {
     exp: Option<u64>,
 }
 
-#[derive(Subcommand)]
-enum OpenaiCommands {
-    /// Add an OpenAI-compatible upstream by detecting and saving its features
-    Add {
-        /// A friendly name for this upstream
-        #[arg(long)]
-        name: String,
-        /// The API key for authentication
-        #[arg(long)]
-        api_key: String,
-        /// The base URL of the API upstream
-        #[arg(long)]
-        api_base: String,
-    },
-    /// Detect features of an OpenAI-compatible upstream and print results
-    Detect {
-        /// The API key for authentication
-        #[arg(long)]
-        api_key: String,
-        /// The base URL of the API upstream
-        #[arg(long)]
-        api_base: String,
-    },
-}
-
 /// Prompt the user for input with the given message and return the trimmed response
 fn prompt_input(prompt: &str) -> String {
     print!("{}", prompt);
@@ -134,66 +103,6 @@ async fn main() {
             db::run_migrations(&pool).await;
             println!("Database migrations completed successfully.");
         }
-        Commands::Openai { command } => match command {
-            OpenaiCommands::Add {
-                name,
-                api_key,
-                api_base,
-            } => {
-                let pool = db::create_pool_from_config().await;
-                match openai::features::detect_and_save_features(&pool, &name, &api_key, &api_base)
-                    .await
-                {
-                    Ok(()) => {
-                        println!(
-                            "Successfully detected and saved features for upstream '{}'",
-                            name
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("Error: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-            }
-            OpenaiCommands::Detect { api_key, api_base } => {
-                match openai::features::detect_features(&api_key, &api_base).await {
-                    Ok(features) => {
-                        println!("API Upstream Features for: {}", api_base);
-                        println!("Responses API supported: {}", features.has_responses_api);
-                        println!();
-                        println!(
-                            "{:<40} | {:<10} | {:<10} | {:<15} | {:<10}",
-                            "Model ID", "Chat", "Embedding", "Image Gen", "Speech"
-                        );
-                        println!(
-                            "{:-<40}-+-{:-<10}-+-{:-<10}-+-{:-<15}-+-{:-<10}",
-                            "", "", "", "", ""
-                        );
-                        for mf in &features.model_features {
-                            println!(
-                                "{:<40} | {:<10} | {:<10} | {:<15} | {:<10}",
-                                mf.model.id,
-                                if mf.has_chat_completion { "✓" } else { "✗" },
-                                if mf.has_embedding { "✓" } else { "✗" },
-                                if mf.has_image_generation {
-                                    "✓"
-                                } else {
-                                    "✗"
-                                },
-                                if mf.has_speech { "✓" } else { "✗" },
-                            );
-                        }
-                        println!();
-                        println!("Total models: {}", features.model_features.len());
-                    }
-                    Err(e) => {
-                        eprintln!("Error detecting features: {}", e);
-                        std::process::exit(1);
-                    }
-                }
-            }
-        },
         Commands::Admin { command } => match command {
             AdminCommands::CreateJwtToken { expire, subject } => {
                 let cfg = config::get_config();

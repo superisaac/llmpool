@@ -1,6 +1,5 @@
 use async_openai::{
     Client,
-    config::OpenAIConfig,
     error::OpenAIError,
     types::{
         audio::{CreateSpeechRequestArgs, SpeechModel, SpeechResponseFormat, Voice::Alloy},
@@ -28,42 +27,6 @@ pub struct ModelFeatures {
     pub has_speech: bool,
     pub has_embedding: bool,
     pub has_chat_completion: bool,
-}
-
-pub struct APIUpstreamFeatures {
-    pub has_responses_api: bool,
-    pub model_features: Vec<ModelFeatures>,
-}
-
-pub async fn detect_features(
-    api_key: &str,
-    api_base: &str,
-) -> Result<APIUpstreamFeatures, OpenAIError> {
-    // Initialize client from environment variables
-    let config = OpenAIConfig::new()
-        .with_api_key(api_key.to_string())
-        .with_api_base(api_base.to_string());
-    let client = Client::with_config(config);
-
-    let response = client.models().list().await?;
-    let mut models = response.data;
-
-    // Sort by ID
-    models.sort_by(|a, b| a.id.cmp(&b.id));
-
-    let has_responses_api = check_responses_api_support(&client).await;
-
-    let mut model_features: Vec<_> = vec![];
-    for model in models {
-        // Perform live feature detection
-        let features = detect_model_features(&client, &model).await;
-        model_features.push(features);
-    }
-    let api_features = APIUpstreamFeatures {
-        has_responses_api,
-        model_features,
-    };
-    Ok(api_features)
 }
 
 /// Detect model features through actual upstream calls
@@ -172,107 +135,6 @@ async fn check_embedding_support(
         Ok(_) => true,
         Err(e) => !is_unsupported_error(&e),
     }
-}
-
-async fn check_responses_api_support(client: &Client<async_openai::config::OpenAIConfig>) -> bool {
-    match client.responses().retrieve("~nosuchresponse_id").await {
-        Ok(_) => true,
-        Err(e) => !is_unsupported_error(&e),
-    }
-}
-
-/// Detect features for an API upstream and save the results to the database.
-/// This will upsert the upstream (by api_base) and upsert each model (by upstream_id + model_id).
-pub async fn detect_and_save_features(
-    pool: &DbPool,
-    name: &str,
-    api_key: &str,
-    api_base: &str,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // 1. Detect features from the remote API
-    let api_features = detect_features(api_key, api_base).await?;
-
-    // 2. Upsert the LLMUpstream
-    let upstream = match db::llm::get_upstream_by_api_base(pool, api_base).await {
-        Ok(existing) => {
-            // Update existing upstream
-            let update = UpdateLLMUpstream {
-                name: Some(name.to_string()),
-                api_base: None,
-                api_key: Some(api_key.to_string()),
-                provider: None,
-                has_responses_api: Some(api_features.has_responses_api),
-                tags: None,
-                proxies: None,
-                status: None,
-                description: None,
-                updated_at: Some(Utc::now().naive_utc()),
-            };
-            db::llm::update_upstream(pool, existing.id, &update).await?
-        }
-        Err(sqlx::Error::RowNotFound) => {
-            // Insert new upstream
-            let new_upstream = NewLLMUpstream {
-                name: name.to_string(),
-                api_base: api_base.to_string(),
-                api_key: api_key.to_string(),
-                provider: "openai".to_string(),
-                has_responses_api: api_features.has_responses_api,
-                tags: vec![],
-                proxies: vec![],
-                status: "online".to_string(),
-                description: String::new(),
-            };
-            db::llm::create_upstream(pool, &new_upstream).await?
-        }
-        Err(e) => return Err(Box::new(e)),
-    };
-
-    // 3. Upsert each model
-    for mf in &api_features.model_features {
-        match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &mf.model.id).await {
-            Ok(existing_model) => {
-                // Update existing model
-                let update = UpdateLLMModel {
-                    model_id: None,
-                    is_active: None,
-                    has_image_generation: Some(mf.has_image_generation),
-                    has_speech: Some(mf.has_speech),
-                    has_chat_completion: Some(mf.has_chat_completion),
-                    has_embedding: Some(mf.has_embedding),
-                    has_messages: None,
-                    input_token_price: None,
-                    output_token_price: None,
-                    batch_input_token_price: None,
-                    batch_output_token_price: None,
-                    description: None,
-                    updated_at: Some(Utc::now().naive_utc()),
-                };
-                db::llm::update_model(pool, existing_model.id, &update).await?;
-            }
-            Err(sqlx::Error::RowNotFound) => {
-                // Insert new model
-                let default_token_price = BigDecimal::from_str("0.000001").unwrap();
-                let new_model = NewLLMModel {
-                    upstream_id: upstream.id,
-                    model_id: mf.model.id.clone(),
-                    has_image_generation: mf.has_image_generation,
-                    has_speech: mf.has_speech,
-                    has_chat_completion: mf.has_chat_completion,
-                    has_embedding: mf.has_embedding,
-                    has_messages: false,
-                    input_token_price: default_token_price.clone(),
-                    output_token_price: default_token_price.clone(),
-                    batch_input_token_price: default_token_price.clone(),
-                    batch_output_token_price: default_token_price,
-                };
-                db::llm::create_model(pool, &new_model).await?;
-            }
-            Err(e) => return Err(Box::new(e)),
-        }
-    }
-
-    Ok(())
 }
 
 /// Fetch the model list from the upstream and save each model to the database without
