@@ -3,6 +3,7 @@ pub mod apikey;
 pub mod fund;
 pub mod model;
 pub mod session_event;
+pub mod subscription;
 pub mod upstream;
 
 use serde::Deserialize;
@@ -13,6 +14,7 @@ pub use apikey::ApiKeyAction;
 pub use fund::FundAction;
 pub use model::ModelAction;
 pub use session_event::SessionEventAction;
+pub use subscription::{SubscriptionAction, SubscriptionPlanAction};
 pub use upstream::UpstreamAction;
 
 pub use account::handle_account;
@@ -20,6 +22,7 @@ pub use apikey::handle_apikey;
 pub use fund::handle_fund;
 pub use model::handle_model;
 pub use session_event::handle_session_event;
+pub use subscription::{handle_subscription, handle_subscription_plan};
 pub use upstream::handle_upstream;
 
 // ============================================================

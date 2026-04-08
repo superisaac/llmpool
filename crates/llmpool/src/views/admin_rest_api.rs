@@ -18,6 +18,7 @@ use crate::defer::BalanceChangeTask;
 use crate::middlewares::admin_auth;
 use crate::models::{Account, NewAccount, UpdateAccount};
 use crate::models::{BalanceChangeContent, NewBalanceChange};
+use crate::models::{Subscription, SubscriptionPlan};
 use crate::redis_utils::caches::account as account_cache;
 use crate::redis_utils::caches::api_key::{self as redis_cache, ApiKeyInfo};
 
@@ -2142,6 +2143,616 @@ async fn list_session_events(
     .into_response()
 }
 
+// ============================================================
+// Subscription Plan Response DTO
+// ============================================================
+
+/// Response DTO for a subscription plan
+#[derive(Serialize)]
+struct SubscriptionPlanResponse {
+    id: i32,
+    status: String,
+    description: String,
+    input_token_limit: i64,
+    output_token_limit: i64,
+    money_limit: String,
+    start_at: Option<String>,
+    end_at: Option<String>,
+    sort_order: i32,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<SubscriptionPlan> for SubscriptionPlanResponse {
+    fn from(p: SubscriptionPlan) -> Self {
+        Self {
+            id: p.id,
+            status: p.status,
+            description: p.description,
+            input_token_limit: p.input_token_limit,
+            output_token_limit: p.output_token_limit,
+            money_limit: p.money_limit.to_string(),
+            start_at: p.start_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            end_at: p.end_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            sort_order: p.sort_order,
+            created_at: p.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            updated_at: p.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+// ============================================================
+// Subscription Plan Handlers
+// ============================================================
+
+/// GET /api/v1/subscription-plans
+///
+/// Returns a paginated list of subscription plans.
+async fn list_subscription_plans(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<PaginationParams>,
+) -> Response {
+    let page = if params.page < 1 { 1 } else { params.page };
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
+    let offset = (page - 1) * page_size;
+
+    let total = match db::subscription::count_subscription_plans(&state.pool).await {
+        Ok(count) => count,
+        Err(e) => {
+            warn!(error = %e, "Failed to count subscription plans");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscription plans",
+            );
+        }
+    };
+
+    let plans =
+        match db::subscription::list_subscription_plans_paginated(&state.pool, offset, page_size)
+            .await
+        {
+            Ok(plans) => plans,
+            Err(e) => {
+                warn!(error = %e, "Failed to list subscription plans");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to query subscription plans",
+                );
+            }
+        };
+
+    let total_pages = if total == 0 {
+        0
+    } else {
+        (total + page_size - 1) / page_size
+    };
+
+    let data: Vec<SubscriptionPlanResponse> =
+        plans.into_iter().map(SubscriptionPlanResponse::from).collect();
+
+    Json(PaginatedResponse {
+        data,
+        pagination: PaginationInfo {
+            page,
+            page_size,
+            total,
+            total_pages,
+        },
+    })
+    .into_response()
+}
+
+/// GET /api/v1/subscription-plans/:plan_id
+///
+/// Returns a single subscription plan by its ID.
+async fn get_subscription_plan(
+    State(state): State<Arc<AppState>>,
+    Path(plan_id): Path<i32>,
+) -> Response {
+    match db::subscription::get_subscription_plan_by_id(&state.pool, plan_id).await {
+        Ok(Some(plan)) => Json(SubscriptionPlanResponse::from(plan)).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription plan with id {} not found", plan_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get subscription plan by id");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscription plan",
+            )
+        }
+    }
+}
+
+/// Request body for creating a subscription plan
+#[derive(Deserialize)]
+struct CreateSubscriptionPlanRequest {
+    description: String,
+    #[serde(default)]
+    input_token_limit: i64,
+    #[serde(default)]
+    output_token_limit: i64,
+    money_limit: BigDecimal,
+    start_at: Option<chrono::NaiveDateTime>,
+    end_at: Option<chrono::NaiveDateTime>,
+    #[serde(default)]
+    sort_order: i32,
+}
+
+/// POST /api/v1/subscription-plans
+///
+/// Creates a new subscription plan.
+async fn create_subscription_plan(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateSubscriptionPlanRequest>,
+) -> Response {
+    if payload.money_limit < BigDecimal::from(0) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            "money_limit must not be negative",
+        );
+    }
+
+    match db::subscription::create_subscription_plan(
+        &state.pool,
+        &payload.description,
+        payload.input_token_limit,
+        payload.output_token_limit,
+        &payload.money_limit,
+        payload.start_at,
+        payload.end_at,
+        payload.sort_order,
+    )
+    .await
+    {
+        Ok(plan) => (
+            StatusCode::CREATED,
+            Json(SubscriptionPlanResponse::from(plan)),
+        )
+            .into_response(),
+        Err(e) => {
+            warn!(error = %e, "Failed to create subscription plan");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to create subscription plan",
+            )
+        }
+    }
+}
+
+/// Request body for updating a subscription plan
+#[derive(Deserialize)]
+struct UpdateSubscriptionPlanRequest {
+    description: Option<String>,
+    input_token_limit: Option<i64>,
+    output_token_limit: Option<i64>,
+    money_limit: Option<BigDecimal>,
+    /// Use null explicitly to clear start_at; omit to leave unchanged.
+    /// This field uses a double-Option: Some(None) = set to NULL, Some(Some(t)) = set to t, None = no change.
+    #[serde(default, deserialize_with = "deserialize_optional_datetime")]
+    start_at: Option<Option<chrono::NaiveDateTime>>,
+    #[serde(default, deserialize_with = "deserialize_optional_datetime")]
+    end_at: Option<Option<chrono::NaiveDateTime>>,
+    sort_order: Option<i32>,
+    status: Option<String>,
+}
+
+/// Custom deserializer for Option<Option<NaiveDateTime>>:
+/// - field absent → None (no change)
+/// - field = null → Some(None) (set to NULL)
+/// - field = "2024-01-01T00:00:00" → Some(Some(t)) (set to value)
+fn deserialize_optional_datetime<'de, D>(
+    deserializer: D,
+) -> Result<Option<Option<chrono::NaiveDateTime>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::Error;
+    let opt: Option<Option<String>> = serde::Deserialize::deserialize(deserializer)?;
+    match opt {
+        None => Ok(None),
+        Some(None) => Ok(Some(None)),
+        Some(Some(s)) => {
+            let dt = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S")
+                .map_err(|e| D::Error::custom(format!("invalid datetime '{}': {}", s, e)))?;
+            Ok(Some(Some(dt)))
+        }
+    }
+}
+
+/// Valid status values for a subscription plan
+const VALID_PLAN_STATUSES: &[&str] = &["created", "started", "deducted", "active", "canceled", "expired"];
+
+/// PUT /api/v1/subscription-plans/:plan_id
+///
+/// Updates an existing subscription plan. Only provided fields are updated.
+async fn update_subscription_plan(
+    State(state): State<Arc<AppState>>,
+    Path(plan_id): Path<i32>,
+    Json(payload): Json<UpdateSubscriptionPlanRequest>,
+) -> Response {
+    if let Some(ref status) = payload.status {
+        if !VALID_PLAN_STATUSES.contains(&status.as_str()) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                &format!(
+                    "Invalid status '{}'. Must be one of: {}",
+                    status,
+                    VALID_PLAN_STATUSES.join(", ")
+                ),
+            );
+        }
+    }
+    if let Some(ref money_limit) = payload.money_limit {
+        if *money_limit < BigDecimal::from(0) {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "validation_error",
+                "money_limit must not be negative",
+            );
+        }
+    }
+
+    match db::subscription::update_subscription_plan(
+        &state.pool,
+        plan_id,
+        payload.description.as_deref(),
+        payload.input_token_limit,
+        payload.output_token_limit,
+        payload.money_limit.as_ref(),
+        payload.start_at,
+        payload.end_at,
+        payload.sort_order,
+        payload.status.as_deref(),
+    )
+    .await
+    {
+        Ok(plan) => Json(SubscriptionPlanResponse::from(plan)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription plan with id {} not found", plan_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to update subscription plan");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to update subscription plan",
+            )
+        }
+    }
+}
+
+/// DELETE /api/v1/subscription-plans/:plan_id
+///
+/// Cancels a subscription plan by setting its status to 'canceled'.
+async fn cancel_subscription_plan(
+    State(state): State<Arc<AppState>>,
+    Path(plan_id): Path<i32>,
+) -> Response {
+    match db::subscription::cancel_subscription_plan(&state.pool, plan_id).await {
+        Ok(plan) => Json(SubscriptionPlanResponse::from(plan)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription plan with id {} not found", plan_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to cancel subscription plan");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to cancel subscription plan",
+            )
+        }
+    }
+}
+
+// ============================================================
+// Subscription Response DTO
+// ============================================================
+
+/// Response DTO for a subscription
+#[derive(Serialize)]
+struct SubscriptionResponse {
+    id: i32,
+    account_id: i32,
+    plan_id: i32,
+    status: String,
+    used_input_tokens: i64,
+    used_output_tokens: i64,
+    used_money: String,
+    created_at: String,
+    updated_at: String,
+}
+
+impl From<Subscription> for SubscriptionResponse {
+    fn from(s: Subscription) -> Self {
+        Self {
+            id: s.id,
+            account_id: s.account_id,
+            plan_id: s.plan_id,
+            status: s.status,
+            used_input_tokens: s.used_input_tokens,
+            used_output_tokens: s.used_output_tokens,
+            used_money: s.used_money.to_string(),
+            created_at: s.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+            updated_at: s.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        }
+    }
+}
+
+// ============================================================
+// Subscription Handlers
+// ============================================================
+
+/// Query parameters for listing subscriptions
+#[derive(Debug, Deserialize)]
+struct ListSubscriptionsParams {
+    account_id: Option<i32>,
+    status: Option<String>,
+    #[serde(default = "default_page")]
+    page: i64,
+    #[serde(default = "default_page_size")]
+    page_size: i64,
+}
+
+/// GET /api/v1/subscriptions
+///
+/// Returns a paginated list of subscriptions with optional filters.
+///
+/// Query parameters:
+/// - `account_id` (optional): Filter by account ID
+/// - `status` (optional): Filter by status
+/// - `page` (optional, default: 1): Page number (1-based)
+/// - `page_size` (optional, default: 20, max: 100): Number of items per page
+async fn list_subscriptions(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<ListSubscriptionsParams>,
+) -> Response {
+    let page = if params.page < 1 { 1 } else { params.page };
+    let page_size = params.page_size.clamp(1, MAX_PAGE_SIZE);
+    let offset = (page - 1) * page_size;
+
+    let status_ref = params.status.as_deref();
+
+    let total = match db::subscription::count_subscriptions(&state.pool, params.account_id, status_ref).await {
+        Ok(count) => count,
+        Err(e) => {
+            warn!(error = %e, "Failed to count subscriptions");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscriptions",
+            );
+        }
+    };
+
+    let subscriptions = match db::subscription::list_subscriptions_paginated(
+        &state.pool,
+        params.account_id,
+        status_ref,
+        offset,
+        page_size,
+    )
+    .await
+    {
+        Ok(subs) => subs,
+        Err(e) => {
+            warn!(error = %e, "Failed to list subscriptions");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscriptions",
+            );
+        }
+    };
+
+    let total_pages = if total == 0 {
+        0
+    } else {
+        (total + page_size - 1) / page_size
+    };
+
+    let data: Vec<SubscriptionResponse> =
+        subscriptions.into_iter().map(SubscriptionResponse::from).collect();
+
+    Json(PaginatedResponse {
+        data,
+        pagination: PaginationInfo {
+            page,
+            page_size,
+            total,
+            total_pages,
+        },
+    })
+    .into_response()
+}
+
+/// GET /api/v1/subscriptions/:subscription_id
+///
+/// Returns a single subscription by its ID.
+async fn get_subscription(
+    State(state): State<Arc<AppState>>,
+    Path(subscription_id): Path<i32>,
+) -> Response {
+    match db::subscription::get_subscription_by_id(&state.pool, subscription_id).await {
+        Ok(Some(sub)) => Json(SubscriptionResponse::from(sub)).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription with id {} not found", subscription_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to get subscription by id");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscription",
+            )
+        }
+    }
+}
+
+/// Request body for creating a subscription
+#[derive(Deserialize)]
+struct CreateSubscriptionRequest {
+    account_id: i32,
+    plan_id: i32,
+}
+
+/// POST /api/v1/subscriptions
+///
+/// Creates a new subscription for an account.
+///
+/// Request body (JSON):
+/// - `account_id` (required): The account to subscribe
+/// - `plan_id` (required): The subscription plan to use
+async fn create_subscription(
+    State(state): State<Arc<AppState>>,
+    Json(payload): Json<CreateSubscriptionRequest>,
+) -> Response {
+    // Verify the account exists
+    match db::account::get_account_by_id(&state.pool, payload.account_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("Account with id {} not found", payload.account_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get account by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query account",
+            );
+        }
+    }
+
+    // Verify the plan exists
+    match db::subscription::get_subscription_plan_by_id(&state.pool, payload.plan_id).await {
+        Ok(Some(_)) => {}
+        Ok(None) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("Subscription plan with id {} not found", payload.plan_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, "Failed to get subscription plan by id");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to query subscription plan",
+            );
+        }
+    }
+
+    match db::subscription::create_subscription(&state.pool, payload.account_id, payload.plan_id)
+        .await
+    {
+        Ok(sub) => (StatusCode::CREATED, Json(SubscriptionResponse::from(sub))).into_response(),
+        Err(e) => {
+            warn!(error = %e, "Failed to create subscription");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to create subscription",
+            )
+        }
+    }
+}
+
+/// Request body for updating a subscription
+#[derive(Deserialize)]
+struct UpdateSubscriptionRequest {
+    status: String,
+}
+
+/// Valid status values for a subscription
+const VALID_SUBSCRIPTION_STATUSES: &[&str] = &["active", "filled", "canceled"];
+
+/// PUT /api/v1/subscriptions/:subscription_id
+///
+/// Updates a subscription's status.
+///
+/// Request body (JSON):
+/// - `status` (required): New status (active, filled, canceled)
+async fn update_subscription(
+    State(state): State<Arc<AppState>>,
+    Path(subscription_id): Path<i32>,
+    Json(payload): Json<UpdateSubscriptionRequest>,
+) -> Response {
+    if !VALID_SUBSCRIPTION_STATUSES.contains(&payload.status.as_str()) {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "validation_error",
+            &format!(
+                "Invalid status '{}'. Must be one of: {}",
+                payload.status,
+                VALID_SUBSCRIPTION_STATUSES.join(", ")
+            ),
+        );
+    }
+
+    match db::subscription::update_subscription_status(&state.pool, subscription_id, &payload.status)
+        .await
+    {
+        Ok(sub) => Json(SubscriptionResponse::from(sub)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription with id {} not found", subscription_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to update subscription");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to update subscription",
+            )
+        }
+    }
+}
+
+/// DELETE /api/v1/subscriptions/:subscription_id
+///
+/// Cancels a subscription by setting its status to 'canceled'.
+async fn cancel_subscription(
+    State(state): State<Arc<AppState>>,
+    Path(subscription_id): Path<i32>,
+) -> Response {
+    match db::subscription::cancel_subscription(&state.pool, subscription_id).await {
+        Ok(sub) => Json(SubscriptionResponse::from(sub)).into_response(),
+        Err(sqlx::Error::RowNotFound) => error_response(
+            StatusCode::NOT_FOUND,
+            "not_found",
+            &format!("Subscription with id {} not found", subscription_id),
+        ),
+        Err(e) => {
+            warn!(error = %e, "Failed to cancel subscription");
+            error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to cancel subscription",
+            )
+        }
+    }
+}
+
 // --- Router ---
 
 pub fn get_router(
@@ -2196,6 +2807,26 @@ pub fn get_router(
         .route("/withdrawals", post(create_withdraw))
         .route("/credits", post(create_credit))
         .route("/apikeys/{apikey}", get(get_apikey).delete(delete_apikey))
+        .route(
+            "/subscription-plans",
+            get(list_subscription_plans).post(create_subscription_plan),
+        )
+        .route(
+            "/subscription-plans/{plan_id}",
+            get(get_subscription_plan)
+                .put(update_subscription_plan)
+                .delete(cancel_subscription_plan),
+        )
+        .route(
+            "/subscriptions",
+            get(list_subscriptions).post(create_subscription),
+        )
+        .route(
+            "/subscriptions/{subscription_id}",
+            get(get_subscription)
+                .put(update_subscription)
+                .delete(cancel_subscription),
+        )
         .route_layer(middleware::from_fn(admin_auth::auth_jwt))
         .with_state(state)
 }

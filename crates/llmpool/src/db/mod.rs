@@ -7,5 +7,6 @@ pub mod fund;
 #[allow(dead_code)]
 pub mod llm;
 pub mod session_event;
+pub mod subscription;
 
 pub use core::*;

@@ -130,3 +130,36 @@ CREATE TABLE IF NOT EXISTS balance_changes (
 );
 CREATE INDEX IF NOT EXISTS idx_balance_changes_account_id ON balance_changes (account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_changes_unique_request_id ON balance_changes (unique_request_id);
+
+-- Create subscription_plans table
+CREATE TABLE IF NOT EXISTS subscription_plans (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR NOT NULL DEFAULT 'created',
+    description VARCHAR NOT NULL DEFAULT '',
+    input_token_limit BIGINT NOT NULL DEFAULT 0,
+    output_token_limit BIGINT NOT NULL DEFAULT 0,
+    money_limit DECIMAL NOT NULL DEFAULT 0,
+    start_at TIMESTAMP,
+    end_at TIMESTAMP,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_status ON subscription_plans (status);
+CREATE INDEX IF NOT EXISTS idx_subscription_plans_sort_order ON subscription_plans (sort_order);
+
+-- Create subscriptions table
+CREATE TABLE IF NOT EXISTS subscriptions (
+    id SERIAL PRIMARY KEY,
+    account_id INT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    plan_id INT NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
+    status VARCHAR NOT NULL DEFAULT 'active',
+    used_input_tokens BIGINT NOT NULL DEFAULT 0,
+    used_output_tokens BIGINT NOT NULL DEFAULT 0,
+    used_money DECIMAL NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_account_id ON subscriptions (account_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_plan_id ON subscriptions (plan_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status);

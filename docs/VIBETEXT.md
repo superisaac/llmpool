@@ -325,3 +325,27 @@ LLMModel增加一个字段 has_messages: bool(default false), 用来判断是否
 
 ==========
 CapacityOption增加一个字段, has_messages, find_models_by_name_and_capacity不再依赖provider 去寻找models, authropic中使用has_messages查找models. 
+
+==========
+设计如下的订阅接口和数据库Model
+* SubscriptionPlan: 字段有 id, status, description, input_token_limit, output_token_limit, money_limit, start_at, end_at,created_at, updated_at, sort_order: integer
+  status 可以选的值为 "created", "started", "active", "canceled", "expired"
+* Subscription: 字段有 id, account_id, plan_id, status, used_input_tokens, used_output_tokens, used_money, created_at, updated_at
+  status 可以选的为 "deducted", "active", "filled"
+
+直接修改migrations文件，不需要新建migration文件。
+写一个方法 get_current_subscription(account_id): Optional[Subscription]: 找到按照sort_order desc排序的第一个用户plan的订阅，如果已经过期或者还没有开始或者stauts != "active"，则返回None
+
+创建admin API:
+1. GET /api/v1/subscription-plans/
+1. GET /api/v1/subscription-plans/:plan_id
+1. POST /api/v1/subscription-plans/
+1. PUT /api/v1/subscription-plans/:plan_id
+1. DELETE /api/v1/subscription-plans/:plan_id, cancel plan
+1. GET /api/v1/subscriptions/, 有filter参数 account_id, status
+1. GET /api/v1/subscriptions/:subscription_id
+1. POST /api/v1/subscriptions/,  参数 {account_id, plan_id}
+1. PUT /api/v1/subscriptions/:subscription_id, 参数 {status}
+1. DELETE /api/v1/subscriptions/:subscription_id, cancel subscription
+
+更新 api-admin.json 和 llmpool-ctl 命令

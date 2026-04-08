@@ -5,9 +5,10 @@ mod client;
 mod cmds;
 
 use cmds::{
-    AccountAction, ApiKeyAction, FundAction, ModelAction, SessionEventAction, UpstreamAction,
+    AccountAction, ApiKeyAction, FundAction, ModelAction, SessionEventAction,
+    SubscriptionAction, SubscriptionPlanAction, UpstreamAction,
     handle_account, handle_apikey, handle_fund, handle_model, handle_session_event,
-    handle_upstream,
+    handle_subscription, handle_subscription_plan, handle_upstream,
 };
 
 // ============================================================
@@ -60,6 +61,16 @@ enum Commands {
         #[command(subcommand)]
         action: SessionEventAction,
     },
+    /// Manage subscription plans
+    SubscriptionPlan {
+        #[command(subcommand)]
+        action: SubscriptionPlanAction,
+    },
+    /// Manage subscriptions
+    Subscription {
+        #[command(subcommand)]
+        action: SubscriptionAction,
+    },
 }
 
 // ============================================================
@@ -102,6 +113,12 @@ async fn main() {
         Commands::Fund { action } => handle_fund(action, &api_client, json_output).await,
         Commands::Sessionevents { action } => {
             handle_session_event(action, &api_client, json_output).await
+        }
+        Commands::SubscriptionPlan { action } => {
+            handle_subscription_plan(action, &api_client, json_output).await
+        }
+        Commands::Subscription { action } => {
+            handle_subscription(action, &api_client, json_output).await
         }
     };
 

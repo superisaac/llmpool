@@ -1,12 +1,9 @@
 {
-  "openapi": "3.1.0",
+  "openapi": "3.0.3",
   "info": {
-    "title": "LLMPool Admin REST API",
-    "description": "RESTful management interface for LLMPool administration.\nAll upstreams require JWT authentication via the `x-admin-token` header.\nAll list upstreams support pagination via `page` and `page_size` query parameters.\n",
+    "title": "LLMPool Admin API",
     "version": "1.0.0",
-    "license": {
-      "name": "MIT"
-    }
+    "description": "Admin REST API for managing LLMPool resources: upstreams, models, accounts, API keys, funds, session events, subscription plans, and subscriptions."
   },
   "servers": [
     {
@@ -15,9 +12,7 @@
     }
   ],
   "security": [
-    {
-      "AdminToken": []
-    }
+    { "AdminToken": [] }
   ],
   "components": {
     "securitySchemes": {
@@ -25,1088 +20,439 @@
         "type": "apiKey",
         "in": "header",
         "name": "x-admin-token",
-        "description": "JWT token signed with the admin JWT secret configured in `llmpool.toml`."
+        "description": "Admin JWT token"
       }
     },
     "schemas": {
-      "PaginationInfo": {
-        "type": "object",
-        "required": [
-          "page",
-          "page_size",
-          "total",
-          "total_pages"
-        ],
-        "properties": {
-          "page": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Current page number (1-based)",
-            "example": 1
-          },
-          "page_size": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of items per page",
-            "example": 20
-          },
-          "total": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Total number of items",
-            "example": 42
-          },
-          "total_pages": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Total number of pages",
-            "example": 3
-          }
-        }
-      },
       "ErrorResponse": {
         "type": "object",
-        "required": [
-          "error",
-          "message"
-        ],
         "properties": {
-          "error": {
-            "type": "string",
-            "description": "Error code",
-            "example": "not_found"
-          },
-          "message": {
-            "type": "string",
-            "description": "Human-readable error message",
-            "example": "Account with id 999 not found"
-          }
-        }
+          "error": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "required": ["error", "message"]
       },
-      "UpstreamResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "api_base",
-          "provider",
-          "has_responses_api",
-          "tags",
-          "proxies",
-          "status",
-          "description",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "name": {
-            "type": "string",
-            "example": "OpenAI"
-          },
-          "api_base": {
-            "type": "string",
-            "example": "https://api.openai.com/v1"
-          },
-          "provider": {
-            "type": "string",
-            "description": "The provider type for this upstream",
-            "example": "openai"
-          },
-          "has_responses_api": {
-            "type": "boolean",
-            "example": true
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "example": [
-              "openai",
-              "production"
-            ]
-          },
-          "proxies": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "example": []
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "online",
-              "offline",
-              "maintenance"
-            ],
-            "example": "online"
-          },
-          "description": {
-            "type": "string",
-            "example": "OpenAI production upstream"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
-        }
-      },
-      "CreateUpstreamRequest": {
-        "type": "object",
-        "required": [
-          "name",
-          "api_key",
-          "api_base"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "A display name for the upstream",
-            "example": "OpenAI"
-          },
-          "api_key": {
-            "type": "string",
-            "description": "The API key for the upstream",
-            "example": "sk-xxx"
-          },
-          "api_base": {
-            "type": "string",
-            "description": "The base URL of the upstream",
-            "example": "https://api.openai.com/v1"
-          },
-          "provider": {
-            "type": "string",
-            "description": "The provider type for this upstream",
-            "default": "openai",
-            "example": "openai"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [],
-            "example": [
-              "openai"
-            ]
-          },
-          "proxies": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "default": [],
-            "example": []
-          }
-        }
-      },
-      "UpdateUpstreamRequest": {
+      "PaginationInfo": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string",
-            "description": "The display name for the upstream"
-          },
-          "provider": {
-            "type": "string",
-            "description": "The provider type for this upstream"
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "proxies": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "description": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "online",
-              "offline",
-              "maintenance"
-            ]
-          }
-        }
-      },
-      "UpstreamWithModelsResponse": {
-        "type": "object",
-        "required": [
-          "upstream",
-          "models"
-        ],
-        "properties": {
-          "upstream": {
-            "$ref": "#/components/schemas/UpstreamResponse"
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelResponse"
-            }
-          }
-        }
-      },
-      "PaginatedUpstreams": {
-        "type": "object",
-        "required": [
-          "data",
-          "pagination"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/UpstreamResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/PaginationInfo"
-          }
-        }
-      },
-      "ModelResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "upstream_id",
-          "model_id",
-          "is_active",
-          "has_chat_completion",
-          "has_embedding",
-          "has_image_generation",
-          "has_speech",
-          "input_token_price",
-          "output_token_price",
-          "batch_input_token_price",
-          "batch_output_token_price",
-          "description",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "upstream_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "model_id": {
-            "type": "string",
-            "example": "gpt-4o"
-          },
-          "is_active": {
-            "type": "boolean",
-            "description": "Whether the model is active and available for use",
-            "example": true
-          },
-          "has_chat_completion": {
-            "type": "boolean",
-            "example": true
-          },
-          "has_embedding": {
-            "type": "boolean",
-            "example": false
-          },
-          "has_image_generation": {
-            "type": "boolean",
-            "example": false
-          },
-          "has_speech": {
-            "type": "boolean",
-            "example": false
-          },
-          "input_token_price": {
-            "type": "string",
-            "description": "Price per input token (decimal string)",
-            "example": "0.000005"
-          },
-          "output_token_price": {
-            "type": "string",
-            "description": "Price per output token (decimal string)",
-            "example": "0.000015"
-          },
-          "batch_input_token_price": {
-            "type": "string",
-            "description": "Price per input token for batch requests (decimal string)",
-            "example": "0.0000025"
-          },
-          "batch_output_token_price": {
-            "type": "string",
-            "description": "Price per output token for batch requests (decimal string)",
-            "example": "0.0000075"
-          },
-          "description": {
-            "type": "string",
-            "example": "GPT-4o model for general chat"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
-        }
-      },
-      "UpdateModelRequest": {
-        "type": "object",
-        "properties": {
-          "is_active": {
-            "type": "boolean",
-            "description": "Whether the model is active and available for use"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of the model"
-          },
-          "input_token_price": {
-            "type": "string",
-            "description": "Price per input token (decimal string, must not be negative)"
-          },
-          "output_token_price": {
-            "type": "string",
-            "description": "Price per output token (decimal string, must not be negative)"
-          },
-          "batch_input_token_price": {
-            "type": "string",
-            "description": "Price per input token for batch requests (decimal string, must not be negative)"
-          },
-          "batch_output_token_price": {
-            "type": "string",
-            "description": "Price per output token for batch requests (decimal string, must not be negative)"
-          }
-        }
-      },
-      "PaginatedModels": {
-        "type": "object",
-        "required": [
-          "data",
-          "pagination"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/PaginationInfo"
-          }
+          "page": { "type": "integer" },
+          "page_size": { "type": "integer" },
+          "total": { "type": "integer" },
+          "total_pages": { "type": "integer" }
         }
       },
       "AccountResponse": {
         "type": "object",
-        "required": [
-          "id",
-          "name",
-          "is_active",
-          "created_at",
-          "updated_at"
-        ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "name": {
-            "type": "string",
-            "example": "alice"
-          },
-          "is_active": {
-            "type": "boolean",
-            "example": true
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
-        }
-      },
-      "CreateAccountRequest": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "The name for the new account",
-            "example": "alice"
-          }
-        }
-      },
-      "UpdateAccountRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "New name for the account"
-          },
-          "is_active": {
-            "type": "boolean",
-            "description": "Whether the account is active"
-          }
-        }
-      },
-      "PaginatedAccounts": {
-        "type": "object",
-        "required": [
-          "data",
-          "pagination"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AccountResponse"
-            }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/PaginationInfo"
-          }
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "is_active": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
       "FundResponse": {
         "type": "object",
-        "required": [
-          "id",
-          "account_id",
-          "balance",
-          "created_at",
-          "updated_at"
-        ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "balance": {
-            "type": "string",
-            "description": "Balance (decimal string). Negative value indicates debt.",
-            "example": "100.00"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
+          "id": { "type": "integer" },
+          "account_id": { "type": "integer" },
+          "balance": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
       "ApiCredentialResponse": {
         "type": "object",
-        "required": [
-          "id",
-          "apikey",
-          "label",
-          "is_active",
-          "created_at",
-          "updated_at"
-        ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true,
-            "example": 1
-          },
-          "apikey": {
-            "type": "string",
-            "description": "Ellipsed representation of the API key (e.g. `lpx-ab...cd`). Full plaintext key is only returned once at creation time via ApiCredentialCreatedResponse.",
-            "example": "lpx-ab...cd"
-          },
-          "label": {
-            "type": "string",
-            "example": "production key"
-          },
-          "is_active": {
-            "type": "boolean",
-            "example": true
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "example": "2027-01-01T00:00:00"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
+          "id": { "type": "integer" },
+          "account_id": { "type": "integer", "nullable": true },
+          "apikey": { "type": "string", "description": "Ellipsed API key (e.g. lpx-ab...cd)" },
+          "label": { "type": "string" },
+          "is_active": { "type": "boolean" },
+          "expires_at": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
       "ApiCredentialCreatedResponse": {
-        "type": "object",
-        "description": "Returned only on API key creation. Contains the full plaintext key — store it securely as it will not be shown again.",
-        "required": [
-          "id",
-          "apikey",
-          "ellipsed_apikey",
-          "label",
-          "is_active",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true,
-            "example": 1
-          },
-          "apikey": {
-            "type": "string",
-            "description": "Full plaintext API key. Only returned once at creation time; store it securely.",
-            "example": "lpx-abcdefghijklmnopqrstuvwxyz123456"
-          },
-          "ellipsed_apikey": {
-            "type": "string",
-            "description": "Ellipsed representation for display purposes.",
-            "example": "lpx-ab...cd"
-          },
-          "label": {
-            "type": "string",
-            "example": "production key"
-          },
-          "is_active": {
-            "type": "boolean",
-            "example": true
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "example": "2027-01-01T00:00:00"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
-        }
-      },
-      "CreateApiKeyRequest": {
-        "type": "object",
-        "properties": {
-          "label": {
-            "type": "string",
-            "description": "Optional label describing the purpose of this API key",
-            "default": "",
-            "example": "production key"
-          }
-        }
-      },
-      "PaginatedApiKeys": {
-        "type": "object",
-        "required": [
-          "data",
-          "pagination"
-        ],
-        "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ApiCredentialResponse"
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiCredentialResponse" },
+          {
+            "type": "object",
+            "properties": {
+              "apikey": { "type": "string", "description": "Full plaintext API key (only returned on creation)" },
+              "ellipsed_apikey": { "type": "string" }
             }
-          },
-          "pagination": {
-            "$ref": "#/components/schemas/PaginationInfo"
           }
+        ]
+      },
+      "UpstreamResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "api_base": { "type": "string" },
+          "provider": { "type": "string" },
+          "has_responses_api": { "type": "boolean" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "proxies": { "type": "array", "items": { "type": "string" } },
+          "status": { "type": "string", "enum": ["online", "offline", "maintenance"] },
+          "description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ModelResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "upstream_id": { "type": "integer" },
+          "model_id": { "type": "string" },
+          "is_active": { "type": "boolean" },
+          "has_chat_completion": { "type": "boolean" },
+          "has_embedding": { "type": "boolean" },
+          "has_image_generation": { "type": "boolean" },
+          "has_speech": { "type": "boolean" },
+          "input_token_price": { "type": "string" },
+          "output_token_price": { "type": "string" },
+          "batch_input_token_price": { "type": "string" },
+          "batch_output_token_price": { "type": "string" },
+          "description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
       "BalanceChangeResponse": {
         "type": "object",
-        "required": [
-          "id",
-          "account_id",
-          "unique_request_id",
-          "content",
-          "is_applied",
-          "created_at"
-        ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "unique_request_id": {
-            "type": "string",
-            "description": "Client-provided idempotency key",
-            "example": "deposit-20260326-001"
-          },
-          "content": {
-            "type": "object",
-            "description": "JSON object describing the balance change details",
-            "example": {
-              "type": "Deposit",
-              "amount": "100.00"
-            }
-          },
-          "is_applied": {
-            "type": "boolean",
-            "description": "Whether the balance change has been applied",
-            "example": false
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
-        }
-      },
-      "CreateDepositRequest": {
-        "type": "object",
-        "required": [
-          "account_id",
-          "unique_request_id",
-          "amount"
-        ],
-        "properties": {
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "The ID of the account to deposit to",
-            "example": 1
-          },
-          "unique_request_id": {
-            "type": "string",
-            "description": "Client-provided idempotency key",
-            "example": "deposit-20260326-001"
-          },
-          "amount": {
-            "type": "string",
-            "description": "The deposit amount (must be positive, decimal string)",
-            "example": "100.00"
-          }
-        }
-      },
-      "CreateWithdrawRequest": {
-        "type": "object",
-        "required": [
-          "account_id",
-          "unique_request_id",
-          "amount"
-        ],
-        "properties": {
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "The ID of the account to withdraw from",
-            "example": 1
-          },
-          "unique_request_id": {
-            "type": "string",
-            "description": "Client-provided idempotency key",
-            "example": "withdraw-20260326-001"
-          },
-          "amount": {
-            "type": "string",
-            "description": "The withdrawal amount (must be positive, decimal string)",
-            "example": "50.00"
-          }
-        }
-      },
-      "CreateCreditRequest": {
-        "type": "object",
-        "required": [
-          "account_id",
-          "unique_request_id",
-          "amount"
-        ],
-        "properties": {
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "The ID of the account to credit",
-            "example": 1
-          },
-          "unique_request_id": {
-            "type": "string",
-            "description": "Client-provided idempotency key",
-            "example": "credit-20260326-001"
-          },
-          "amount": {
-            "type": "string",
-            "description": "The credit amount (must be positive, decimal string)",
-            "example": "200.00"
-          }
-        }
-      },
-      "TagsResponse": {
-        "type": "object",
-        "required": [
-          "upstream_id",
-          "tags"
-        ],
-        "properties": {
-          "upstream_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "example": [
-              "openai",
-              "production"
-            ]
-          }
-        }
-      },
-      "AddTagRequest": {
-        "type": "object",
-        "required": [
-          "tag"
-        ],
-        "properties": {
-          "tag": {
-            "type": "string",
-            "description": "The tag string to add",
-            "example": "production"
-          }
-        }
-      },
-      "TestModelsRequest": {
-        "type": "object",
-        "required": [
-          "model_ids"
-        ],
-        "properties": {
-          "model_ids": {
-            "type": "array",
-            "items": {
-              "type": "integer",
-              "format": "int32"
-            },
-            "description": "List of model database IDs to test",
-            "example": [1, 2, 3]
-          }
-        }
-      },
-      "ModelTestResult": {
-        "type": "object",
-        "required": [
-          "model_id"
-        ],
-        "properties": {
-          "model_id": {
-            "type": "integer",
-            "format": "int32",
-            "description": "The database ID of the model that was tested",
-            "example": 1
-          },
-          "model": {
-            "$ref": "#/components/schemas/ModelResponse",
-            "description": "The updated model with refreshed feature flags. Present on success."
-          },
-          "error": {
-            "type": "string",
-            "description": "Error message if the test failed for this model. Present on failure.",
-            "example": "Row not found"
-          }
-        }
-      },
-      "TestUpstreamRequest": {
-        "type": "object",
-        "required": [
-          "api_key",
-          "api_base"
-        ],
-        "properties": {
-          "api_key": {
-            "type": "string",
-            "description": "The API key for the upstream",
-            "example": "sk-xxx"
-          },
-          "api_base": {
-            "type": "string",
-            "description": "The base URL of the upstream",
-            "example": "https://api.openai.com/v1"
-          }
-        }
-      },
-      "ModelFeaturesResponse": {
-        "type": "object",
-        "required": [
-          "model_id",
-          "owned_by",
-          "has_chat_completion",
-          "has_embedding",
-          "has_image_generation",
-          "has_speech"
-        ],
-        "properties": {
-          "model_id": {
-            "type": "string",
-            "example": "gpt-4o"
-          },
-          "owned_by": {
-            "type": "string",
-            "example": "openai"
-          },
-          "has_chat_completion": {
-            "type": "boolean",
-            "example": true
-          },
-          "has_embedding": {
-            "type": "boolean",
-            "example": false
-          },
-          "has_image_generation": {
-            "type": "boolean",
-            "example": false
-          },
-          "has_speech": {
-            "type": "boolean",
-            "example": false
-          }
-        }
-      },
-      "TestUpstreamResponse": {
-        "type": "object",
-        "required": [
-          "has_responses_api",
-          "models"
-        ],
-        "properties": {
-          "has_responses_api": {
-            "type": "boolean",
-            "example": true
-          },
-          "models": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelFeaturesResponse"
-            }
-          }
+          "id": { "type": "integer" },
+          "account_id": { "type": "integer" },
+          "unique_request_id": { "type": "string" },
+          "content": { "type": "object" },
+          "is_applied": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
         }
       },
       "SessionEventResponse": {
         "type": "object",
-        "required": [
-          "id",
-          "session_id",
-          "session_index",
-          "account_id",
-          "model_id",
-          "api_key_id",
-          "input_token_price",
-          "input_tokens",
-          "output_token_price",
-          "output_tokens",
-          "event_data",
-          "created_at"
-        ],
         "properties": {
-          "id": {
-            "type": "integer",
-            "format": "int64",
-            "example": 1
-          },
-          "session_id": {
-            "type": "string",
-            "example": "sess-abc123"
-          },
-          "session_index": {
-            "type": "integer",
-            "format": "int32",
-            "example": 0
-          },
-          "account_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "model_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "api_key_id": {
-            "type": "integer",
-            "format": "int32",
-            "example": 1
-          },
-          "input_token_price": {
-            "type": "string",
-            "description": "Price per input token at the time of the event (decimal string)",
-            "example": "0.000005"
-          },
-          "input_tokens": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of input tokens consumed",
-            "example": 150
-          },
-          "output_token_price": {
-            "type": "string",
-            "description": "Price per output token at the time of the event (decimal string)",
-            "example": "0.000015"
-          },
-          "output_tokens": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of output tokens consumed",
-            "example": 200
-          },
-          "event_data": {
-            "type": "object",
-            "description": "JSON object containing the session event data"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-19T12:00:00"
-          }
+          "id": { "type": "integer" },
+          "session_id": { "type": "string" },
+          "session_index": { "type": "integer" },
+          "account_id": { "type": "integer" },
+          "model_id": { "type": "integer" },
+          "api_key_id": { "type": "integer" },
+          "input_token_price": { "type": "string" },
+          "input_tokens": { "type": "integer" },
+          "output_token_price": { "type": "string" },
+          "output_tokens": { "type": "integer" },
+          "event_data": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" }
         }
       },
-      "CursorSessionEvents": {
+      "SubscriptionPlanResponse": {
         "type": "object",
-        "required": [
-          "data",
-          "next_id",
-          "has_more"
-        ],
         "properties": {
-          "data": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SessionEventResponse"
-            }
+          "id": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": ["created", "started", "deducted", "active", "canceled", "expired"]
           },
-          "next_id": {
-            "type": "integer",
-            "format": "int64",
-            "description": "The ID of the last event in the current page. Use as `start` for the next request.",
-            "example": 42
-          },
-          "has_more": {
-            "type": "boolean",
-            "description": "Whether there are more events after this page",
-            "example": true
-          }
-        }
-      }
-    },
-    "parameters": {
-      "PageParam": {
-        "name": "page",
-        "in": "query",
-        "description": "Page number (1-based)",
-        "required": false,
-        "schema": {
-          "type": "integer",
-          "format": "int64",
-          "default": 1,
-          "minimum": 1
+          "description": { "type": "string" },
+          "input_token_limit": { "type": "integer", "description": "0 means unlimited" },
+          "output_token_limit": { "type": "integer", "description": "0 means unlimited" },
+          "money_limit": { "type": "string", "description": "Decimal string; 0 means unlimited" },
+          "start_at": { "type": "string", "format": "date-time", "nullable": true },
+          "end_at": { "type": "string", "format": "date-time", "nullable": true },
+          "sort_order": { "type": "integer", "description": "Higher value = higher priority" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       },
-      "PageSizeParam": {
-        "name": "page_size",
-        "in": "query",
-        "description": "Number of items per page",
-        "required": false,
-        "schema": {
-          "type": "integer",
-          "format": "int64",
-          "default": 20,
-          "minimum": 1,
-          "maximum": 100
+      "SubscriptionResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "account_id": { "type": "integer" },
+          "plan_id": { "type": "integer" },
+          "status": {
+            "type": "string",
+            "enum": ["active", "filled", "canceled"]
+          },
+          "used_input_tokens": { "type": "integer" },
+          "used_output_tokens": { "type": "integer" },
+          "used_money": { "type": "string", "description": "Decimal string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
         }
       }
     }
   },
   "paths": {
+    "/accounts": {
+      "get": {
+        "summary": "List accounts",
+        "operationId": "listAccounts",
+        "tags": ["Accounts"],
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of accounts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/AccountResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create account",
+        "operationId": "createAccount",
+        "tags": ["Accounts"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Account created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccountResponse" } } } },
+          "409": { "description": "Duplicate name", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/accounts/{account_id}": {
+      "get": {
+        "summary": "Get account by ID",
+        "operationId": "getAccount",
+        "tags": ["Accounts"],
+        "parameters": [{ "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Account", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccountResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update account",
+        "operationId": "updateAccount",
+        "tags": ["Accounts"],
+        "parameters": [{ "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "is_active": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated account", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccountResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/accounts_by_name/{name}": {
+      "get": {
+        "summary": "Get account by name",
+        "operationId": "getAccountByName",
+        "tags": ["Accounts"],
+        "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Account", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AccountResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/accounts/{account_id}/fund": {
+      "get": {
+        "summary": "Get account fund",
+        "operationId": "getAccountFund",
+        "tags": ["Funds"],
+        "parameters": [{ "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Fund", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FundResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/accounts/{account_id}/apikeys": {
+      "get": {
+        "summary": "List API keys for account",
+        "operationId": "listAccountApikeys",
+        "tags": ["API Keys"],
+        "parameters": [
+          { "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of API keys",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/ApiCredentialResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create API key for account",
+        "operationId": "createAccountApikey",
+        "tags": ["API Keys"],
+        "parameters": [{ "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "label": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "API key created (includes full plaintext key)", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiCredentialCreatedResponse" } } } }
+        }
+      }
+    },
+    "/apikeys/{apikey}": {
+      "get": {
+        "summary": "Get API key info",
+        "operationId": "getApikey",
+        "tags": ["API Keys"],
+        "parameters": [{ "name": "apikey", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "API key info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiCredentialResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Deactivate API key",
+        "operationId": "deleteApikey",
+        "tags": ["API Keys"],
+        "parameters": [{ "name": "apikey", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "API key deactivated", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiCredentialResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/deposits": {
+      "post": {
+        "summary": "Create deposit",
+        "operationId": "createDeposit",
+        "tags": ["Funds"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account_id": { "type": "integer" },
+                  "unique_request_id": { "type": "string" },
+                  "amount": { "type": "string", "description": "Positive decimal amount" }
+                },
+                "required": ["account_id", "unique_request_id", "amount"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Deposit created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BalanceChangeResponse" } } } }
+        }
+      }
+    },
+    "/withdrawals": {
+      "post": {
+        "summary": "Create withdrawal",
+        "operationId": "createWithdrawal",
+        "tags": ["Funds"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account_id": { "type": "integer" },
+                  "unique_request_id": { "type": "string" },
+                  "amount": { "type": "string", "description": "Positive decimal amount" }
+                },
+                "required": ["account_id", "unique_request_id", "amount"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Withdrawal created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BalanceChangeResponse" } } } }
+        }
+      }
+    },
+    "/credits": {
+      "post": {
+        "summary": "Create credit",
+        "operationId": "createCredit",
+        "tags": ["Funds"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account_id": { "type": "integer" },
+                  "unique_request_id": { "type": "string" },
+                  "amount": { "type": "string", "description": "Positive decimal amount" }
+                },
+                "required": ["account_id", "unique_request_id", "amount"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Credit created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BalanceChangeResponse" } } } }
+        }
+      }
+    },
     "/upstreams": {
       "get": {
-        "tags": [
-          "Upstreams"
-        ],
-        "summary": "List all OpenAI upstreams",
-        "description": "Returns a paginated list of OpenAI upstreams.",
+        "summary": "List upstreams",
         "operationId": "listUpstreams",
+        "tags": ["Upstreams"],
         "parameters": [
-          {
-            "$ref": "#/components/parameters/PageParam"
-          },
-          {
-            "$ref": "#/components/parameters/PageSizeParam"
-          }
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
@@ -1114,17 +460,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedUpstreams"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/UpstreamResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
                 }
               }
             }
@@ -1132,576 +472,85 @@
         }
       },
       "post": {
-        "tags": [
-          "Upstreams"
-        ],
-        "summary": "Create a new upstream",
-        "description": "Creates a new OpenAI-compatible upstream by detecting its features and saving\nthe upstream along with its models to the database.\n",
+        "summary": "Create upstream",
         "operationId": "createUpstream",
+        "tags": ["Upstreams"],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateUpstreamRequest"
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "api_key": { "type": "string" },
+                  "api_base": { "type": "string" },
+                  "provider": { "type": "string", "default": "openai" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "proxies": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["name", "api_key", "api_base"]
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Upstream created successfully with detected models",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpstreamWithModelsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Failed to detect upstream features from remote API",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "201": { "description": "Upstream created with models" }
         }
       }
     },
     "/upstreams/{upstream_id}": {
       "get": {
-        "tags": [
-          "Upstreams"
-        ],
-        "summary": "Get an upstream by ID",
-        "description": "Returns a single upstream by its ID.",
-        "operationId": "getUpstreamById",
-        "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
+        "summary": "Get upstream by ID",
+        "operationId": "getUpstream",
+        "tags": ["Upstreams"],
+        "parameters": [{ "name": "upstream_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": {
-          "200": {
-            "description": "Upstream details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpstreamResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "200": { "description": "Upstream", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpstreamResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "put": {
-        "tags": [
-          "Upstreams"
-        ],
-        "summary": "Update an upstream",
-        "description": "Updates an existing upstream. Only the provided fields will be updated.\n",
-        "operationId": "updateUpstreamById",
-        "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
+        "summary": "Update upstream",
+        "operationId": "updateUpstream",
+        "tags": ["Upstreams"],
+        "parameters": [{ "name": "upstream_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateUpstreamRequest"
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "provider": { "type": "string" },
+                  "tags": { "type": "array", "items": { "type": "string" } },
+                  "proxies": { "type": "array", "items": { "type": "string" } },
+                  "description": { "type": "string" },
+                  "status": { "type": "string", "enum": ["online", "offline", "maintenance"] }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Upstream updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpstreamResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/upstream_by_name/{name}": {
-      "get": {
-        "tags": [
-          "Upstreams"
-        ],
-        "summary": "Get an upstream by name",
-        "description": "Returns a single upstream by its name.",
-        "operationId": "getUpstreamByName",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Upstream details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UpstreamResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/upstreams/{upstream_id}/tags": {
-      "get": {
-        "tags": [
-          "Upstream Tags"
-        ],
-        "summary": "List upstream tags",
-        "description": "Returns the list of tags for a given upstream.",
-        "operationId": "listUpstreamTags",
-        "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Tags for the upstream",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagsResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Upstream Tags"
-        ],
-        "summary": "Add a tag to an upstream",
-        "description": "Adds a tag to the specified upstream. If the tag already exists, it is not duplicated.",
-        "operationId": "addUpstreamTag",
-        "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AddTagRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Tag added (or already existed), returns updated tags",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagsResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (empty tag)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/upstreams/{upstream_id}/tags/{tag}": {
-      "delete": {
-        "tags": [
-          "Upstream Tags"
-        ],
-        "summary": "Remove a tag from an upstream",
-        "description": "Removes a tag from the specified upstream.",
-        "operationId": "removeUpstreamTag",
-        "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "tag",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Tag removed, returns updated tags",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TagsResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Upstream not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/upstream-tests": {
-      "post": {
-        "tags": [
-          "Upstream Tests"
-        ],
-        "summary": "Test an upstream",
-        "description": "Tests an OpenAI-compatible upstream by detecting its supported features.\nThis does NOT save anything to the database — it only probes the remote API.\n",
-        "operationId": "testUpstream",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TestUpstreamRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Feature detection results",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TestUpstreamResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Failed to detect upstream features",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/models-tests": {
-      "post": {
-        "tags": [
-          "Model Tests"
-        ],
-        "summary": "Test model features",
-        "description": "Tests the features of the specified models (by their database IDs) and updates\nthe feature flags (`has_chat_completion`, `has_embedding`, `has_image_generation`, `has_speech`)\nin the LLMModel table. All other fields (prices, description, etc.) remain unchanged.\nEach model is tested independently; partial failures are tolerated.\n",
-        "operationId": "testModels",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TestModelsRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Array of per-model test results",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ModelTestResult"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (empty model_ids)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "200": { "description": "Updated upstream", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpstreamResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
     "/models": {
       "get": {
-        "tags": [
-          "Models"
-        ],
         "summary": "List models",
-        "description": "Returns a paginated list of OpenAI models with optional filters.",
         "operationId": "listModels",
+        "tags": ["Models"],
         "parameters": [
-          {
-            "name": "upstream_id",
-            "in": "query",
-            "description": "Filter by upstream ID",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "upstream_name",
-            "in": "query",
-            "description": "Filter by upstream name",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "name",
-            "in": "query",
-            "description": "Filter by model name (model_id)",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "is_active",
-            "in": "query",
-            "description": "Filter by active status (true or false)",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/PageParam"
-          },
-          {
-            "$ref": "#/components/parameters/PageSizeParam"
-          }
+          { "name": "upstream_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "upstream_name", "in": "query", "schema": { "type": "string" } },
+          { "name": "name", "in": "query", "schema": { "type": "string" } },
+          { "name": "is_active", "in": "query", "schema": { "type": "boolean" } },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
@@ -1709,81 +558,11 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedModels"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/models/path/{upstream_name}/{model_name}": {
-      "get": {
-        "tags": [
-          "Models"
-        ],
-        "summary": "Get a model by upstream name and model name",
-        "description": "Returns a single model identified by its upstream name and model name (model_id).\nThe `model_name` path segment is a wildcard that supports model names containing slashes.\n",
-        "operationId": "getModelByUpstreamAndName",
-        "parameters": [
-          {
-            "name": "upstream_name",
-            "in": "path",
-            "description": "The name of the upstream",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "OpenAI"
-          },
-          {
-            "name": "model_name",
-            "in": "path",
-            "description": "The model name (model_id). May contain slashes.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "example": "gpt-4o"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Model details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Model not found in the specified upstream",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/ModelResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
                 }
               }
             }
@@ -1793,868 +572,66 @@
     },
     "/models/{model_id}": {
       "get": {
-        "tags": [
-          "Models"
-        ],
-        "summary": "Get a model by ID",
-        "description": "Returns a single model by its ID.",
-        "operationId": "getModelById",
-        "parameters": [
-          {
-            "name": "model_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
+        "summary": "Get model by ID",
+        "operationId": "getModel",
+        "tags": ["Models"],
+        "parameters": [{ "name": "model_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": {
-          "200": {
-            "description": "Model details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Model not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "200": { "description": "Model", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       },
       "put": {
-        "tags": [
-          "Models"
-        ],
-        "summary": "Update a model",
-        "description": "Updates an existing model. Only the provided fields will be updated.\n",
-        "operationId": "updateModelById",
-        "parameters": [
-          {
-            "name": "model_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
+        "summary": "Update model",
+        "operationId": "updateModel",
+        "tags": ["Models"],
+        "parameters": [{ "name": "model_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UpdateModelRequest"
+                "type": "object",
+                "properties": {
+                  "is_active": { "type": "boolean" },
+                  "description": { "type": "string" },
+                  "input_token_price": { "type": "string" },
+                  "output_token_price": { "type": "string" },
+                  "batch_input_token_price": { "type": "string" },
+                  "batch_output_token_price": { "type": "string" }
+                }
               }
             }
           }
         },
         "responses": {
-          "200": {
-            "description": "Model updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (negative price)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Model not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "200": { "description": "Updated model", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/accounts": {
+    "/session-events": {
       "get": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "List all accounts",
-        "description": "Returns a paginated list of accounts.",
-        "operationId": "listAccounts",
+        "summary": "List session events (cursor-based)",
+        "operationId": "listSessionEvents",
+        "tags": ["Session Events"],
         "parameters": [
-          {
-            "$ref": "#/components/parameters/PageParam"
-          },
-          {
-            "$ref": "#/components/parameters/PageSizeParam"
-          }
+          { "name": "session", "in": "query", "schema": { "type": "string" }, "description": "Filter by session_id" },
+          { "name": "start", "in": "query", "schema": { "type": "integer", "default": 0 }, "description": "Cursor: start after this event ID" },
+          { "name": "count", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
-            "description": "Paginated list of accounts",
+            "description": "Cursor-paginated session events",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PaginatedAccounts"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "Create a new account",
-        "description": "Creates a new account. Optionally, an initial credit amount can be provided\nwhich will be applied asynchronously to the account's fund.\n",
-        "operationId": "createAccount",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateAccountRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Account created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (empty name or negative initial_credit)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "An account with this name already exists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/accounts/{account_id}": {
-      "get": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "Get an account by ID",
-        "description": "Returns a single account by their ID.",
-        "operationId": "getAccountById",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "Update an account",
-        "description": "Updates an existing account. Only the provided fields will be updated.\n",
-        "operationId": "updateAccountById",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateAccountRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Account updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (empty name)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "An account with this name already exists",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/accounts_by_name/{name}": {
-      "get": {
-        "tags": [
-          "Accounts"
-        ],
-        "summary": "Get an account by name",
-        "description": "Returns a single account by their name.",
-        "operationId": "getAccountByName",
-        "parameters": [
-          {
-            "name": "name",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Account details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/accounts/{account_id}/fund": {
-      "get": {
-        "tags": [
-          "Funds"
-        ],
-        "summary": "Get an account's fund",
-        "description": "Returns the fund (asset) information for a given account.\nIf the account has no fund record yet, returns a default fund with zero balances.\n",
-        "operationId": "getAccountFund",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Fund details for the account",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FundResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/accounts/{account_id}/apikeys": {
-      "get": {
-        "tags": [
-          "API Keys"
-        ],
-        "summary": "List API keys for an account",
-        "description": "Returns a paginated list of API keys for a given account.",
-        "operationId": "listAccountApiKeys",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "$ref": "#/components/parameters/PageParam"
-          },
-          {
-            "$ref": "#/components/parameters/PageSizeParam"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Paginated list of API keys",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedApiKeys"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "API Keys"
-        ],
-        "summary": "Create an API key for an account",
-        "description": "Creates a new API key for the specified account.",
-        "operationId": "createAccountApiKey",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateApiKeyRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "API key created successfully. The full plaintext key is included in the response and will not be shown again.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiCredentialCreatedResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/apikeys/{apikey}": {
-      "get": {
-        "tags": [
-          "API Keys"
-        ],
-        "summary": "Get an API key by its key string",
-        "description": "Returns the API credential info for the given apikey string.",
-        "operationId": "getApiKey",
-        "parameters": [
-          {
-            "name": "apikey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "API key details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiCredentialResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "API key not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "API Keys"
-        ],
-        "summary": "Deactivate an API key",
-        "description": "Soft-deletes the API credential by setting `is_active = false`.\nAlso invalidates the Redis cache entry for this apikey.\n",
-        "operationId": "deleteApiKey",
-        "parameters": [
-          {
-            "name": "apikey",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "API key deactivated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiCredentialResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "API key not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/deposits": {
-      "post": {
-        "tags": [
-          "Balance Changes"
-        ],
-        "summary": "Create a deposit",
-        "description": "Creates a deposit for an account. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Deposits add to the account's cash balance.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
-        "operationId": "createDeposit",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateDepositRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Deposit created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BalanceChangeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (non-positive amount)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/withdrawals": {
-      "post": {
-        "tags": [
-          "Balance Changes"
-        ],
-        "summary": "Create a withdrawal",
-        "description": "Creates a withdrawal for an account. This first checks that the account's fund has\nsufficient cash (cash >= amount). If not, returns an error. Otherwise, creates\na BalanceChange record and enqueues a task to apply it asynchronously.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
-        "operationId": "createWithdrawal",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateWithdrawRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Withdrawal created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BalanceChangeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (non-positive amount or insufficient funds)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/credits": {
-      "post": {
-        "tags": [
-          "Balance Changes"
-        ],
-        "summary": "Create a credit",
-        "description": "Creates a credit for an account. This creates a BalanceChange record and enqueues\na task to apply it asynchronously. Unlike deposits which add to the cash field,\ncredits add to the credit field of the account's fund.\nThe `unique_request_id` field is a client-provided idempotency key.\n",
-        "operationId": "createCredit",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateCreditRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Credit created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BalanceChangeResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (non-positive amount)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Account not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/SessionEventResponse" } },
+                    "next_id": { "type": "integer" },
+                    "has_more": { "type": "boolean" }
+                  }
                 }
               }
             }
@@ -2664,166 +641,241 @@
     },
     "/session-events/{event_id}": {
       "get": {
-        "tags": [
-          "Session Events"
-        ],
-        "summary": "Get a session event by ID",
-        "description": "Returns a single session event by its ID.",
-        "operationId": "getSessionEventById",
-        "parameters": [
-          {
-            "name": "event_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            }
-          }
-        ],
+        "summary": "Get session event by ID",
+        "operationId": "getSessionEvent",
+        "tags": ["Session Events"],
+        "parameters": [{ "name": "event_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": {
-          "200": {
-            "description": "Session event details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SessionEventResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Session event not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
+          "200": { "description": "Session event", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionEventResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
-    "/session-events": {
+    "/subscription-plans": {
       "get": {
-        "tags": [
-          "Session Events"
-        ],
-        "summary": "List session events",
-        "description": "Returns a cursor-paginated list of session events with optional session_id filter.\nUse `start` and `count` for cursor-based pagination instead of `page` and `page_size`.\n",
-        "operationId": "listSessionEvents",
+        "summary": "List subscription plans",
+        "operationId": "listSubscriptionPlans",
+        "tags": ["Subscription Plans"],
         "parameters": [
-          {
-            "name": "session",
-            "in": "query",
-            "description": "Filter by session_id",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "start",
-            "in": "query",
-            "description": "Cursor: event ID to start after (exclusive). Events with id > start are returned.",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "default": 0,
-              "minimum": 0
-            }
-          },
-          {
-            "name": "count",
-            "in": "query",
-            "description": "Number of items to return",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
-            }
-          }
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
         "responses": {
           "200": {
-            "description": "Cursor-paginated list of session events",
+            "description": "Paginated list of subscription plans",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CursorSessionEvents"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/SubscriptionPlanResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
                 }
               }
             }
           }
         }
+      },
+      "post": {
+        "summary": "Create subscription plan",
+        "operationId": "createSubscriptionPlan",
+        "tags": ["Subscription Plans"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "input_token_limit": { "type": "integer", "default": 0, "description": "0 = unlimited" },
+                  "output_token_limit": { "type": "integer", "default": 0, "description": "0 = unlimited" },
+                  "money_limit": { "type": "string", "description": "Decimal string; 0 = unlimited" },
+                  "start_at": { "type": "string", "format": "date-time", "nullable": true },
+                  "end_at": { "type": "string", "format": "date-time", "nullable": true },
+                  "sort_order": { "type": "integer", "default": 0 }
+                },
+                "required": ["description", "money_limit"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Subscription plan created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionPlanResponse" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/subscription-plans/{plan_id}": {
+      "get": {
+        "summary": "Get subscription plan by ID",
+        "operationId": "getSubscriptionPlan",
+        "tags": ["Subscription Plans"],
+        "parameters": [{ "name": "plan_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Subscription plan", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionPlanResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update subscription plan",
+        "operationId": "updateSubscriptionPlan",
+        "tags": ["Subscription Plans"],
+        "parameters": [{ "name": "plan_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "input_token_limit": { "type": "integer" },
+                  "output_token_limit": { "type": "integer" },
+                  "money_limit": { "type": "string" },
+                  "start_at": {
+                    "description": "Omit to leave unchanged; set to null to clear; set to datetime string to update",
+                    "oneOf": [
+                      { "type": "string", "format": "date-time" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "end_at": {
+                    "description": "Omit to leave unchanged; set to null to clear; set to datetime string to update",
+                    "oneOf": [
+                      { "type": "string", "format": "date-time" },
+                      { "type": "null" }
+                    ]
+                  },
+                  "sort_order": { "type": "integer" },
+                  "status": {
+                    "type": "string",
+                    "enum": ["created", "started", "deducted", "active", "canceled", "expired"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated subscription plan", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionPlanResponse" } } } },
+          "400": { "description": "Validation error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Cancel subscription plan",
+        "operationId": "cancelSubscriptionPlan",
+        "description": "Sets the plan status to 'canceled'. Does not delete the record.",
+        "tags": ["Subscription Plans"],
+        "parameters": [{ "name": "plan_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Canceled subscription plan", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionPlanResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/subscriptions": {
+      "get": {
+        "summary": "List subscriptions",
+        "operationId": "listSubscriptions",
+        "tags": ["Subscriptions"],
+        "parameters": [
+          { "name": "account_id", "in": "query", "schema": { "type": "integer" }, "description": "Filter by account ID" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "filled", "canceled"] }, "description": "Filter by status" },
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of subscriptions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/SubscriptionResponse" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationInfo" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create subscription",
+        "operationId": "createSubscription",
+        "tags": ["Subscriptions"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "account_id": { "type": "integer" },
+                  "plan_id": { "type": "integer" }
+                },
+                "required": ["account_id", "plan_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Subscription created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionResponse" } } } },
+          "404": { "description": "Account or plan not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/subscriptions/{subscription_id}": {
+      "get": {
+        "summary": "Get subscription by ID",
+        "operationId": "getSubscription",
+        "tags": ["Subscriptions"],
+        "parameters": [{ "name": "subscription_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Subscription", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "put": {
+        "summary": "Update subscription status",
+        "operationId": "updateSubscription",
+        "tags": ["Subscriptions"],
+        "parameters": [{ "name": "subscription_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "enum": ["active", "filled", "canceled"] }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated subscription", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionResponse" } } } },
+          "400": { "description": "Invalid status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "delete": {
+        "summary": "Cancel subscription",
+        "operationId": "cancelSubscription",
+        "description": "Sets the subscription status to 'canceled'. Does not delete the record.",
+        "tags": ["Subscriptions"],
+        "parameters": [{ "name": "subscription_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Canceled subscription", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SubscriptionResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
       }
     }
-  },
-  "tags": [
-    {
-      "name": "Upstreams",
-      "description": "Manage OpenAI-compatible upstreams"
-    },
-    {
-      "name": "Upstream Tags",
-      "description": "Manage tags on upstreams"
-    },
-    {
-      "name": "Upstream Tests",
-      "description": "Test upstream feature detection without saving"
-    },
-    {
-      "name": "Model Tests",
-      "description": "Test model feature detection and update the LLMModel table"
-    },
-    {
-      "name": "Models",
-      "description": "Manage OpenAI models"
-    },
-    {
-      "name": "Accounts",
-      "description": "Manage accounts (users)"
-    },
-    {
-      "name": "Funds",
-      "description": "View account fund balances"
-    },
-    {
-      "name": "API Keys",
-      "description": "Manage account API keys"
-    },
-    {
-      "name": "Balance Changes",
-      "description": "Deposits, withdrawals, and credits"
-    },
-    {
-      "name": "Session Events",
-      "description": "View session event logs"
-    }
-  ]
+  }
 }

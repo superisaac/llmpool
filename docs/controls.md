@@ -310,6 +310,160 @@ llmpool-ctl fund credit --account alice --amount "200.00" --request-id "cr-001"
 
 ---
 
+### Subscription Plan Management
+
+Manage subscription plans that define token/money limits for accounts.
+
+#### `subscription-plan list`
+
+List all subscription plans.
+
+```bash
+llmpool-ctl subscription-plan list
+```
+
+#### `subscription-plan show`
+
+Show details of a specific subscription plan.
+
+```bash
+llmpool-ctl subscription-plan show --plan-id 1
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--plan-id` | Yes | Subscription plan ID |
+
+#### `subscription-plan add`
+
+Create a new subscription plan.
+
+```bash
+llmpool-ctl subscription-plan add \
+  --description "Basic Plan" \
+  --input-token-limit 1000000 \
+  --output-token-limit 500000 \
+  --money-limit "10.00" \
+  --sort-order 10
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--description` | Yes | Description of the plan |
+| `--input-token-limit` | No | Input token limit (default: 0 = unlimited) |
+| `--output-token-limit` | No | Output token limit (default: 0 = unlimited) |
+| `--money-limit` | No | Money limit as decimal string (default: "0" = unlimited) |
+| `--start-at` | No | Start datetime (e.g. `2024-01-01T00:00:00`) |
+| `--end-at` | No | End datetime (e.g. `2024-12-31T23:59:59`) |
+| `--sort-order` | No | Sort order; higher = higher priority (default: 0) |
+
+#### `subscription-plan update`
+
+Update an existing subscription plan.
+
+```bash
+llmpool-ctl subscription-plan update \
+  --plan-id 1 \
+  --description "Updated Basic Plan" \
+  --status active
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--plan-id` | Yes | Subscription plan ID |
+| `--description` | No | New description |
+| `--input-token-limit` | No | New input token limit |
+| `--output-token-limit` | No | New output token limit |
+| `--money-limit` | No | New money limit |
+| `--sort-order` | No | New sort order |
+| `--status` | No | New status: `created`, `started`, `deducted`, `active`, `canceled`, `expired` |
+
+#### `subscription-plan cancel`
+
+Cancel a subscription plan (sets status to `canceled`).
+
+```bash
+llmpool-ctl subscription-plan cancel --plan-id 1
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--plan-id` | Yes | Subscription plan ID |
+
+---
+
+### Subscription Management
+
+Manage account subscriptions to plans.
+
+#### `subscription list`
+
+List subscriptions with optional filters.
+
+```bash
+llmpool-ctl subscription list
+llmpool-ctl subscription list --account alice
+llmpool-ctl subscription list --status active
+llmpool-ctl subscription list --account alice --status active
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--account` | No | Filter by account name or numeric ID |
+| `--status` | No | Filter by status: `active`, `filled`, `canceled` |
+
+#### `subscription show`
+
+Show details of a specific subscription.
+
+```bash
+llmpool-ctl subscription show --subscription-id 1
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--subscription-id` | Yes | Subscription ID |
+
+#### `subscription add`
+
+Create a new subscription for an account.
+
+```bash
+llmpool-ctl subscription add --account alice --plan-id 1
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--account` | Yes | Account name or numeric account ID |
+| `--plan-id` | Yes | Subscription plan ID |
+
+#### `subscription update`
+
+Update a subscription's status.
+
+```bash
+llmpool-ctl subscription update --subscription-id 1 --status filled
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--subscription-id` | Yes | Subscription ID |
+| `--status` | Yes | New status: `active`, `filled`, `canceled` |
+
+#### `subscription cancel`
+
+Cancel a subscription (sets status to `canceled`).
+
+```bash
+llmpool-ctl subscription cancel --subscription-id 1
+```
+
+| Flag | Required | Description |
+|------|----------|-------------|
+| `--subscription-id` | Yes | Subscription ID |
+
+---
+
 ## JSON Output
 
 All commands support `--format json` for machine-readable output, useful for scripting and automation:
