@@ -11,24 +11,11 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::anthropic_api::{
-    AnthropicApiClient, AnthropicApiError, CompletionRequest, CountMessageTokensParams,
-    CreateMessageParams,
+    AnthropicApiError, CompletionRequest, CountMessageTokensParams, CreateMessageParams,
 };
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
-
-// ---------------------------------------------------------------------------
-// Helper: build an AnthropicApiClient from an AnthropicUpstreamClient
-// ---------------------------------------------------------------------------
-
-fn make_api_client(upstream: &super::client::AnthropicUpstreamClient) -> AnthropicApiClient {
-    AnthropicApiClient::with_http_client(
-        upstream.http_client.clone(),
-        upstream.api_key.clone(),
-        upstream.api_base.clone(),
-    )
-}
 
 // ---------------------------------------------------------------------------
 // POST /v1/messages — Create a Message
@@ -67,7 +54,7 @@ pub async fn create_message(
     let is_stream = payload.stream.unwrap_or(false);
 
     for (i, upstream_client) in clients.iter().enumerate() {
-        let api_client = make_api_client(upstream_client);
+        let api_client = &upstream_client.client;
         let model_db_id = upstream_client.model_db_id;
 
         let result = if is_stream {
@@ -188,7 +175,7 @@ pub async fn create_completion(
     let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
     for (i, upstream_client) in clients.iter().enumerate() {
-        let api_client = make_api_client(upstream_client);
+        let api_client = &upstream_client.client;
         let model_db_id = upstream_client.model_db_id;
 
         let result = if is_stream {
@@ -303,7 +290,7 @@ pub async fn count_message_tokens(
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     match api_client.count_message_tokens(&payload).await {
         Ok(result) => {

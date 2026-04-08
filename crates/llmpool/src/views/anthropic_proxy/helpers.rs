@@ -12,7 +12,55 @@ use crate::models::{CapacityOption, LLMModel, LLMUpstream};
 
 use crate::defer::OpenAIEventTask;
 
-use super::client::{AnthropicUpstreamClient, build_anthropic_client};
+use super::anthropic_api::AnthropicApiClient;
+
+// --- Upstream client for Anthropic ---
+
+pub struct AnthropicUpstreamClient {
+    /// The Anthropic API client (possibly configured with a proxy)
+    pub client: AnthropicApiClient,
+    /// The LLMModel primary key
+    pub model_db_id: i32,
+    /// The LLMUpstream primary key (used to mark upstream offline on network errors)
+    pub upstream_id: i32,
+}
+
+/// Build an `AnthropicUpstreamClient` from a (LLMModel, LLMUpstream) pair.
+/// If the upstream has proxies configured, a random one is selected and used.
+pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> AnthropicUpstreamClient {
+    use rand::seq::IndexedRandom;
+
+    let client = if !upstream.proxies.is_empty() {
+        let mut rng = rand::rng();
+        if let Some(proxy_url) = upstream.proxies.choose(&mut rng) {
+            tracing::info!(
+                upstream_name = %upstream.name,
+                proxy = %proxy_url,
+                "Anthropic proxy: using proxy for upstream"
+            );
+            let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
+            let http_client = reqwest::Client::builder()
+                .proxy(proxy)
+                .build()
+                .expect("Failed to build reqwest client with proxy");
+            AnthropicApiClient::with_http_client(
+                http_client,
+                upstream.api_key.clone(),
+                upstream.api_base.clone(),
+            )
+        } else {
+            AnthropicApiClient::with_base_url(upstream.api_key.clone(), upstream.api_base.clone())
+        }
+    } else {
+        AnthropicApiClient::with_base_url(upstream.api_key.clone(), upstream.api_base.clone())
+    };
+
+    AnthropicUpstreamClient {
+        client,
+        model_db_id: model.id,
+        upstream_id: upstream.id,
+    }
+}
 
 /// Returns up to `count` AnthropicUpstreamClient entries selected by lowest current-hour output
 /// token usage from Redis. If a model has no Redis key, its usage defaults to 0.

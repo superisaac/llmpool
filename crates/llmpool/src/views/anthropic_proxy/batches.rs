@@ -7,22 +7,10 @@ use axum::{
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::anthropic_api::{AnthropicApiClient, AnthropicApiError, CreateMessageBatchParams};
+use super::anthropic_api::{AnthropicApiError, CreateMessageBatchParams};
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
-
-// ---------------------------------------------------------------------------
-// Helper: build an AnthropicApiClient from an AnthropicUpstreamClient
-// ---------------------------------------------------------------------------
-
-fn make_api_client(upstream: &super::client::AnthropicUpstreamClient) -> AnthropicApiClient {
-    AnthropicApiClient::with_http_client(
-        upstream.http_client.clone(),
-        upstream.api_key.clone(),
-        upstream.api_base.clone(),
-    )
-}
 
 fn is_network_error(e: &AnthropicApiError) -> bool {
     matches!(e, AnthropicApiError::Network(_))
@@ -67,7 +55,7 @@ pub async fn create_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     match api_client.create_message_batch(&payload).await {
         Ok(batch) => {
@@ -138,7 +126,7 @@ pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     let params = super::anthropic_api::ListMessageBatchesParams::default();
     match api_client.list_message_batches(&params).await {
@@ -192,7 +180,7 @@ pub async fn retrieve_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     match api_client.retrieve_message_batch(&message_batch_id).await {
         Ok(batch) => Json(batch).into_response(),
@@ -245,7 +233,7 @@ pub async fn cancel_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     match api_client.cancel_message_batch(&message_batch_id).await {
         Ok(batch) => {
@@ -301,7 +289,7 @@ pub async fn retrieve_message_batch_results(
     }
 
     let upstream_client = &clients[0];
-    let api_client = make_api_client(upstream_client);
+    let api_client = &upstream_client.client;
 
     match api_client
         .retrieve_message_batch_results_raw(&message_batch_id)
