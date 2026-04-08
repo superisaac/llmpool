@@ -10,7 +10,7 @@ use crate::db;
 use crate::db::{DbPool, RedisPool};
 use crate::models::{CapacityOption, LLMModel, LLMUpstream};
 
-use crate::defer::OpenAIEventTask;
+use crate::defer::AnthropicEventTask;
 
 use super::client::AnthropicApiClient;
 
@@ -132,7 +132,7 @@ pub async fn select_anthropic_clients(
 pub struct AnthropicAppState {
     pub pool: DbPool,
     pub redis_pool: RedisPool,
-    pub event_storage: RedisStorage<OpenAIEventTask>,
+    pub event_storage: RedisStorage<AnthropicEventTask>,
 }
 
 /// Check if the account has sufficient funds.

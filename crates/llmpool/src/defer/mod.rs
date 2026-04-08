@@ -17,6 +17,10 @@ use redis::AsyncCommands;
 use tracing::warn;
 
 use crate::config;
+use crate::views::anthropic_proxy::client::{
+    CompletionRequest, CompletionResponse, CreateMessageBatchParams, CreateMessageParams, Message,
+    MessageBatch,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", content = "body")]
@@ -47,6 +51,42 @@ pub struct OpenAIEventTask {
     pub event_data: OpenAIEventData,
 }
 
+/// Anthropic-specific event data variants
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "action", content = "body")]
+pub enum AnthropicEventData {
+    /// Non-streaming message request
+    CreateMessageRequest(CreateMessageParams),
+    /// Non-streaming message response
+    CreateMessageResponse(Message),
+    /// Streaming message request
+    CreateMessageStreamRequest(CreateMessageParams),
+    /// Streaming message response done (carries final usage from message_delta)
+    CreateMessageStreamResponseDone {
+        input_tokens: u64,
+        output_tokens: u64,
+    },
+    /// Legacy completion request
+    CreateCompletionRequest(CompletionRequest),
+    /// Legacy completion response
+    CreateCompletionResponse(CompletionResponse),
+    /// Batch message request
+    CreateMessageBatchRequest(CreateMessageBatchParams),
+    /// Batch message response
+    CreateMessageBatchResponse(MessageBatch),
+}
+
+/// An Anthropic event entry to be processed asynchronously via the task queue.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnthropicEventTask {
+    pub session_id: String,
+    pub session_index: i32,
+    pub account_id: i32,
+    pub model_id: i32,
+    pub api_key_id: i32,
+    pub event_data: AnthropicEventData,
+}
+
 /// A balance change entry to be processed asynchronously via the task queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BalanceChangeTask {
@@ -59,6 +99,15 @@ pub async fn create_event_storage() -> RedisStorage<OpenAIEventTask> {
     let conn = apalis_redis::connect(redis_url)
         .await
         .expect("Failed to connect to Redis for task queue");
+    RedisStorage::new(conn)
+}
+
+/// Create a RedisStorage for AnthropicEventTask tasks by connecting to the configured Redis URL.
+pub async fn create_anthropic_event_storage() -> RedisStorage<AnthropicEventTask> {
+    let redis_url = config::get_redis_url();
+    let conn = apalis_redis::connect(redis_url)
+        .await
+        .expect("Failed to connect to Redis for anthropic event task queue");
     RedisStorage::new(conn)
 }
 
@@ -86,10 +135,12 @@ pub async fn cleanup_stale_workers(worker_names: &[&str]) {
     // Build configs matching what RedisStorage::new() would produce for each type
     let event_config =
         RedisConfig::default().set_namespace(std::any::type_name::<OpenAIEventTask>());
+    let anthropic_event_config =
+        RedisConfig::default().set_namespace(std::any::type_name::<AnthropicEventTask>());
     let balance_config =
         RedisConfig::default().set_namespace(std::any::type_name::<BalanceChangeTask>());
 
-    let configs = [event_config, balance_config];
+    let configs = [event_config, anthropic_event_config, balance_config];
 
     for config in &configs {
         let workers_set = config.workers_set();

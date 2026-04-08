@@ -14,7 +14,9 @@ use super::client::{
     AnthropicApiError, CompletionRequest, CountMessageTokensParams, CreateMessageParams,
 };
 use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
+use crate::anthropic::session_tracer::SessionTracer;
 use crate::db;
+use crate::defer::AnthropicEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,21 @@ pub async fn create_message(
         let api_client = &upstream_client.client;
         let model_db_id = upstream_client.model_db_id;
 
+        let mut tracer = SessionTracer::new(
+            state.event_storage.clone(),
+            account_id,
+            model_db_id,
+            api_key_id,
+        );
+
         let result = if is_stream {
+            // Record the request event
+            tracer
+                .add(AnthropicEventData::CreateMessageStreamRequest(
+                    payload.clone(),
+                ))
+                .await;
+
             // Use create_message_raw for streaming
             match api_client.create_message_raw(&payload).await {
                 Ok(resp) => {
@@ -67,6 +83,8 @@ pub async fn create_message(
                         account_id,
                         model_db_id,
                         api_key_id,
+                        state.event_storage.clone(),
+                        tracer,
                     );
                     Ok(Sse::new(event_stream)
                         .keep_alive(KeepAlive::default())
@@ -75,6 +93,11 @@ pub async fn create_message(
                 Err(e) => Err(e),
             }
         } else {
+            // Record the request event
+            tracer
+                .add(AnthropicEventData::CreateMessageRequest(payload.clone()))
+                .await;
+
             match api_client.create_message(&payload).await {
                 Ok(message) => {
                     info!(
@@ -83,6 +106,10 @@ pub async fn create_message(
                         model_db_id = model_db_id,
                         "Anthropic message usage"
                     );
+                    // Record the response event (with usage)
+                    tracer
+                        .add(AnthropicEventData::CreateMessageResponse(message.clone()))
+                        .await;
                     Ok(Json(message).into_response())
                 }
                 Err(e) => Err(e),
@@ -178,6 +205,18 @@ pub async fn create_completion(
         let api_client = &upstream_client.client;
         let model_db_id = upstream_client.model_db_id;
 
+        let mut tracer = SessionTracer::new(
+            state.event_storage.clone(),
+            account_id,
+            model_db_id,
+            api_key_id,
+        );
+
+        // Record the request event
+        tracer
+            .add(AnthropicEventData::CreateCompletionRequest(payload.clone()))
+            .await;
+
         let result = if is_stream {
             match api_client.create_completion_raw(&payload).await {
                 Ok(resp) => {
@@ -187,6 +226,8 @@ pub async fn create_completion(
                         account_id,
                         model_db_id,
                         api_key_id,
+                        state.event_storage.clone(),
+                        tracer,
                     );
                     Ok(Sse::new(event_stream)
                         .keep_alive(KeepAlive::default())
@@ -201,6 +242,12 @@ pub async fn create_completion(
                         model_db_id = model_db_id,
                         "Anthropic completion response received"
                     );
+                    // Record the response event
+                    tracer
+                        .add(AnthropicEventData::CreateCompletionResponse(
+                            completion.clone(),
+                        ))
+                        .await;
                     Ok(Json(completion).into_response())
                 }
                 Err(e) => Err(e),
@@ -341,15 +388,23 @@ fn is_network_error(e: &AnthropicApiError) -> bool {
 
 /// Transform the raw byte stream from the upstream Anthropic SSE response into
 /// an Axum SSE event stream, forwarding each `data:` line as-is.
+///
+/// When a `message_delta` event is received, the usage (input/output tokens) is
+/// extracted and recorded via the `SessionTracer`.
 fn transform_anthropic_stream(
     byte_stream: impl Stream<Item = Result<axum::body::Bytes, reqwest::Error>> + Send + 'static,
     account_id: i32,
     model_db_id: i32,
     _api_key_id: i32,
+    _event_storage: apalis_redis::RedisStorage<crate::defer::AnthropicEventTask>,
+    mut tracer: SessionTracer,
 ) -> impl Stream<Item = Result<Event, Infallible>> {
     async_stream::stream! {
         let mut buffer = String::new();
         let mut current_event_type: Option<String> = None;
+        // Accumulate usage from message_start (input_tokens) and message_delta (output_tokens)
+        let mut stream_input_tokens: u64 = 0;
+        let mut stream_output_tokens: u64 = 0;
 
         tokio::pin!(byte_stream);
 
@@ -380,18 +435,44 @@ fn transform_anthropic_stream(
                             }
 
                             if let Some(data) = line.strip_prefix("data: ") {
-                                // Log usage from message_delta events
-                                if current_event_type.as_deref() == Some("message_delta") {
-                                    if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
-                                        if let Some(usage) = parsed.get("usage") {
-                                            info!(
-                                                output_tokens = usage.get("output_tokens").and_then(|v| v.as_u64()).unwrap_or(0),
-                                                model_db_id = model_db_id,
-                                                account_id = account_id,
-                                                "Anthropic stream message_delta usage"
-                                            );
+                                match current_event_type.as_deref() {
+                                    Some("message_start") => {
+                                        // Extract input_tokens from message_start
+                                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                                            if let Some(tokens) = parsed
+                                                .get("message")
+                                                .and_then(|m| m.get("usage"))
+                                                .and_then(|u| u.get("input_tokens"))
+                                                .and_then(|v| v.as_u64())
+                                            {
+                                                stream_input_tokens = tokens;
+                                            }
                                         }
                                     }
+                                    Some("message_delta") => {
+                                        // Extract output_tokens from message_delta
+                                        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(data) {
+                                            if let Some(usage) = parsed.get("usage") {
+                                                if let Some(tokens) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
+                                                    stream_output_tokens = tokens;
+                                                    info!(
+                                                        output_tokens = tokens,
+                                                        model_db_id = model_db_id,
+                                                        account_id = account_id,
+                                                        "Anthropic stream message_delta usage"
+                                                    );
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Some("message_stop") => {
+                                        // Stream is done — record the final usage event
+                                        tracer.add(AnthropicEventData::CreateMessageStreamResponseDone {
+                                            input_tokens: stream_input_tokens,
+                                            output_tokens: stream_output_tokens,
+                                        }).await;
+                                    }
+                                    _ => {}
                                 }
 
                                 // Build the SSE event, optionally with an event type

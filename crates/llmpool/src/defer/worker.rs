@@ -18,6 +18,7 @@ pub async fn run_worker(concurrency: usize) {
     let pool = db::create_pool_from_config().await;
     let redis_pool = db::create_redis_pool_from_config().await;
     let event_storage = super::create_event_storage().await;
+    let anthropic_event_storage = super::create_anthropic_event_storage().await;
     let balance_change_storage = super::create_balance_change_storage().await;
 
     info!(
@@ -27,14 +28,22 @@ pub async fn run_worker(concurrency: usize) {
 
     // Clean up stale worker entries in Redis to prevent
     // "worker is still active within threshold" errors on restart
-    super::cleanup_stale_workers(&["event-worker", "balance-change-worker"]).await;
+    super::cleanup_stale_workers(&[
+        "event-worker",
+        "anthropic-event-worker",
+        "balance-change-worker",
+    ])
+    .await;
 
     let schedule = Schedule::from_str(UPSTREAM_HEALTH_CHECK_CRON)
         .expect("Invalid cron expression for upstream health check");
 
     let pool_clone = pool.clone();
+    let pool_clone2 = pool.clone();
     let redis_pool_clone = redis_pool.clone();
+    let redis_pool_clone2 = redis_pool.clone();
     let balance_change_storage_clone = balance_change_storage.clone();
+    let balance_change_storage_clone2 = balance_change_storage.clone();
     let health_check_pool = pool.clone();
 
     Monitor::new()
@@ -48,10 +57,19 @@ pub async fn run_worker(concurrency: usize) {
                 .build(super::tasks::handle_openai_event)
         })
         .register(move |_| {
-            WorkerBuilder::new("balance-change-worker")
-                .backend(balance_change_storage.clone())
+            WorkerBuilder::new("anthropic-event-worker")
+                .backend(anthropic_event_storage.clone())
                 .data(pool_clone.clone())
                 .data(redis_pool_clone.clone())
+                .data(balance_change_storage_clone2.clone())
+                .concurrency(concurrency)
+                .build(super::tasks::handle_anthropic_event)
+        })
+        .register(move |_| {
+            WorkerBuilder::new("balance-change-worker")
+                .backend(balance_change_storage.clone())
+                .data(pool_clone2.clone())
+                .data(redis_pool_clone2.clone())
                 .concurrency(concurrency)
                 .build(super::tasks::settle_balance_change)
         })

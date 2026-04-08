@@ -21,6 +21,7 @@ pub async fn serve(bind: &str) {
     let pool = crate::db::create_pool_from_config().await;
     let redis_pool = crate::db::create_redis_pool_from_config().await;
     let event_storage = crate::defer::create_event_storage().await;
+    let anthropic_event_storage = crate::defer::create_anthropic_event_storage().await;
     let balance_change_storage = crate::defer::create_balance_change_storage().await;
 
     // Build the rate limiting state (shares the same Redis pool)
@@ -28,8 +29,12 @@ pub async fn serve(bind: &str) {
         redis_pool: redis_pool.clone(),
     });
 
-    let anthropic_router =
-        anthropic_proxy::get_router(pool.clone(), redis_pool.clone(), event_storage.clone());
+    let anthropic_router = anthropic_proxy::get_router(
+        pool.clone(),
+        redis_pool.clone(),
+        anthropic_event_storage,
+        event_storage.clone(),
+    );
     let openai_router = openai_proxy::get_router(pool.clone(), redis_pool.clone(), event_storage);
     let admin_rest_router =
         admin_rest_api::get_router(pool.clone(), redis_pool, balance_change_storage);

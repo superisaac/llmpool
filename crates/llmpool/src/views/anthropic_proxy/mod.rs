@@ -12,7 +12,7 @@ use std::sync::Arc;
 use apalis_redis::RedisStorage;
 
 use crate::db::{DbPool, RedisPool};
-use crate::defer::OpenAIEventTask;
+use crate::defer::{AnthropicEventTask, OpenAIEventTask};
 use crate::middlewares::api_auth::auth_anthropic_api;
 use crate::views::openai_proxy::helpers::AppState as OpenAIAppState;
 
@@ -21,20 +21,21 @@ use helpers::AnthropicAppState;
 pub fn get_router(
     pool: DbPool,
     redis_pool: RedisPool,
-    event_storage: RedisStorage<OpenAIEventTask>,
+    anthropic_event_storage: RedisStorage<AnthropicEventTask>,
+    openai_event_storage: RedisStorage<OpenAIEventTask>,
 ) -> Router {
     // The Anthropic state (used by message handlers)
     let anthropic_state = Arc::new(AnthropicAppState {
         pool: pool.clone(),
         redis_pool: redis_pool.clone(),
-        event_storage: event_storage.clone(),
+        event_storage: anthropic_event_storage,
     });
 
     // The OpenAI-compatible state used by the auth middleware
     let auth_state = Arc::new(OpenAIAppState {
         pool,
         redis_pool,
-        event_storage,
+        event_storage: openai_event_storage,
     });
 
     Router::new()
