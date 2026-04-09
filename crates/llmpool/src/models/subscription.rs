@@ -12,16 +12,10 @@ use sqlx::FromRow;
 #[sqlx(type_name = "varchar")]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionPlanStatus {
-    #[sqlx(rename = "created")]
-    Created,
-    #[sqlx(rename = "started")]
-    Started,
     #[sqlx(rename = "active")]
     Active,
-    #[sqlx(rename = "canceled")]
-    Canceled,
-    #[sqlx(rename = "expired")]
-    Expired,
+    #[sqlx(rename = "deactive")]
+    Deactive,
 }
 
 /// Represents a subscription plan
@@ -30,11 +24,9 @@ pub struct SubscriptionPlan {
     pub id: i32,
     pub status: String,
     pub description: String,
-    pub input_token_limit: i64,
-    pub output_token_limit: i64,
+    pub total_token_limit: i64,
+    pub time_span: i32,
     pub money_limit: BigDecimal,
-    pub start_at: Option<NaiveDateTime>,
-    pub end_at: Option<NaiveDateTime>,
     pub sort_order: i32,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -49,14 +41,12 @@ pub struct SubscriptionPlan {
 #[sqlx(type_name = "varchar")]
 #[serde(rename_all = "snake_case")]
 pub enum SubscriptionStatus {
-    #[sqlx(rename = "deducted")]
-    Deducted,
+    #[sqlx(rename = "pending")]
+    Pending,
     #[sqlx(rename = "active")]
     Active,
-    #[sqlx(rename = "filled")]
-    Filled,
-    #[sqlx(rename = "canceled")]
-    Canceled,
+    #[sqlx(rename = "deactive")]
+    Deactive,
 }
 
 /// Represents a user's subscription record
@@ -66,8 +56,11 @@ pub struct Subscription {
     pub account_id: i32,
     pub plan_id: i32,
     pub status: String,
-    pub used_input_tokens: i64,
-    pub used_output_tokens: i64,
+    pub start_at: Option<NaiveDateTime>,
+    pub end_at: Option<NaiveDateTime>,
+    pub used_total_tokens: i64,
+    pub total_token_limit: i64,
+    pub sort_order: i32,
     pub used_money: BigDecimal,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

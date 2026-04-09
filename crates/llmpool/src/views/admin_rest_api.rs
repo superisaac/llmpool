@@ -2153,11 +2153,9 @@ struct SubscriptionPlanResponse {
     id: i32,
     status: String,
     description: String,
-    input_token_limit: i64,
-    output_token_limit: i64,
+    total_token_limit: i64,
+    time_span: i32,
     money_limit: String,
-    start_at: Option<String>,
-    end_at: Option<String>,
     sort_order: i32,
     created_at: String,
     updated_at: String,
@@ -2169,11 +2167,9 @@ impl From<SubscriptionPlan> for SubscriptionPlanResponse {
             id: p.id,
             status: p.status,
             description: p.description,
-            input_token_limit: p.input_token_limit,
-            output_token_limit: p.output_token_limit,
+            total_token_limit: p.total_token_limit,
+            time_span: p.time_span,
             money_limit: p.money_limit.to_string(),
-            start_at: p.start_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
-            end_at: p.end_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
             sort_order: p.sort_order,
             created_at: p.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: p.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -2229,8 +2225,10 @@ async fn list_subscription_plans(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<SubscriptionPlanResponse> =
-        plans.into_iter().map(SubscriptionPlanResponse::from).collect();
+    let data: Vec<SubscriptionPlanResponse> = plans
+        .into_iter()
+        .map(SubscriptionPlanResponse::from)
+        .collect();
 
     Json(PaginatedResponse {
         data,
@@ -2274,12 +2272,10 @@ async fn get_subscription_plan(
 struct CreateSubscriptionPlanRequest {
     description: String,
     #[serde(default)]
-    input_token_limit: i64,
+    total_token_limit: i64,
     #[serde(default)]
-    output_token_limit: i64,
+    time_span: i32,
     money_limit: BigDecimal,
-    start_at: Option<chrono::NaiveDateTime>,
-    end_at: Option<chrono::NaiveDateTime>,
     #[serde(default)]
     sort_order: i32,
 }
@@ -2302,11 +2298,9 @@ async fn create_subscription_plan(
     match db::subscription::create_subscription_plan(
         &state.pool,
         &payload.description,
-        payload.input_token_limit,
-        payload.output_token_limit,
+        payload.total_token_limit,
+        payload.time_span,
         &payload.money_limit,
-        payload.start_at,
-        payload.end_at,
         payload.sort_order,
     )
     .await
@@ -2331,44 +2325,15 @@ async fn create_subscription_plan(
 #[derive(Deserialize)]
 struct UpdateSubscriptionPlanRequest {
     description: Option<String>,
-    input_token_limit: Option<i64>,
-    output_token_limit: Option<i64>,
+    total_token_limit: Option<i64>,
+    time_span: Option<i32>,
     money_limit: Option<BigDecimal>,
-    /// Use null explicitly to clear start_at; omit to leave unchanged.
-    /// This field uses a double-Option: Some(None) = set to NULL, Some(Some(t)) = set to t, None = no change.
-    #[serde(default, deserialize_with = "deserialize_optional_datetime")]
-    start_at: Option<Option<chrono::NaiveDateTime>>,
-    #[serde(default, deserialize_with = "deserialize_optional_datetime")]
-    end_at: Option<Option<chrono::NaiveDateTime>>,
     sort_order: Option<i32>,
     status: Option<String>,
 }
 
-/// Custom deserializer for Option<Option<NaiveDateTime>>:
-/// - field absent → None (no change)
-/// - field = null → Some(None) (set to NULL)
-/// - field = "2024-01-01T00:00:00" → Some(Some(t)) (set to value)
-fn deserialize_optional_datetime<'de, D>(
-    deserializer: D,
-) -> Result<Option<Option<chrono::NaiveDateTime>>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::Error;
-    let opt: Option<Option<String>> = serde::Deserialize::deserialize(deserializer)?;
-    match opt {
-        None => Ok(None),
-        Some(None) => Ok(Some(None)),
-        Some(Some(s)) => {
-            let dt = chrono::NaiveDateTime::parse_from_str(&s, "%Y-%m-%dT%H:%M:%S")
-                .map_err(|e| D::Error::custom(format!("invalid datetime '{}': {}", s, e)))?;
-            Ok(Some(Some(dt)))
-        }
-    }
-}
-
 /// Valid status values for a subscription plan
-const VALID_PLAN_STATUSES: &[&str] = &["created", "started", "deducted", "active", "canceled", "expired"];
+const VALID_PLAN_STATUSES: &[&str] = &["active", "deactive"];
 
 /// PUT /api/v1/subscription-plans/:plan_id
 ///
@@ -2405,11 +2370,9 @@ async fn update_subscription_plan(
         &state.pool,
         plan_id,
         payload.description.as_deref(),
-        payload.input_token_limit,
-        payload.output_token_limit,
+        payload.total_token_limit,
+        payload.time_span,
         payload.money_limit.as_ref(),
-        payload.start_at,
-        payload.end_at,
         payload.sort_order,
         payload.status.as_deref(),
     )
@@ -2468,8 +2431,11 @@ struct SubscriptionResponse {
     account_id: i32,
     plan_id: i32,
     status: String,
-    used_input_tokens: i64,
-    used_output_tokens: i64,
+    start_at: Option<String>,
+    end_at: Option<String>,
+    used_total_tokens: i64,
+    total_token_limit: i64,
+    sort_order: i32,
     used_money: String,
     created_at: String,
     updated_at: String,
@@ -2482,8 +2448,13 @@ impl From<Subscription> for SubscriptionResponse {
             account_id: s.account_id,
             plan_id: s.plan_id,
             status: s.status,
-            used_input_tokens: s.used_input_tokens,
-            used_output_tokens: s.used_output_tokens,
+            start_at: s
+                .start_at
+                .map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            end_at: s.end_at.map(|t| t.format("%Y-%m-%dT%H:%M:%S").to_string()),
+            used_total_tokens: s.used_total_tokens,
+            total_token_limit: s.total_token_limit,
+            sort_order: s.sort_order,
             used_money: s.used_money.to_string(),
             created_at: s.created_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
             updated_at: s.updated_at.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -2525,17 +2496,20 @@ async fn list_subscriptions(
 
     let status_ref = params.status.as_deref();
 
-    let total = match db::subscription::count_subscriptions(&state.pool, params.account_id, status_ref).await {
-        Ok(count) => count,
-        Err(e) => {
-            warn!(error = %e, "Failed to count subscriptions");
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "database_error",
-                "Failed to query subscriptions",
-            );
-        }
-    };
+    let total =
+        match db::subscription::count_subscriptions(&state.pool, params.account_id, status_ref)
+            .await
+        {
+            Ok(count) => count,
+            Err(e) => {
+                warn!(error = %e, "Failed to count subscriptions");
+                return error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "database_error",
+                    "Failed to query subscriptions",
+                );
+            }
+        };
 
     let subscriptions = match db::subscription::list_subscriptions_paginated(
         &state.pool,
@@ -2563,8 +2537,10 @@ async fn list_subscriptions(
         (total + page_size - 1) / page_size
     };
 
-    let data: Vec<SubscriptionResponse> =
-        subscriptions.into_iter().map(SubscriptionResponse::from).collect();
+    let data: Vec<SubscriptionResponse> = subscriptions
+        .into_iter()
+        .map(SubscriptionResponse::from)
+        .collect();
 
     Json(PaginatedResponse {
         data,
@@ -2683,14 +2659,14 @@ struct UpdateSubscriptionRequest {
 }
 
 /// Valid status values for a subscription
-const VALID_SUBSCRIPTION_STATUSES: &[&str] = &["active", "filled", "canceled"];
+const VALID_SUBSCRIPTION_STATUSES: &[&str] = &["active", "deactive"];
 
 /// PUT /api/v1/subscriptions/:subscription_id
 ///
 /// Updates a subscription's status.
 ///
 /// Request body (JSON):
-/// - `status` (required): New status (active, filled, canceled)
+/// - `status` (required): New status (active, deactive)
 async fn update_subscription(
     State(state): State<Arc<AppState>>,
     Path(subscription_id): Path<i32>,
@@ -2708,8 +2684,12 @@ async fn update_subscription(
         );
     }
 
-    match db::subscription::update_subscription_status(&state.pool, subscription_id, &payload.status)
-        .await
+    match db::subscription::update_subscription_status(
+        &state.pool,
+        subscription_id,
+        &payload.status,
+    )
+    .await
     {
         Ok(sub) => Json(SubscriptionResponse::from(sub)).into_response(),
         Err(sqlx::Error::RowNotFound) => error_response(

@@ -71,6 +71,7 @@ pub struct BalanceChange {
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
+    pub subscription_id: i32,
     pub created_at: NaiveDateTime,
 }
 

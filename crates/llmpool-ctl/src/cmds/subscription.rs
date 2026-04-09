@@ -14,11 +14,9 @@ pub struct SubscriptionPlanResponse {
     pub id: i32,
     pub status: String,
     pub description: String,
-    pub input_token_limit: i64,
-    pub output_token_limit: i64,
+    pub total_token_limit: i64,
+    pub time_span: i32,
     pub money_limit: String,
-    pub start_at: Option<String>,
-    pub end_at: Option<String>,
     pub sort_order: i32,
     pub created_at: String,
     pub updated_at: String,
@@ -31,8 +29,11 @@ pub struct SubscriptionResponse {
     pub account_id: i32,
     pub plan_id: i32,
     pub status: String,
-    pub used_input_tokens: i64,
-    pub used_output_tokens: i64,
+    pub start_at: Option<String>,
+    pub end_at: Option<String>,
+    pub used_total_tokens: i64,
+    pub total_token_limit: i64,
+    pub sort_order: i32,
     pub used_money: String,
     pub created_at: String,
     pub updated_at: String,
@@ -57,21 +58,15 @@ pub enum SubscriptionPlanAction {
         /// Description of the plan
         #[arg(long)]
         description: String,
-        /// Input token limit (0 = unlimited)
+        /// Total token limit (0 = unlimited)
         #[arg(long, default_value = "0")]
-        input_token_limit: i64,
-        /// Output token limit (0 = unlimited)
+        total_token_limit: i64,
+        /// Time span in seconds (0 = unlimited)
         #[arg(long, default_value = "0")]
-        output_token_limit: i64,
+        time_span: i32,
         /// Money limit (0 = unlimited)
         #[arg(long, default_value = "0")]
         money_limit: String,
-        /// Start datetime (e.g. 2024-01-01T00:00:00)
-        #[arg(long)]
-        start_at: Option<String>,
-        /// End datetime (e.g. 2024-12-31T23:59:59)
-        #[arg(long)]
-        end_at: Option<String>,
         /// Sort order (higher = higher priority)
         #[arg(long, default_value = "0")]
         sort_order: i32,
@@ -84,23 +79,23 @@ pub enum SubscriptionPlanAction {
         /// New description
         #[arg(long)]
         description: Option<String>,
-        /// New input token limit
+        /// New total token limit
         #[arg(long)]
-        input_token_limit: Option<i64>,
-        /// New output token limit
+        total_token_limit: Option<i64>,
+        /// New time span in seconds
         #[arg(long)]
-        output_token_limit: Option<i64>,
+        time_span: Option<i32>,
         /// New money limit
         #[arg(long)]
         money_limit: Option<String>,
         /// New sort order
         #[arg(long)]
         sort_order: Option<i32>,
-        /// New status (created, started, deducted, active, canceled, expired)
+        /// New status (active, deactive)
         #[arg(long)]
         status: Option<String>,
     },
-    /// Cancel a subscription plan
+    /// Deactivate a subscription plan
     Cancel {
         /// Subscription plan ID
         #[arg(long)]
@@ -115,7 +110,7 @@ pub enum SubscriptionAction {
         /// Filter by account name or ID
         #[arg(long)]
         account: Option<String>,
-        /// Filter by status (active, filled, canceled)
+        /// Filter by status (active, deactive)
         #[arg(long)]
         status: Option<String>,
     },
@@ -139,11 +134,11 @@ pub enum SubscriptionAction {
         /// Subscription ID
         #[arg(long)]
         subscription_id: i32,
-        /// New status (active, filled, canceled)
+        /// New status (active, deactive)
         #[arg(long)]
         status: String,
     },
-    /// Cancel a subscription
+    /// Deactivate a subscription
     Cancel {
         /// Subscription ID
         #[arg(long)]
@@ -158,13 +153,9 @@ pub enum SubscriptionAction {
 #[derive(Serialize)]
 struct CreateSubscriptionPlanRequest {
     description: String,
-    input_token_limit: i64,
-    output_token_limit: i64,
+    total_token_limit: i64,
+    time_span: i32,
     money_limit: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    start_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    end_at: Option<String>,
     sort_order: i32,
 }
 
@@ -173,9 +164,9 @@ struct UpdateSubscriptionPlanRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     description: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    input_token_limit: Option<i64>,
+    total_token_limit: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    output_token_limit: Option<i64>,
+    time_span: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     money_limit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -205,18 +196,18 @@ fn print_plans(plans: &[SubscriptionPlanResponse]) {
         return;
     }
     println!(
-        "{:<5} {:<10} {:<25} {:<15} {:<15} {:<12} {:<5}",
-        "ID", "Status", "Description", "Input Limit", "Output Limit", "Money Limit", "Order"
+        "{:<5} {:<10} {:<25} {:<15} {:<12} {:<12} {:<5}",
+        "ID", "Status", "Description", "Token Limit", "Time Span", "Money Limit", "Order"
     );
     println!("{}", "-".repeat(90));
     for p in plans {
         println!(
-            "{:<5} {:<10} {:<25} {:<15} {:<15} {:<12} {:<5}",
+            "{:<5} {:<10} {:<25} {:<15} {:<12} {:<12} {:<5}",
             p.id,
             p.status,
             truncate(&p.description, 23),
-            p.input_token_limit,
-            p.output_token_limit,
+            p.total_token_limit,
+            p.time_span,
             truncate(&p.money_limit, 10),
             p.sort_order,
         );
@@ -227,17 +218,9 @@ fn print_plan_detail(p: &SubscriptionPlanResponse) {
     println!("  ID:                  {}", p.id);
     println!("  Status:              {}", p.status);
     println!("  Description:         {}", p.description);
-    println!("  Input Token Limit:   {}", p.input_token_limit);
-    println!("  Output Token Limit:  {}", p.output_token_limit);
+    println!("  Total Token Limit:   {}", p.total_token_limit);
+    println!("  Time Span:           {}", p.time_span);
     println!("  Money Limit:         {}", p.money_limit);
-    println!(
-        "  Start At:            {}",
-        p.start_at.as_deref().unwrap_or("(none)")
-    );
-    println!(
-        "  End At:              {}",
-        p.end_at.as_deref().unwrap_or("(none)")
-    );
     println!("  Sort Order:          {}", p.sort_order);
     println!("  Created At:          {}", p.created_at);
     println!("  Updated At:          {}", p.updated_at);
@@ -250,9 +233,16 @@ fn print_subscriptions(subs: &[SubscriptionResponse]) {
     }
     println!(
         "{:<5} {:<10} {:<8} {:<10} {:<15} {:<15} {:<12} {:<22}",
-        "ID", "Status", "Acct ID", "Plan ID", "Used Input", "Used Output", "Used Money", "Created At"
+        "ID",
+        "Status",
+        "Acct ID",
+        "Plan ID",
+        "Used Tokens",
+        "Token Limit",
+        "Used Money",
+        "Created At"
     );
-    println!("{}", "-".repeat(100));
+    println!("{}", "-".repeat(110));
     for s in subs {
         println!(
             "{:<5} {:<10} {:<8} {:<10} {:<15} {:<15} {:<12} {:<22}",
@@ -260,8 +250,8 @@ fn print_subscriptions(subs: &[SubscriptionResponse]) {
             s.status,
             s.account_id,
             s.plan_id,
-            s.used_input_tokens,
-            s.used_output_tokens,
+            s.used_total_tokens,
+            s.total_token_limit,
             truncate(&s.used_money, 10),
             s.created_at,
         );
@@ -273,8 +263,17 @@ fn print_subscription_detail(s: &SubscriptionResponse) {
     println!("  Account ID:          {}", s.account_id);
     println!("  Plan ID:             {}", s.plan_id);
     println!("  Status:              {}", s.status);
-    println!("  Used Input Tokens:   {}", s.used_input_tokens);
-    println!("  Used Output Tokens:  {}", s.used_output_tokens);
+    println!(
+        "  Start At:            {}",
+        s.start_at.as_deref().unwrap_or("(none)")
+    );
+    println!(
+        "  End At:              {}",
+        s.end_at.as_deref().unwrap_or("(none)")
+    );
+    println!("  Used Total Tokens:   {}", s.used_total_tokens);
+    println!("  Total Token Limit:   {}", s.total_token_limit);
+    println!("  Sort Order:          {}", s.sort_order);
     println!("  Used Money:          {}", s.used_money);
     println!("  Created At:          {}", s.created_at);
     println!("  Updated At:          {}", s.updated_at);
@@ -316,20 +315,16 @@ pub async fn handle_subscription_plan(
         }
         SubscriptionPlanAction::Add {
             description,
-            input_token_limit,
-            output_token_limit,
+            total_token_limit,
+            time_span,
             money_limit,
-            start_at,
-            end_at,
             sort_order,
         } => {
             let body = CreateSubscriptionPlanRequest {
                 description,
-                input_token_limit,
-                output_token_limit,
+                total_token_limit,
+                time_span,
                 money_limit,
-                start_at,
-                end_at,
                 sort_order,
             };
             if json_output {
@@ -346,16 +341,16 @@ pub async fn handle_subscription_plan(
         SubscriptionPlanAction::Update {
             plan_id,
             description,
-            input_token_limit,
-            output_token_limit,
+            total_token_limit,
+            time_span,
             money_limit,
             sort_order,
             status,
         } => {
             let body = UpdateSubscriptionPlanRequest {
                 description,
-                input_token_limit,
-                output_token_limit,
+                total_token_limit,
+                time_span,
                 money_limit,
                 sort_order,
                 status,
@@ -384,7 +379,7 @@ pub async fn handle_subscription_plan(
                 let resp: SubscriptionPlanResponse = client
                     .delete(&format!("/subscription-plans/{}", plan_id))
                     .await?;
-                println!("Subscription plan canceled.");
+                println!("Subscription plan deactivated.");
                 println!();
                 print_plan_detail(&resp);
             }
@@ -438,7 +433,10 @@ pub async fn handle_subscription(
         }
         SubscriptionAction::Add { account, plan_id } => {
             let account_id = resolve_account_id(&account, client).await?;
-            let body = CreateSubscriptionRequest { account_id, plan_id };
+            let body = CreateSubscriptionRequest {
+                account_id,
+                plan_id,
+            };
             if json_output {
                 let raw = client.post_raw("/subscriptions", &body).await?;
                 println!("{}", raw);
@@ -478,7 +476,7 @@ pub async fn handle_subscription(
                 let resp: SubscriptionResponse = client
                     .delete(&format!("/subscriptions/{}", subscription_id))
                     .await?;
-                println!("Subscription canceled.");
+                println!("Subscription deactivated.");
                 println!();
                 print_subscription_detail(&resp);
             }

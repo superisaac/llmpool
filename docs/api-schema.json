@@ -156,14 +156,12 @@
           "id": { "type": "integer" },
           "status": {
             "type": "string",
-            "enum": ["created", "started", "deducted", "active", "canceled", "expired"]
+            "enum": ["active", "deactive"]
           },
           "description": { "type": "string" },
-          "input_token_limit": { "type": "integer", "description": "0 means unlimited" },
-          "output_token_limit": { "type": "integer", "description": "0 means unlimited" },
+          "total_token_limit": { "type": "integer", "description": "0 means unlimited" },
+          "time_span": { "type": "integer", "description": "Time span in seconds; 0 means unlimited" },
           "money_limit": { "type": "string", "description": "Decimal string; 0 means unlimited" },
-          "start_at": { "type": "string", "format": "date-time", "nullable": true },
-          "end_at": { "type": "string", "format": "date-time", "nullable": true },
           "sort_order": { "type": "integer", "description": "Higher value = higher priority" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
@@ -177,10 +175,13 @@
           "plan_id": { "type": "integer" },
           "status": {
             "type": "string",
-            "enum": ["active", "filled", "canceled"]
+            "enum": ["active", "deactive"]
           },
-          "used_input_tokens": { "type": "integer" },
-          "used_output_tokens": { "type": "integer" },
+          "start_at": { "type": "string", "format": "date-time", "nullable": true },
+          "end_at": { "type": "string", "format": "date-time", "nullable": true },
+          "used_total_tokens": { "type": "integer" },
+          "total_token_limit": { "type": "integer", "description": "0 means unlimited" },
+          "sort_order": { "type": "integer" },
           "used_money": { "type": "string", "description": "Decimal string" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
@@ -689,11 +690,9 @@
                 "type": "object",
                 "properties": {
                   "description": { "type": "string" },
-                  "input_token_limit": { "type": "integer", "default": 0, "description": "0 = unlimited" },
-                  "output_token_limit": { "type": "integer", "default": 0, "description": "0 = unlimited" },
+                  "total_token_limit": { "type": "integer", "default": 0, "description": "0 = unlimited" },
+                  "time_span": { "type": "integer", "default": 0, "description": "Time span in seconds; 0 = unlimited" },
                   "money_limit": { "type": "string", "description": "Decimal string; 0 = unlimited" },
-                  "start_at": { "type": "string", "format": "date-time", "nullable": true },
-                  "end_at": { "type": "string", "format": "date-time", "nullable": true },
                   "sort_order": { "type": "integer", "default": 0 }
                 },
                 "required": ["description", "money_limit"]
@@ -731,27 +730,13 @@
                 "type": "object",
                 "properties": {
                   "description": { "type": "string" },
-                  "input_token_limit": { "type": "integer" },
-                  "output_token_limit": { "type": "integer" },
+                  "total_token_limit": { "type": "integer" },
+                  "time_span": { "type": "integer" },
                   "money_limit": { "type": "string" },
-                  "start_at": {
-                    "description": "Omit to leave unchanged; set to null to clear; set to datetime string to update",
-                    "oneOf": [
-                      { "type": "string", "format": "date-time" },
-                      { "type": "null" }
-                    ]
-                  },
-                  "end_at": {
-                    "description": "Omit to leave unchanged; set to null to clear; set to datetime string to update",
-                    "oneOf": [
-                      { "type": "string", "format": "date-time" },
-                      { "type": "null" }
-                    ]
-                  },
                   "sort_order": { "type": "integer" },
                   "status": {
                     "type": "string",
-                    "enum": ["created", "started", "deducted", "active", "canceled", "expired"]
+                    "enum": ["active", "deactive"]
                   }
                 }
               }
@@ -783,7 +768,7 @@
         "tags": ["Subscriptions"],
         "parameters": [
           { "name": "account_id", "in": "query", "schema": { "type": "integer" }, "description": "Filter by account ID" },
-          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "filled", "canceled"] }, "description": "Filter by status" },
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["active", "deactive"] }, "description": "Filter by status" },
           { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
           { "name": "page_size", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
         ],
@@ -852,7 +837,7 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "status": { "type": "string", "enum": ["active", "filled", "canceled"] }
+                  "status": { "type": "string", "enum": ["active", "deactive"] }
                 },
                 "required": ["status"]
               }

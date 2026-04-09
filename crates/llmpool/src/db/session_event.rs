@@ -116,18 +116,6 @@ pub async fn find_balance_change_by_id_with_tx(
         .await
 }
 
-/// Mark a balance change as applied using an existing transaction
-pub async fn mark_balance_change_applied_with_tx(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    id: i32,
-) -> Result<(), sqlx::Error> {
-    sqlx::query("UPDATE balance_changes SET is_applied = TRUE WHERE id = $1")
-        .bind(id)
-        .execute(&mut **tx)
-        .await?;
-    Ok(())
-}
-
 /// Create a new balance change entry
 #[allow(dead_code)]
 pub async fn create_balance_change(

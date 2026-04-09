@@ -2,7 +2,10 @@ use bigdecimal::BigDecimal;
 use chrono::Utc;
 
 use crate::db::DbPool;
-use crate::models::{BalanceChangeContent, Fund, NewFund, UpdateFund};
+use crate::db::subscription::{
+    get_current_subscription_with_tx, increment_subscription_usage_with_tx,
+};
+use crate::models::{BalanceChange, BalanceChangeContent, Fund, NewFund, UpdateFund};
 
 /// Find a account's fund by account_id
 pub async fn find_account_fund(
@@ -13,6 +16,20 @@ pub async fn find_account_fund(
         .bind(account_id)
         .fetch_optional(pool)
         .await
+}
+
+/// Mark a balance change as applied using an existing transaction
+pub async fn mark_balance_change_applied_with_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: i32,
+    subscription_id: i32,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("UPDATE balance_changes SET is_applied = TRUE, subscription_id = $2 WHERE id = $1")
+        .bind(id)
+        .bind(subscription_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(())
 }
 
 /// Apply a balance change to a user's fund.
@@ -27,11 +44,11 @@ pub async fn find_account_fund(
 #[allow(dead_code)]
 pub async fn apply_balance_change(
     pool: &DbPool,
-    account_id: i32,
+    balance_change: &BalanceChange,
     content: &BalanceChangeContent,
 ) -> Result<Fund, sqlx::Error> {
     let mut tx = pool.begin().await?;
-    let result = apply_balance_change_with_tx(&mut tx, account_id, content).await?;
+    let result = apply_balance_change_with_tx(&mut tx, balance_change, content).await?;
     tx.commit().await?;
     Ok(result)
 }
@@ -41,9 +58,11 @@ pub async fn apply_balance_change(
 /// This variant is useful when you want to run the operation within an existing transaction.
 pub async fn apply_balance_change_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    account_id: i32,
+    balance_change: &BalanceChange,
+    // account_id: i32,
     content: &BalanceChangeContent,
 ) -> Result<Fund, sqlx::Error> {
+    let account_id = balance_change.account_id;
     // Find or create the account fund
     let account_fund: Option<Fund> =
         sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
@@ -71,11 +90,23 @@ pub async fn apply_balance_change_with_tx(
         }
     };
 
+    let mut subscription_id: i32 = 0;
     // Compute new balance; balance can be negative (debt)
     let new_balance = match content {
         BalanceChangeContent::SpendToken(spend) => {
-            let spend_amount = &spend.input_spend_amount + &spend.output_spend_amount;
-            &account_fund.balance - &spend_amount
+            // If SpendToken, try to find and update an active subscription first
+            let total_tokens = spend.input_tokens + spend.output_tokens;
+            let spend_amount = spend.input_spend_amount.clone() + spend.output_spend_amount.clone();
+            if let Some(subscription) =
+                get_current_subscription_with_tx(tx, account_id, total_tokens).await?
+            {
+                subscription_id = subscription.id;
+                increment_subscription_usage_with_tx(tx, &subscription, total_tokens, spend_amount)
+                    .await?;
+                account_fund.balance.clone()
+            } else {
+                account_fund.balance.clone() - spend_amount
+            }
         }
         BalanceChangeContent::Deposit { amount } | BalanceChangeContent::AddCredit { amount } => {
             &account_fund.balance + amount
@@ -83,19 +114,25 @@ pub async fn apply_balance_change_with_tx(
         BalanceChangeContent::Withdraw { amount } => &account_fund.balance - amount,
     };
 
-    let update = UpdateFund {
-        balance: Some(new_balance),
-        updated_at: Some(Utc::now().naive_utc()),
-    };
+    let return_fund = if new_balance != account_fund.balance {
+        let update = UpdateFund {
+            balance: Some(new_balance),
+            updated_at: Some(Utc::now().naive_utc()),
+        };
 
-    sqlx::query_as::<_, Fund>(
-        "UPDATE funds SET balance = $1, updated_at = $2
-         WHERE id = $3
-         RETURNING *",
-    )
-    .bind(&update.balance)
-    .bind(&update.updated_at)
-    .bind(account_fund.id)
-    .fetch_one(&mut **tx)
-    .await
+        sqlx::query_as::<_, Fund>(
+            "UPDATE funds SET balance = $1, updated_at = $2
+            WHERE id = $3
+            RETURNING *",
+        )
+        .bind(&update.balance)
+        .bind(&update.updated_at)
+        .bind(account_fund.id)
+        .fetch_one(&mut **tx)
+        .await?
+    } else {
+        account_fund
+    };
+    mark_balance_change_applied_with_tx(tx, balance_change.id, subscription_id).await?;
+    Ok(return_fund)
 }

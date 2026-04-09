@@ -349,3 +349,17 @@ CapacityOption增加一个字段, has_messages, find_models_by_name_and_capacity
 1. DELETE /api/v1/subscriptions/:subscription_id, cancel subscription
 
 更新 api-admin.json 和 llmpool-ctl 命令
+
+===========
+修改database model SubscriptionPlan: status choices 为active, deactive; 删除字段 input_token_limit, output_token_limit, start_at, end_at. 增加字段  total_token_limit, time_span: integer.
+修改database model Subscription: status choices 为active, deactive; 删除字段 used_input_tokens, used_input_tokens, 添加字段:  start_at, end_at, used_total_tokens, total_token_limit, sort_order.
+修改migrations文件即可，不需要新建migration文件
+修改api-schema.json 以及llmpool-ctl 命令
+
+重写 get_current_scubscription(pool, account_id, consumed_tokens), 选择条件包括 start_at <= now < end_at and status = 'active' and total_token_limit >= used_total_tokens + consumed_tokens
+
+在apply_balance_change_with_tx中，如果遇到SpendToken, 则优先get_current_subscription_with_tx(tx, account_id, spend.input_tokens + spend.output_tokens) 找到subscription, 如果找到，则更新subscription将subscription.used_total_tokens += spend.input_tokens + spend.output_tokens. subscription.used_money += spend.input_spend_amount + spend.output_spend_amount.
+
+==========
+BalanceChange 增加字段subscription_id, 记录apply的对应subscription id. 修改migrations文件即可，不需要新建migration文件
+mark_balance_change_applied_with_tx 增加参数subscription_id

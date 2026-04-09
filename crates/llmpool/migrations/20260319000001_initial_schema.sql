@@ -126,21 +126,21 @@ CREATE TABLE IF NOT EXISTS balance_changes (
     unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,
+    subscription_id INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_balance_changes_account_id ON balance_changes (account_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_balance_changes_unique_request_id ON balance_changes (unique_request_id);
+CREATE INDEX IF NOT EXISTS idx_balance_changes_subscription_id ON balance_changes (subscription_id);
 
 -- Create subscription_plans table
 CREATE TABLE IF NOT EXISTS subscription_plans (
     id SERIAL PRIMARY KEY,
-    status VARCHAR NOT NULL DEFAULT 'created',
+    status VARCHAR NOT NULL DEFAULT 'active',
     description VARCHAR NOT NULL DEFAULT '',
-    input_token_limit BIGINT NOT NULL DEFAULT 0,
-    output_token_limit BIGINT NOT NULL DEFAULT 0,
+    total_token_limit BIGINT NOT NULL DEFAULT 0,
+    time_span INTEGER NOT NULL DEFAULT 0,
     money_limit DECIMAL NOT NULL DEFAULT 0,
-    start_at TIMESTAMP,
-    end_at TIMESTAMP,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -153,9 +153,12 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     id SERIAL PRIMARY KEY,
     account_id INT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     plan_id INT NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
-    status VARCHAR NOT NULL DEFAULT 'active',
-    used_input_tokens BIGINT NOT NULL DEFAULT 0,
-    used_output_tokens BIGINT NOT NULL DEFAULT 0,
+    status VARCHAR NOT NULL DEFAULT 'pending',
+    start_at TIMESTAMP,
+    end_at TIMESTAMP,
+    used_total_tokens BIGINT NOT NULL DEFAULT 0,
+    total_token_limit BIGINT NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
     used_money DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()

@@ -74,7 +74,8 @@ pub async fn settle_balance_change(
     }
 
     // 3. Parse the content JSON into BalanceChangeContent
-    let content: BalanceChangeContent = match serde_json::from_value(balance_change.content) {
+    let content: BalanceChangeContent = match serde_json::from_value(balance_change.content.clone())
+    {
         Ok(content) => content,
         Err(e) => {
             warn!(
@@ -87,8 +88,8 @@ pub async fn settle_balance_change(
     };
 
     // 4. Apply the balance change to the account's balance within the same transaction
-    let updated_balance =
-        match db::fund::apply_balance_change_with_tx(&mut tx, balance_change.account_id, &content)
+    let updated_fund =
+        match db::fund::apply_balance_change_with_tx(&mut tx, &balance_change.clone(), &content)
             .await
         {
             Ok(ub) => ub,
@@ -103,17 +104,17 @@ pub async fn settle_balance_change(
             }
         };
 
-    // 5. Mark the balance change as applied
-    if let Err(e) =
-        db::session_event::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await
-    {
-        warn!(
-            error = %e,
-            balance_change_id = balance_change_id,
-            "Failed to mark balance change as applied"
-        );
-        return;
-    }
+    // // 5. Mark the balance change as applied
+    // if let Err(e) =
+    //     db::fund::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await
+    // {
+    //     warn!(
+    //         error = %e,
+    //         balance_change_id = balance_change_id,
+    //         "Failed to mark balance change as applied"
+    //     );
+    //     return;
+    // }
 
     // Commit the transaction
     match tx.commit().await {
@@ -121,14 +122,13 @@ pub async fn settle_balance_change(
             info!(
                 balance_change_id = balance_change_id,
                 account_id = balance_change.account_id,
-                balance = %updated_balance.balance,
+                balance = %updated_fund.balance,
                 "Successfully applied balance change"
             );
 
             // Update the fund cache with the latest balance
             if let Err(e) =
-                fund_cache::set_fund_info(&redis_pool, updated_balance.account_id, updated_balance)
-                    .await
+                fund_cache::set_fund_info(&redis_pool, updated_fund.account_id, updated_fund).await
             {
                 warn!(
                     error = %e,

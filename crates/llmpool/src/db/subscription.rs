@@ -1,7 +1,6 @@
-use chrono::Utc;
-
 use crate::db::DbPool;
 use crate::models::{Subscription, SubscriptionPlan};
+use bigdecimal::BigDecimal;
 
 // ============================================================
 // SubscriptionPlan DB operations
@@ -11,27 +10,23 @@ use crate::models::{Subscription, SubscriptionPlan};
 pub async fn create_subscription_plan(
     pool: &DbPool,
     description: &str,
-    input_token_limit: i64,
-    output_token_limit: i64,
+    total_token_limit: i64,
+    time_span: i32,
     money_limit: &bigdecimal::BigDecimal,
-    start_at: Option<chrono::NaiveDateTime>,
-    end_at: Option<chrono::NaiveDateTime>,
     sort_order: i32,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>(
         r#"
         INSERT INTO subscription_plans
-            (description, input_token_limit, output_token_limit, money_limit, start_at, end_at, sort_order)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+            (description, total_token_limit, time_span, money_limit, sort_order)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *
         "#,
     )
     .bind(description)
-    .bind(input_token_limit)
-    .bind(output_token_limit)
+    .bind(total_token_limit)
+    .bind(time_span)
     .bind(money_limit)
-    .bind(start_at)
-    .bind(end_at)
     .bind(sort_order)
     .fetch_one(pool)
     .await
@@ -76,11 +71,9 @@ pub async fn update_subscription_plan(
     pool: &DbPool,
     plan_id: i32,
     description: Option<&str>,
-    input_token_limit: Option<i64>,
-    output_token_limit: Option<i64>,
+    total_token_limit: Option<i64>,
+    time_span: Option<i32>,
     money_limit: Option<&bigdecimal::BigDecimal>,
-    start_at: Option<Option<chrono::NaiveDateTime>>,
-    end_at: Option<Option<chrono::NaiveDateTime>>,
     sort_order: Option<i32>,
     status: Option<&str>,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
@@ -88,13 +81,11 @@ pub async fn update_subscription_plan(
         r#"
         UPDATE subscription_plans SET
             description = COALESCE($2, description),
-            input_token_limit = COALESCE($3, input_token_limit),
-            output_token_limit = COALESCE($4, output_token_limit),
+            total_token_limit = COALESCE($3, total_token_limit),
+            time_span = COALESCE($4, time_span),
             money_limit = COALESCE($5, money_limit),
-            start_at = CASE WHEN $6 THEN $7 ELSE start_at END,
-            end_at = CASE WHEN $8 THEN $9 ELSE end_at END,
-            sort_order = COALESCE($10, sort_order),
-            status = COALESCE($11, status),
+            sort_order = COALESCE($6, sort_order),
+            status = COALESCE($7, status),
             updated_at = NOW()
         WHERE id = $1
         RETURNING *
@@ -102,27 +93,23 @@ pub async fn update_subscription_plan(
     )
     .bind(plan_id)
     .bind(description)
-    .bind(input_token_limit)
-    .bind(output_token_limit)
+    .bind(total_token_limit)
+    .bind(time_span)
     .bind(money_limit)
-    .bind(start_at.is_some())
-    .bind(start_at.flatten())
-    .bind(end_at.is_some())
-    .bind(end_at.flatten())
     .bind(sort_order)
     .bind(status)
     .fetch_one(pool)
     .await
 }
 
-/// Cancel (soft-delete) a subscription plan by setting status = 'canceled'
+/// Deactivate (soft-delete) a subscription plan by setting status = 'deactive'
 pub async fn cancel_subscription_plan(
     pool: &DbPool,
     plan_id: i32,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>(
         r#"
-        UPDATE subscription_plans SET status = 'canceled', updated_at = NOW()
+        UPDATE subscription_plans SET status = 'deactive', updated_at = NOW()
         WHERE id = $1
         RETURNING *
         "#,
@@ -199,7 +186,7 @@ pub async fn list_subscriptions_paginated(
         SELECT * FROM subscriptions
         WHERE ($1::INT IS NULL OR account_id = $1)
           AND ($2::VARCHAR IS NULL OR status = $2)
-        ORDER BY id DESC
+        ORDER BY sort_order DESC, id DESC
         LIMIT $3 OFFSET $4
         "#,
     )
@@ -230,14 +217,14 @@ pub async fn update_subscription_status(
     .await
 }
 
-/// Cancel a subscription by setting status = 'canceled'
+/// Deactivate a subscription by setting status = 'deactive'
 pub async fn cancel_subscription(
     pool: &DbPool,
     subscription_id: i32,
 ) -> Result<Subscription, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(
         r#"
-        UPDATE subscriptions SET status = 'canceled', updated_at = NOW()
+        UPDATE subscriptions SET status = 'deactive', updated_at = NOW()
         WHERE id = $1
         RETURNING *
         "#,
@@ -249,34 +236,82 @@ pub async fn cancel_subscription(
 
 /// Find the current active subscription for an account.
 ///
-/// Looks up the subscription joined with its plan, ordered by plan.sort_order DESC,
+/// Looks up the subscription ordered by sort_order DESC,
 /// and returns the first one that:
 /// - has subscription status == "active"
-/// - the plan has already started (plan.start_at IS NULL OR plan.start_at <= NOW())
-/// - the plan has not yet expired (plan.end_at IS NULL OR plan.end_at > NOW())
+/// - has already started (start_at <= NOW())
+/// - has not yet expired (end_at > NOW())
+/// - has enough remaining token quota (total_token_limit >= used_total_tokens + consumed_tokens)
 ///
 /// Returns None if no such subscription exists.
 pub async fn get_current_subscription(
     pool: &DbPool,
     account_id: i32,
+    consumed_tokens: i64,
 ) -> Result<Option<Subscription>, sqlx::Error> {
-    let now = Utc::now().naive_utc();
-
     sqlx::query_as::<_, Subscription>(
         r#"
-        SELECT s.*
-        FROM subscriptions s
-        JOIN subscription_plans p ON s.plan_id = p.id
-        WHERE s.account_id = $1
-          AND s.status = 'active'
-          AND (p.start_at IS NULL OR p.start_at <= $2)
-          AND (p.end_at IS NULL OR p.end_at > $2)
-        ORDER BY p.sort_order DESC
+        SELECT *
+        FROM subscriptions
+        WHERE account_id = $1
+          AND status = 'active'
+          AND start_at <= NOW()
+          AND end_at > NOW()
+          AND total_token_limit >= used_total_tokens + $2
+        ORDER BY sort_order DESC
         LIMIT 1
         "#,
     )
     .bind(account_id)
-    .bind(now)
+    .bind(consumed_tokens)
     .fetch_optional(pool)
     .await
+}
+
+/// Find the current active subscription for an account within an existing transaction.
+///
+/// Same logic as `get_current_subscription` but operates within a provided transaction.
+pub async fn get_current_subscription_with_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    account_id: i32,
+    consumed_tokens: i64,
+) -> Result<Option<Subscription>, sqlx::Error> {
+    sqlx::query_as::<_, Subscription>(
+        r#"
+        SELECT *
+        FROM subscriptions
+        WHERE account_id = $1
+          AND status = 'active'
+          AND start_at <= NOW()
+          AND end_at > NOW()
+          AND total_token_limit >= used_total_tokens + $2
+        ORDER BY sort_order DESC
+        LIMIT 1
+        "#,
+    )
+    .bind(account_id)
+    .bind(consumed_tokens)
+    .fetch_optional(&mut **tx)
+    .await
+}
+
+pub async fn increment_subscription_usage_with_tx(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    subscription: &Subscription,
+    total_tokens: i64,
+    total_spend_amount: BigDecimal,
+) -> Result<(), sqlx::Error> {
+    let new_used_total_tokens = subscription.used_total_tokens + total_tokens;
+    let new_used_money = &subscription.used_money + total_spend_amount;
+
+    sqlx::query(
+        "UPDATE subscriptions SET used_total_tokens = $1, used_money = $2, updated_at = NOW()
+            WHERE id = $3",
+    )
+    .bind(new_used_total_tokens)
+    .bind(&new_used_money)
+    .bind(subscription.id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
 }
