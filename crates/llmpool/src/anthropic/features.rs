@@ -58,7 +58,7 @@ pub async fn detect_and_update_model_features(
 
     // 4. Update only has_messages in the database
     let update = UpdateLLMModel {
-        model_id: None,
+        fullname: None,
         is_active: None,
         has_image_generation: None,
         has_speech: None,

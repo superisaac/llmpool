@@ -73,7 +73,10 @@ pub struct UpdateLLMUpstream {
 pub struct LLMModel {
     pub id: i32,
     pub upstream_id: i32,
-    pub model_id: String,
+    /// The full model identifier (e.g. "provider/model-name"), used when sending requests to upstream
+    pub fullname: String,
+    /// The short name after "/" in fullname; equals fullname if no "/" present. Used for client-facing model name matching.
+    pub cname: String,
     pub is_active: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
@@ -96,7 +99,8 @@ pub struct LLMModel {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewLLMModel {
     pub upstream_id: i32,
-    pub model_id: String,
+    /// The full model identifier (e.g. "provider/model-name")
+    pub fullname: String,
     pub has_image_generation: bool,
     pub has_speech: bool,
     pub has_chat_completion: bool,
@@ -131,7 +135,8 @@ pub struct CapacityOption {
 /// Used to update an existing OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateLLMModel {
-    pub model_id: Option<String>,
+    /// If provided, updates both fullname and cname (cname is derived from fullname)
+    pub fullname: Option<String>,
     pub is_active: Option<bool>,
     pub has_image_generation: Option<bool>,
     pub has_speech: Option<bool>,

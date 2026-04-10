@@ -66,16 +66,20 @@ pub async fn create_message(
             api_key_id,
         );
 
+        // Override model with fullname for upstream request
+        let mut upstream_payload = payload.clone();
+        upstream_payload.model = upstream_client.fullname.clone();
+
         let result = if is_stream {
             // Record the request event
             tracer
                 .add(AnthropicEventData::CreateMessageStreamRequest(
-                    payload.clone(),
+                    upstream_payload.clone(),
                 ))
                 .await;
 
             // Use create_message_raw for streaming
-            match api_client.create_message_raw(&payload).await {
+            match api_client.create_message_raw(&upstream_payload).await {
                 Ok(resp) => {
                     let byte_stream = resp.bytes_stream();
                     let event_stream = transform_anthropic_stream(
@@ -95,10 +99,12 @@ pub async fn create_message(
         } else {
             // Record the request event
             tracer
-                .add(AnthropicEventData::CreateMessageRequest(payload.clone()))
+                .add(AnthropicEventData::CreateMessageRequest(
+                    upstream_payload.clone(),
+                ))
                 .await;
 
-            match api_client.create_message(&payload).await {
+            match api_client.create_message(&upstream_payload).await {
                 Ok(message) => {
                     info!(
                         input_tokens = message.usage.input_tokens,

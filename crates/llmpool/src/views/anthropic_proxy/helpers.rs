@@ -23,6 +23,8 @@ pub struct AnthropicUpstreamClient {
     pub model_db_id: i32,
     /// The LLMUpstream primary key (used to mark upstream offline on network errors)
     pub upstream_id: i32,
+    /// The full model identifier to use when sending requests to the upstream
+    pub fullname: String,
 }
 
 /// Build an `AnthropicUpstreamClient` from a (LLMModel, LLMUpstream) pair.
@@ -59,6 +61,7 @@ pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> Anthr
         client,
         model_db_id: model.id,
         upstream_id: upstream.id,
+        fullname: model.fullname.clone(),
     }
 }
 

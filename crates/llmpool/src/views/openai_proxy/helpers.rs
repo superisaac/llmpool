@@ -190,6 +190,8 @@ pub(super) struct UpstreamClient {
     pub model_db_id: i32,
     /// The LLMUpstream primary key (used to mark upstream offline on network errors)
     pub upstream_id: i32,
+    /// The full model identifier to use when sending requests to the upstream
+    pub fullname: String,
 }
 
 /// Returns up to `count` UpstreamClient entries selected by lowest current-hour output
@@ -244,11 +246,13 @@ pub(super) async fn select_model_clients(
                 output_token_usage = usage,
                 "Selected upstream candidate by lowest output token usage"
             );
+            let fullname = model.fullname.clone();
             let (client, model_db_id) = build_client_from_model_upstream(model, upstream);
             UpstreamClient {
                 client,
                 model_db_id,
                 upstream_id: upstream.id,
+                fullname,
             }
         })
         .collect()

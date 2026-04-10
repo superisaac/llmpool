@@ -183,7 +183,7 @@ fn print_test_result(result: &TestUpstreamResponse) {
     for m in &result.models {
         println!(
             "{:<35} {:<15} {:<6} {:<6} {:<6} {:<6}",
-            truncate(&m.model_id, 33),
+            truncate(&m.fullname, 33),
             truncate(&m.owned_by, 13),
             bool_mark(m.has_chat_completion),
             bool_mark(m.has_embedding),

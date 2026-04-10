@@ -62,15 +62,21 @@ async fn create_test_upstream(
 async fn create_test_model(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     upstream_id: i32,
-    model_id: &str,
+    fullname: &str,
 ) -> LLMModel {
+    let cname = if let Some(pos) = fullname.find('/') {
+        fullname[pos + 1..].to_string()
+    } else {
+        fullname.to_string()
+    };
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, model_id, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
-         VALUES ($1, $2, true, false, false, false, 0.000001, 0.000001)
+        "INSERT INTO llm_models (upstream_id, fullname, cname, has_chat_completion, has_embedding, has_image_generation, has_speech, input_token_price, output_token_price)
+         VALUES ($1, $2, $3, true, false, false, false, 0.000001, 0.000001)
          RETURNING *",
     )
     .bind(upstream_id)
-    .bind(model_id)
+    .bind(fullname)
+    .bind(&cname)
     .fetch_one(&mut **tx)
     .await
     .expect("Failed to create test model")
@@ -594,7 +600,6 @@ mod openai_tests {
         assert_eq!(upstream.name, "test-ep");
         assert_eq!(upstream.api_base, "https://api.test.com/v1");
         assert_eq!(upstream.api_key, "test-key");
-        assert!(!upstream.has_responses_api);
         assert_eq!(upstream.status, "online");
         assert!(upstream.tags.is_empty());
         assert!(upstream.proxies.is_empty());
@@ -835,7 +840,7 @@ mod openai_tests {
         let model = create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
         assert_eq!(model.upstream_id, upstream.id);
-        assert_eq!(model.model_id, "gpt-4");
+        assert_eq!(model.fullname, "gpt-4");
         assert!(model.has_chat_completion);
         assert!(!model.has_embedding);
         assert!(!model.has_image_generation);
@@ -853,18 +858,19 @@ mod openai_tests {
             create_test_upstream(&mut tx, "dup-model-ep", "https://api.dupmodel.com/v1").await;
         create_test_model(&mut tx, upstream.id, "gpt-4").await;
 
-        // Duplicate (upstream_id, model_id) should fail
+        // Duplicate (upstream_id, fullname) should fail
         let result = sqlx::query_as::<_, LLMModel>(
-            "INSERT INTO llm_models (upstream_id, model_id) VALUES ($1, $2) RETURNING *",
+            "INSERT INTO llm_models (upstream_id, fullname, cname) VALUES ($1, $2, $3) RETURNING *",
         )
         .bind(upstream.id)
+        .bind("gpt-4")
         .bind("gpt-4")
         .fetch_one(&mut *tx)
         .await;
 
         assert!(
             result.is_err(),
-            "Duplicate (upstream_id, model_id) should fail"
+            "Duplicate (upstream_id, fullname) should fail"
         );
 
         tx.rollback().await.unwrap();
@@ -907,7 +913,7 @@ mod openai_tests {
             .await
             .unwrap();
 
-        assert_eq!(found.model_id, "gpt-4");
+        assert_eq!(found.fullname, "gpt-4");
 
         tx.rollback().await.unwrap();
     }
@@ -922,7 +928,7 @@ mod openai_tests {
         create_test_model(&mut tx, upstream.id, "claude-3").await;
 
         let found = sqlx::query_as::<_, LLMModel>(
-            "SELECT * FROM llm_models WHERE upstream_id = $1 AND model_id = $2",
+            "SELECT * FROM llm_models WHERE upstream_id = $1 AND fullname = $2",
         )
         .bind(upstream.id)
         .bind("claude-3")
@@ -930,7 +936,7 @@ mod openai_tests {
         .await
         .unwrap();
 
-        assert_eq!(found.model_id, "claude-3");
+        assert_eq!(found.fullname, "claude-3");
         assert_eq!(found.upstream_id, upstream.id);
 
         tx.rollback().await.unwrap();
@@ -1030,13 +1036,13 @@ mod openai_tests {
         create_test_model(&mut tx, ep2.id, "shared-model").await;
 
         let found =
-            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1")
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE cname = $1 LIMIT 1")
                 .bind("shared-model")
                 .fetch_one(&mut *tx)
                 .await
                 .unwrap();
 
-        assert_eq!(found.model_id, "shared-model");
+        assert_eq!(found.cname, "shared-model");
 
         tx.rollback().await.unwrap();
     }
@@ -1078,10 +1084,11 @@ mod openai_tests {
             create_test_upstream(&mut tx, "price-ep", "https://api.priceep.com/v1").await;
 
         let model = sqlx::query_as::<_, LLMModel>(
-            "INSERT INTO llm_models (upstream_id, model_id, input_token_price, output_token_price)
-             VALUES ($1, $2, $3, $4) RETURNING *",
+            "INSERT INTO llm_models (upstream_id, fullname, cname, input_token_price, output_token_price)
+             VALUES ($1, $2, $3, $4, $5) RETURNING *",
         )
         .bind(upstream.id)
+        .bind("expensive-model")
         .bind("expensive-model")
         .bind(BigDecimal::from_str("0.03").unwrap())
         .bind(BigDecimal::from_str("0.06").unwrap())

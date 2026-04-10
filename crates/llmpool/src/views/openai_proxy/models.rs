@@ -17,13 +17,13 @@ pub async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response 
 
     match res {
         Ok(models) => {
-            // Deduplicate by model_id, keeping the first occurrence
+            // Deduplicate by cname, keeping the first occurrence
             let mut seen = HashSet::new();
             let unique_models: Vec<Model> = models
                 .into_iter()
-                .filter(|m| seen.insert(m.model_id.clone()))
+                .filter(|m| seen.insert(m.cname.clone()))
                 .map(|m| Model {
-                    id: m.model_id,
+                    id: m.cname,
                     object: "model".to_string(),
                     created: m.created_at.and_utc().timestamp() as u32,
                     owned_by: "system".to_string(),

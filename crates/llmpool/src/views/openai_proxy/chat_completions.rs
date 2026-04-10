@@ -54,7 +54,9 @@ pub async fn chat_completions(
             upstream_client.model_db_id,
             api_key_id,
         );
-        match chat_completions_with_client(&upstream_client.client, &mut tracer, payload.clone())
+        let mut upstream_payload = payload.clone();
+        upstream_payload.model = upstream_client.fullname.clone();
+        match chat_completions_with_client(&upstream_client.client, &mut tracer, upstream_payload)
             .await
         {
             Ok(response) => return response,

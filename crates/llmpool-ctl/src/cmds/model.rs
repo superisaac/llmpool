@@ -90,7 +90,8 @@ pub fn print_model_full(m: &ModelResponse, title: &str) {
     println!();
     println!("  ID:                       {}", m.id);
     println!("  Upstream ID:              {}", m.upstream_id);
-    println!("  Model ID:                 {}", m.model_id);
+    println!("  Fullname:                 {}", m.fullname);
+    println!("  Cname:                    {}", m.cname);
     println!("  Active:                   {}", bool_mark(m.is_active));
     println!(
         "  Chat Completion:          {}",

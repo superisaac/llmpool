@@ -221,7 +221,7 @@ pub async fn list_and_save_without_detect(
             Err(sqlx::Error::RowNotFound) => {
                 let new_model = NewLLMModel {
                     upstream_id: upstream.id,
-                    model_id: model.id.clone(),
+                    fullname: model.id.clone(),
                     has_image_generation: false,
                     has_speech: false,
                     has_chat_completion: false,
@@ -263,7 +263,7 @@ pub async fn detect_and_update_model_features(
 
     // 4. Build a minimal Model struct for feature detection
     let model_info = async_openai::types::models::Model {
-        id: model.model_id.clone(),
+        id: model.fullname.clone(),
         created: 0,
         object: "model".to_string(),
         owned_by: String::new(),
@@ -274,7 +274,7 @@ pub async fn detect_and_update_model_features(
 
     // 6. Update only the feature flags in the database
     let update = UpdateLLMModel {
-        model_id: None,
+        fullname: None,
         is_active: None,
         has_image_generation: Some(features.has_image_generation),
         has_speech: Some(features.has_speech),

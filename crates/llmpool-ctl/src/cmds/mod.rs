@@ -69,7 +69,8 @@ pub struct UpstreamResponse {
 pub struct ModelResponse {
     pub id: i32,
     pub upstream_id: i32,
-    pub model_id: String,
+    pub fullname: String,
+    pub cname: String,
     pub is_active: bool,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
@@ -129,7 +130,7 @@ pub struct UpstreamWithModelsResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ModelFeaturesResponse {
-    pub model_id: String,
+    pub fullname: String,
     pub owned_by: String,
     pub has_chat_completion: bool,
     pub has_embedding: bool,
@@ -221,7 +222,7 @@ pub fn print_models(models: &[ModelResponse]) {
             "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
             m.id,
             m.upstream_id,
-            truncate(&m.model_id, 33),
+            truncate(&m.fullname, 33),
             bool_mark(m.has_chat_completion),
             bool_mark(m.has_embedding),
             bool_mark(m.has_image_generation),

@@ -20,8 +20,9 @@ CREATE INDEX IF NOT EXISTS idx_llm_upstreams_tags ON llm_upstreams USING GIN (ta
 CREATE TABLE IF NOT EXISTS llm_models (
     id SERIAL PRIMARY KEY,
     upstream_id INTEGER NOT NULL REFERENCES llm_upstreams(id) ON DELETE CASCADE,
-    model_id VARCHAR NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE;
+    fullname VARCHAR NOT NULL,
+    cname VARCHAR NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     has_image_generation BOOLEAN NOT NULL DEFAULT FALSE,
     has_speech BOOLEAN NOT NULL DEFAULT FALSE,
     has_chat_completion BOOLEAN NOT NULL DEFAULT FALSE,
@@ -36,7 +37,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_upstream_model ON llm_models (upstream_id, model_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_upstream_model ON llm_models (upstream_id, fullname);
 CREATE INDEX IF NOT EXISTS idx_llm_models_upstream_id ON llm_models (upstream_id);
 
 -- Create accounts table

@@ -39,6 +39,15 @@ fn encrypt_api_key(api_key: &str) -> Result<String, sqlx::Error> {
         .map_err(|e| sqlx::Error::Protocol(format!("Failed to encrypt api_key: {}", e)))
 }
 
+/// Derive the cname from a fullname: the part after the first "/", or the fullname itself if no "/" present.
+fn derive_cname(fullname: &str) -> String {
+    if let Some(pos) = fullname.find('/') {
+        fullname[pos + 1..].to_string()
+    } else {
+        fullname.to_string()
+    }
+}
+
 // ============================================================
 // LLMUpstream CRUD operations
 // ============================================================
@@ -218,13 +227,15 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sql
 
 /// Create a new OpenAI model
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
+    let cname = derive_cname(&new_model.fullname);
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        "INSERT INTO llm_models (upstream_id, fullname, cname, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
-    .bind(&new_model.model_id)
+    .bind(&new_model.fullname)
+    .bind(&cname)
     .bind(new_model.has_image_generation)
     .bind(new_model.has_speech)
     .bind(new_model.has_chat_completion)
@@ -276,14 +287,14 @@ pub async fn get_model_with_tx(
         .await
 }
 
-/// Find a model by upstream_id and model_id string
+/// Find a model by upstream_id and fullname string
 pub async fn find_model_by_upstream_and_model_id(
     pool: &DbPool,
     upstream_id: i32,
     model_id_str: &str,
 ) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "SELECT * FROM llm_models WHERE upstream_id = $1 AND model_id = $2",
+        "SELECT * FROM llm_models WHERE upstream_id = $1 AND fullname = $2",
     )
     .bind(upstream_id)
     .bind(model_id_str)
@@ -291,7 +302,7 @@ pub async fn find_model_by_upstream_and_model_id(
     .await
 }
 
-/// Find a model by upstream name and model_id string
+/// Find a model by upstream name and fullname string
 pub async fn find_model_by_upstream_name_and_model_id(
     pool: &DbPool,
     upstream_name: &str,
@@ -300,7 +311,7 @@ pub async fn find_model_by_upstream_name_and_model_id(
     sqlx::query_as::<_, LLMModel>(
         "SELECT m.* FROM llm_models m
          INNER JOIN llm_upstreams e ON m.upstream_id = e.id
-         WHERE e.name = $1 AND m.model_id = $2",
+         WHERE e.name = $1 AND m.fullname = $2",
     )
     .bind(upstream_name)
     .bind(model_id_str)
@@ -317,7 +328,11 @@ pub async fn update_model(
     // Fetch current values first
     let current = get_model(pool, model_pk).await?;
 
-    let model_id = update.model_id.as_deref().unwrap_or(&current.model_id);
+    let (fullname, cname) = if let Some(ref new_fullname) = update.fullname {
+        (new_fullname.as_str(), derive_cname(new_fullname))
+    } else {
+        (current.fullname.as_str(), current.cname.clone())
+    };
     let is_active = update.is_active.unwrap_or(current.is_active);
     let has_image_generation = update
         .has_image_generation
@@ -355,16 +370,17 @@ pub async fn update_model(
 
     sqlx::query_as::<_, LLMModel>(
         "UPDATE llm_models
-         SET model_id = $1, is_active = $2, has_image_generation = $3, has_speech = $4,
-             has_chat_completion = $5, has_embedding = $6, has_messages = $7,
-             has_responses_api = $8,
-             input_token_price = $9, output_token_price = $10,
-             batch_input_token_price = $11, batch_output_token_price = $12,
-             description = $13, updated_at = $14
-         WHERE id = $15
+         SET fullname = $1, cname = $2, is_active = $3, has_image_generation = $4, has_speech = $5,
+             has_chat_completion = $6, has_embedding = $7, has_messages = $8,
+             has_responses_api = $9,
+             input_token_price = $10, output_token_price = $11,
+             batch_input_token_price = $12, batch_output_token_price = $13,
+             description = $14, updated_at = $15
+         WHERE id = $16
          RETURNING *",
     )
-    .bind(model_id)
+    .bind(fullname)
+    .bind(&cname)
     .bind(is_active)
     .bind(has_image_generation)
     .bind(has_speech)
@@ -383,12 +399,12 @@ pub async fn update_model(
     .await
 }
 
-/// Find the first model by model_id string (name)
+/// Find the first model by cname (short name)
 pub async fn find_first_model_by_name(
     pool: &DbPool,
     model_name: &str,
 ) -> Result<LLMModel, sqlx::Error> {
-    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE model_id = $1 LIMIT 1")
+    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE cname = $1 LIMIT 1")
         .bind(model_name)
         .fetch_one(pool)
         .await
@@ -423,7 +439,7 @@ pub async fn count_models_filtered(
     }
     if filter.name.is_some() {
         param_idx += 1;
-        sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
+        sql.push_str(&format!(" AND m.cname = ${}", param_idx));
     }
     if filter.is_active.is_some() {
         param_idx += 1;
@@ -471,7 +487,7 @@ pub async fn list_models_filtered_paginated(
     }
     if filter.name.is_some() {
         param_idx += 1;
-        sql.push_str(&format!(" AND m.model_id = ${}", param_idx));
+        sql.push_str(&format!(" AND m.cname = ${}", param_idx));
     }
     if filter.is_active.is_some() {
         param_idx += 1;
@@ -600,7 +616,8 @@ struct ModelUpstreamRow {
     // LLMModel fields
     pub id: i32,
     pub upstream_id: i32,
-    pub model_id: String,
+    pub fullname: String,
+    pub cname: String,
     pub is_active: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
@@ -634,7 +651,8 @@ impl ModelUpstreamRow {
         let model = LLMModel {
             id: self.id,
             upstream_id: self.upstream_id,
-            model_id: self.model_id,
+            fullname: self.fullname,
+            cname: self.cname,
             is_active: self.is_active,
             has_image_generation: self.has_image_generation,
             has_speech: self.has_speech,
@@ -671,7 +689,7 @@ impl ModelUpstreamRow {
     }
 }
 
-/// Find all OpenAI models with a given model_id (name) that match the specified capacity options,
+/// Find all OpenAI models with a given cname (short name) that match the specified capacity options,
 /// along with their associated upstream information (api_key, api_base).
 ///
 /// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
@@ -682,7 +700,7 @@ pub async fn find_models_by_name_and_capacity(
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
-        "SELECT m.id, m.upstream_id, m.model_id, m.is_active, m.has_image_generation, m.has_speech,
+        "SELECT m.id, m.upstream_id, m.fullname, m.cname, m.is_active, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.has_messages, m.has_responses_api,
                 m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
@@ -694,7 +712,7 @@ pub async fn find_models_by_name_and_capacity(
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
          FROM llm_models m
          INNER JOIN llm_upstreams e ON m.upstream_id = e.id
-         WHERE m.model_id = $1
+         WHERE m.cname = $1
                 AND e.status = 'online'
                 AND m.is_active = true ",
     );

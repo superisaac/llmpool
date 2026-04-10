@@ -939,7 +939,8 @@ fn default_provider() -> String {
 struct ModelResponse {
     id: i32,
     upstream_id: i32,
-    model_id: String,
+    fullname: String,
+    cname: String,
     is_active: bool,
     has_chat_completion: bool,
     has_embedding: bool,
@@ -959,7 +960,8 @@ impl From<crate::models::LLMModel> for ModelResponse {
         Self {
             id: m.id,
             upstream_id: m.upstream_id,
-            model_id: m.model_id,
+            fullname: m.fullname,
+            cname: m.cname,
             is_active: m.is_active,
             has_chat_completion: m.has_chat_completion,
             has_embedding: m.has_embedding,
@@ -1445,7 +1447,7 @@ async fn update_model_by_id(
     }
 
     let update = crate::models::UpdateLLMModel {
-        model_id: None,
+        fullname: None,
         is_active: payload.is_active,
         has_image_generation: None,
         has_speech: None,
