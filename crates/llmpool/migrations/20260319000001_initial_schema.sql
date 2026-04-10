@@ -83,15 +83,15 @@ CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_session_events_session_id_index ON session_events (session_id, session_index);
 CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (session_id);
 
--- Create funds table
-CREATE TABLE IF NOT EXISTS funds (
+-- Create wallets table
+CREATE TABLE IF NOT EXISTS wallets (
     id SERIAL PRIMARY KEY,
     account_id INT NOT NULL REFERENCES accounts(id),
     balance DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_funds_account_id ON funds (account_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wallets_account_id ON wallets (account_id);
 
 -- Create file_metas table
 CREATE TABLE IF NOT EXISTS file_metas (

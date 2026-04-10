@@ -5,14 +5,14 @@ use crate::db::DbPool;
 use crate::db::subscription::{
     get_current_subscription_with_tx, increment_subscription_usage_with_tx,
 };
-use crate::models::{BalanceChange, BalanceChangeContent, Fund, NewFund, UpdateFund};
+use crate::models::{BalanceChange, BalanceChangeContent, NewWallet, UpdateWallet, Wallet};
 
-/// Find a account's fund by account_id
-pub async fn find_account_fund(
+/// Find a account's wallet by account_id
+pub async fn find_account_wallet(
     pool: &DbPool,
     account_id: i32,
-) -> Result<Option<Fund>, sqlx::Error> {
-    sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+) -> Result<Option<Wallet>, sqlx::Error> {
+    sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
         .bind(account_id)
         .fetch_optional(pool)
         .await
@@ -32,28 +32,28 @@ pub async fn mark_balance_change_applied_with_tx(
     Ok(())
 }
 
-/// Apply a balance change to a user's fund.
+/// Apply a balance change to a user's wallet.
 ///
-/// - SpendToken: fund.balance -= (input_spend_amount + output_spend_amount)
-/// - Deposit / AddCredit: fund.balance += amount
-/// - Withdraw: fund.balance -= amount
+/// - SpendToken: wallet.balance -= (input_spend_amount + output_spend_amount)
+/// - Deposit / AddCredit: wallet.balance += amount
+/// - Withdraw: wallet.balance -= amount
 ///
 /// balance can be negative (indicating debt).
 ///
-/// If the account has no existing fund record, one is created automatically.
+/// If the account has no existing wallet record, one is created automatically.
 #[allow(dead_code)]
 pub async fn apply_balance_change(
     pool: &DbPool,
     balance_change: &BalanceChange,
     content: &BalanceChangeContent,
-) -> Result<Fund, sqlx::Error> {
+) -> Result<Wallet, sqlx::Error> {
     let mut tx = pool.begin().await?;
     let result = apply_balance_change_with_tx(&mut tx, balance_change, content).await?;
     tx.commit().await?;
     Ok(result)
 }
 
-/// Apply a balance change to a user's fund using an existing transaction.
+/// Apply a balance change to a user's wallet using an existing transaction.
 ///
 /// This variant is useful when you want to run the operation within an existing transaction.
 pub async fn apply_balance_change_with_tx(
@@ -61,30 +61,30 @@ pub async fn apply_balance_change_with_tx(
     balance_change: &BalanceChange,
     // account_id: i32,
     content: &BalanceChangeContent,
-) -> Result<Fund, sqlx::Error> {
+) -> Result<Wallet, sqlx::Error> {
     let account_id = balance_change.account_id;
-    // Find or create the account fund
-    let account_fund: Option<Fund> =
-        sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+    // Find or create the account wallet
+    let account_wallet: Option<Wallet> =
+        sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
             .bind(account_id)
             .fetch_optional(&mut **tx)
             .await?;
 
-    let account_fund = match account_fund {
+    let account_wallet = match account_wallet {
         Some(uf) => uf,
         None => {
-            // Create a new fund record with zero balance
-            let new_fund = NewFund {
+            // Create a new wallet record with zero balance
+            let new_wallet = NewWallet {
                 account_id,
                 balance: BigDecimal::from(0),
             };
-            sqlx::query_as::<_, Fund>(
-                "INSERT INTO funds (account_id, balance)
+            sqlx::query_as::<_, Wallet>(
+                "INSERT INTO wallets (account_id, balance)
                  VALUES ($1, $2)
                  RETURNING *",
             )
-            .bind(new_fund.account_id)
-            .bind(&new_fund.balance)
+            .bind(new_wallet.account_id)
+            .bind(&new_wallet.balance)
             .fetch_one(&mut **tx)
             .await?
         }
@@ -103,36 +103,36 @@ pub async fn apply_balance_change_with_tx(
                 subscription_id = subscription.id;
                 increment_subscription_usage_with_tx(tx, &subscription, total_tokens, spend_amount)
                     .await?;
-                account_fund.balance.clone()
+                account_wallet.balance.clone()
             } else {
-                account_fund.balance.clone() - spend_amount
+                account_wallet.balance.clone() - spend_amount
             }
         }
         BalanceChangeContent::Deposit { amount } | BalanceChangeContent::AddCredit { amount } => {
-            &account_fund.balance + amount
+            &account_wallet.balance + amount
         }
-        BalanceChangeContent::Withdraw { amount } => &account_fund.balance - amount,
+        BalanceChangeContent::Withdraw { amount } => &account_wallet.balance - amount,
     };
 
-    let return_fund = if new_balance != account_fund.balance {
-        let update = UpdateFund {
+    let return_wallet = if new_balance != account_wallet.balance {
+        let update = UpdateWallet {
             balance: Some(new_balance),
             updated_at: Some(Utc::now().naive_utc()),
         };
 
-        sqlx::query_as::<_, Fund>(
-            "UPDATE funds SET balance = $1, updated_at = $2
+        sqlx::query_as::<_, Wallet>(
+            "UPDATE wallets SET balance = $1, updated_at = $2
             WHERE id = $3
             RETURNING *",
         )
         .bind(&update.balance)
         .bind(&update.updated_at)
-        .bind(account_fund.id)
+        .bind(account_wallet.id)
         .fetch_one(&mut **tx)
         .await?
     } else {
-        account_fund
+        account_wallet
     };
     mark_balance_change_applied_with_tx(tx, balance_change.id, subscription_id).await?;
-    Ok(return_fund)
+    Ok(return_wallet)
 }

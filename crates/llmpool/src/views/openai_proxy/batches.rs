@@ -10,7 +10,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::files::wrap_file;
-use super::helpers::{AppState, build_client_from_upstream, check_fund_balance};
+use super::helpers::{AppState, build_client_from_upstream, check_wallet_balance};
 use crate::db;
 use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
@@ -88,7 +88,7 @@ async fn sync_batch_status(state: &AppState, batch_id: &str, batch: &Batch) {
 /// Handle GET /v1/batches — list batches
 pub async fn list_batches_handler(State(state): State<Arc<AppState>>) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -132,7 +132,7 @@ pub async fn create_batch_handler(
     Json(payload): Json<BatchRequest>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -249,7 +249,7 @@ pub async fn batch_by_id_handler(
     Path(batch_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -312,7 +312,7 @@ pub async fn batch_cancel_handler(
     Path(batch_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

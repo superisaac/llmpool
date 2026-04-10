@@ -12,7 +12,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::helpers::{
-    AppState, build_client_from_upstream, check_fund_balance, select_first_upstream,
+    AppState, build_client_from_upstream, check_wallet_balance, select_first_upstream,
 };
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
@@ -159,7 +159,7 @@ async fn get_upstream_by_id(
 /// Handle GET /v1/files — list files
 pub async fn list_files_handler(State(state): State<Arc<AppState>>) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -189,7 +189,7 @@ pub async fn create_file_handler(
     mut multipart: Multipart,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -356,7 +356,7 @@ pub async fn retrieve_file_handler(
     Path(file_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -397,7 +397,7 @@ pub async fn delete_file_handler(
     Path(file_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -442,7 +442,7 @@ pub async fn file_content_handler(
     Path(file_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

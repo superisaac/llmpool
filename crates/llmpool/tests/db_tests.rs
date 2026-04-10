@@ -1103,21 +1103,21 @@ mod openai_tests {
 }
 
 // ============================================================
-// Fund DB Tests
+// Wallet DB Tests
 // ============================================================
 
-mod fund_tests {
+mod wallet_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_create_fund() {
+    async fn test_create_wallet() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let account = create_test_account(&mut tx, "fund_account").await;
+        let account = create_test_account(&mut tx, "wallet_account").await;
 
-        let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, balance) VALUES ($1, $2) RETURNING *",
+        let wallet = sqlx::query_as::<_, Wallet>(
+            "INSERT INTO wallets (account_id, balance) VALUES ($1, $2) RETURNING *",
         )
         .bind(account.id)
         .bind(BigDecimal::from(100))
@@ -1125,68 +1125,71 @@ mod fund_tests {
         .await
         .unwrap();
 
-        assert_eq!(fund.account_id, account.id);
-        assert_eq!(fund.balance, BigDecimal::from(100));
+        assert_eq!(wallet.account_id, account.id);
+        assert_eq!(wallet.balance, BigDecimal::from(100));
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_create_fund_duplicate_account() {
+    async fn test_create_wallet_duplicate_account() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let account = create_test_account(&mut tx, "fund_dup_account").await;
+        let account = create_test_account(&mut tx, "wallet_dup_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
+        sqlx::query("INSERT INTO wallets (account_id, balance) VALUES ($1, 0)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
         // Duplicate account_id should fail (unique index)
-        let result = sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
+        let result = sqlx::query("INSERT INTO wallets (account_id, balance) VALUES ($1, 0)")
             .bind(account.id)
             .execute(&mut *tx)
             .await;
 
-        assert!(result.is_err(), "Duplicate account_id in funds should fail");
+        assert!(
+            result.is_err(),
+            "Duplicate account_id in wallets should fail"
+        );
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_find_account_fund() {
+    async fn test_find_account_wallet() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let account = create_test_account(&mut tx, "find_fund_account").await;
+        let account = create_test_account(&mut tx, "find_wallet_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 200)")
+        sqlx::query("INSERT INTO wallets (account_id, balance) VALUES ($1, 200)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+        let found = sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
             .bind(account.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
 
         assert!(found.is_some());
-        let fund = found.unwrap();
-        assert_eq!(fund.balance, BigDecimal::from(200));
+        let wallet = found.unwrap();
+        assert_eq!(wallet.balance, BigDecimal::from(200));
 
         tx.rollback().await.unwrap();
     }
 
     #[tokio::test]
-    async fn test_find_account_fund_not_found() {
+    async fn test_find_account_wallet_not_found() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let found = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+        let found = sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
             .bind(999999)
             .fetch_optional(&mut *tx)
             .await
@@ -1198,25 +1201,25 @@ mod fund_tests {
     }
 
     #[tokio::test]
-    async fn test_update_fund() {
+    async fn test_update_wallet() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let account = create_test_account(&mut tx, "update_fund_account").await;
+        let account = create_test_account(&mut tx, "update_wallet_account").await;
 
-        let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, balance) VALUES ($1, 100) RETURNING *",
+        let wallet = sqlx::query_as::<_, Wallet>(
+            "INSERT INTO wallets (account_id, balance) VALUES ($1, 100) RETURNING *",
         )
         .bind(account.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        let updated = sqlx::query_as::<_, Fund>(
-            "UPDATE funds SET balance = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+        let updated = sqlx::query_as::<_, Wallet>(
+            "UPDATE wallets SET balance = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
         )
         .bind(BigDecimal::from(80))
-        .bind(fund.id)
+        .bind(wallet.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
@@ -1227,8 +1230,8 @@ mod fund_tests {
     }
 
     #[tokio::test]
-    async fn test_fund_balance_positive() {
-        let fund = Fund {
+    async fn test_wallet_balance_positive() {
+        let wallet = Wallet {
             id: 1,
             account_id: 1,
             balance: BigDecimal::from(150),
@@ -1236,14 +1239,14 @@ mod fund_tests {
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        assert_eq!(fund.balance, BigDecimal::from(150));
-        assert!(fund.balance > BigDecimal::from(0));
+        assert_eq!(wallet.balance, BigDecimal::from(150));
+        assert!(wallet.balance > BigDecimal::from(0));
     }
 
     #[tokio::test]
-    async fn test_fund_balance_negative() {
+    async fn test_wallet_balance_negative() {
         // Negative balance represents debt
-        let fund = Fund {
+        let wallet = Wallet {
             id: 1,
             account_id: 1,
             balance: BigDecimal::from(-20),
@@ -1251,7 +1254,7 @@ mod fund_tests {
             updated_at: chrono::Utc::now().naive_utc(),
         };
 
-        assert!(fund.balance < BigDecimal::from(0));
+        assert!(wallet.balance < BigDecimal::from(0));
     }
 }
 
@@ -1829,24 +1832,24 @@ mod integration_tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_account_with_fund_and_api_key() {
+    async fn test_account_with_wallet_and_api_key() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
         // Create account
         let account = create_test_account(&mut tx, "integration_account").await;
 
-        // Create fund for account
-        let fund = sqlx::query_as::<_, Fund>(
-            "INSERT INTO funds (account_id, balance) VALUES ($1, 1500) RETURNING *",
+        // Create wallet for account
+        let wallet = sqlx::query_as::<_, Wallet>(
+            "INSERT INTO wallets (account_id, balance) VALUES ($1, 1500) RETURNING *",
         )
         .bind(account.id)
         .fetch_one(&mut *tx)
         .await
         .unwrap();
 
-        assert_eq!(fund.account_id, account.id);
-        assert_eq!(fund.balance, BigDecimal::from(1500));
+        assert_eq!(wallet.account_id, account.id);
+        assert_eq!(wallet.balance, BigDecimal::from(1500));
 
         // Create API key for account
         let api_key = sqlx::query_as::<_, ApiCredential>(
@@ -1944,8 +1947,8 @@ mod integration_tests {
         // Create account
         let account = create_test_account(&mut tx, "workflow_account").await;
 
-        // Create fund
-        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 0)")
+        // Create wallet
+        sqlx::query("INSERT INTO wallets (account_id, balance) VALUES ($1, 0)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
@@ -1969,8 +1972,8 @@ mod integration_tests {
 
         assert!(!bc.is_applied);
 
-        // Simulate applying the balance change: update fund
-        sqlx::query("UPDATE funds SET balance = balance + 500 WHERE account_id = $1")
+        // Simulate applying the balance change: update wallet
+        sqlx::query("UPDATE wallets SET balance = balance + 500 WHERE account_id = $1")
             .bind(account.id)
             .execute(&mut *tx)
             .await
@@ -1984,13 +1987,13 @@ mod integration_tests {
             .unwrap();
 
         // Verify
-        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+        let wallet = sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
             .bind(account.id)
             .fetch_one(&mut *tx)
             .await
             .unwrap();
 
-        assert_eq!(fund.balance, BigDecimal::from(500));
+        assert_eq!(wallet.balance, BigDecimal::from(500));
 
         let bc_updated =
             sqlx::query_as::<_, BalanceChange>("SELECT * FROM balance_changes WHERE id = $1")
@@ -2005,38 +2008,38 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn test_account_deletion_cascades_to_fund() {
+    async fn test_account_deletion_cascades_to_wallet() {
         let pool = test_pool().await;
         let mut tx = pool.begin().await.unwrap();
 
-        let account = create_test_account(&mut tx, "cascade_fund_account").await;
+        let account = create_test_account(&mut tx, "cascade_wallet_account").await;
 
-        sqlx::query("INSERT INTO funds (account_id, balance) VALUES ($1, 100)")
+        sqlx::query("INSERT INTO wallets (account_id, balance) VALUES ($1, 100)")
             .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        // Delete account - fund should cascade (due to FK constraint)
+        // Delete account - wallet should cascade (due to FK constraint)
         sqlx::query("DELETE FROM accounts WHERE id = $1")
             .bind(account.id)
             .execute(&mut *tx)
             .await
             .unwrap();
 
-        let fund = sqlx::query_as::<_, Fund>("SELECT * FROM funds WHERE account_id = $1")
+        let wallet = sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
             .bind(account.id)
             .fetch_optional(&mut *tx)
             .await
             .unwrap();
 
-        // Note: funds table has REFERENCES accounts(id) but without ON DELETE CASCADE,
+        // Note: wallets table has REFERENCES accounts(id) but without ON DELETE CASCADE,
         // so this might fail depending on the actual constraint. If it does, the test
         // documents the expected behavior.
         // If the FK doesn't cascade, the delete of the account would fail instead.
         assert!(
-            fund.is_none(),
-            "Fund should be removed when account is deleted"
+            wallet.is_none(),
+            "Wallet should be removed when account is deleted"
         );
 
         tx.rollback().await.unwrap();

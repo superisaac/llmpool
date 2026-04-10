@@ -6,11 +6,12 @@ LLMPool is an **OpenAI-compatible API gateway/proxy server** written in Rust. It
 
 - **Multi-Upstream Aggregation** — Register multiple OpenAI-compatible API upstreams with automatic detection of supported models and capabilities (Chat, Embedding, Image Generation, Speech)
 - **Smart Routing & Retry** — Requests are randomly distributed across available upstreams; automatic retry on a different upstream upon failure
-- **OpenAI-Compatible API** — Standard `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/speech`, and `/v1/models` upstreams
-- **User & API Key Management** — Create users, generate API keys, and authenticate via Bearer Token
-- **Usage Tracking & Billing** — Automatically records token usage per request, calculates costs based on model pricing, and manages cash balance, credit, and debt
+- **OpenAI-Compatible API** — Standard `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`, `/v1/audio/speech`, and `/v1/models` endpoints
+- **Account & API Key Management** — Create accounts, generate API keys, and authenticate via Bearer Token
+- **Wallet & Billing** — Each account has a wallet with a single balance field. Token spending, deposits, withdrawals, and credits are tracked as balance change records. Balance can go negative (debt).
+- **Subscription Plans** — Define token/money limits per account via subscription plans; spending is deducted from the active subscription before touching the wallet balance
 - **Async Task Queue** — Redis + [Apalis](https://github.com/geofmureithi/apalis)-based async task processing for event logging and balance updates
-- **Admin REST API** — JWT-authenticated RESTful management interface for managing upstreams, models, users, and API keys with paginated responses
+- **Admin REST API** — JWT-authenticated RESTful management interface for managing upstreams, models, accounts, API keys, wallets, and subscriptions with paginated responses
 - **API Key Encryption** — OpenAI upstream API keys are encrypted at rest in the database using AES algorithm; decryption happens transparently at runtime
 - **OpenTelemetry Observability** — Built-in OpenTelemetry tracing support
 - **Docker Support** — Includes Dockerfile and docker-compose.yml for one-command development environment setup
@@ -169,8 +170,8 @@ For the `llmpool-ctl` CLI management tool documentation, see the **[llmpool-ctl 
 
 LLMPool provides two sets of APIs:
 
-- **OpenAI-Compatible API** (`/openai/v1/*`) — Standard upstreams for Chat Completions, Embeddings, Image Generation, Speech, and Models. Compatible with any OpenAI SDK.
-- **Admin REST API** (`/api/v1/*`) — JWT-authenticated RESTful interface for managing upstreams, models, users, API keys, and billing (deposits, withdrawals, credits).
+- **OpenAI-Compatible API** (`/openai/v1/*`) — Standard endpoints for Chat Completions, Embeddings, Image Generation, Speech, and Models. Compatible with any OpenAI SDK.
+- **Admin REST API** (`/api/v1/*`) — JWT-authenticated RESTful interface for managing upstreams, models, accounts, API keys, wallets, and billing (deposits, withdrawals, credits).
 
 ## Quick Start
 

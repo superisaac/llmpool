@@ -1,29 +1,29 @@
 pub mod account;
 pub mod apikey;
-pub mod fund;
 pub mod model;
 pub mod session_event;
 pub mod subscription;
 pub mod upstream;
+pub mod wallet;
 
 use serde::Deserialize;
 
 // Re-export subcommand enums and handlers
 pub use account::AccountAction;
 pub use apikey::ApiKeyAction;
-pub use fund::FundAction;
 pub use model::ModelAction;
 pub use session_event::SessionEventAction;
 pub use subscription::{SubscriptionAction, SubscriptionPlanAction};
 pub use upstream::UpstreamAction;
+pub use wallet::WalletAction;
 
 pub use account::handle_account;
 pub use apikey::handle_apikey;
-pub use fund::handle_fund;
 pub use model::handle_model;
 pub use session_event::handle_session_event;
 pub use subscription::{handle_subscription, handle_subscription_plan};
 pub use upstream::handle_upstream;
+pub use wallet::handle_wallet;
 
 // ============================================================
 // Common API Response Types
@@ -103,7 +103,7 @@ pub struct AccountResponse {
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
-pub struct FundResponse {
+pub struct WalletResponse {
     pub id: i32,
     pub account_id: i32,
     pub balance: String,

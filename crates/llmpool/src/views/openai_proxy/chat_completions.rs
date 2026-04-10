@@ -15,7 +15,7 @@ use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::helpers::{AppState, check_fund_balance, select_model_clients};
+use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::db;
 use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
@@ -29,8 +29,8 @@ pub async fn chat_completions(
     let model_name = &payload.model;
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    // Check if the account has sufficient wallets
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

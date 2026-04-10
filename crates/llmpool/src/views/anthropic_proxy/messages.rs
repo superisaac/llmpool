@@ -13,7 +13,7 @@ use tracing::{info, warn};
 use super::client::{
     AnthropicApiError, CompletionRequest, CountMessageTokensParams, CreateMessageParams,
 };
-use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
+use super::helpers::{AnthropicAppState, check_wallet_balance, select_anthropic_clients};
 use crate::anthropic::session_tracer::SessionTracer;
 use crate::db;
 use crate::defer::AnthropicEventData;
@@ -31,8 +31,8 @@ pub async fn create_message(
     let model_name = payload.model.clone();
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    // Check if the account has sufficient wallets
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -178,7 +178,7 @@ pub async fn create_completion(
     let model_name = payload.model.clone();
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -316,7 +316,7 @@ pub async fn count_message_tokens(
     let model_name = payload.model.clone();
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

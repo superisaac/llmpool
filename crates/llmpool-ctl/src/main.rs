@@ -5,10 +5,10 @@ mod client;
 mod cmds;
 
 use cmds::{
-    AccountAction, ApiKeyAction, FundAction, ModelAction, SessionEventAction, SubscriptionAction,
-    SubscriptionPlanAction, UpstreamAction, handle_account, handle_apikey, handle_fund,
+    AccountAction, ApiKeyAction, ModelAction, SessionEventAction, SubscriptionAction,
+    SubscriptionPlanAction, UpstreamAction, WalletAction, handle_account, handle_apikey,
     handle_model, handle_session_event, handle_subscription, handle_subscription_plan,
-    handle_upstream,
+    handle_upstream, handle_wallet,
 };
 
 // ============================================================
@@ -51,10 +51,10 @@ enum Commands {
         #[command(subcommand)]
         action: ApiKeyAction,
     },
-    /// Manage account funds (balance, deposit, withdraw, credit)
-    Fund {
+    /// Manage account wallets (balance, deposit, withdraw, credit)
+    Wallet {
         #[command(subcommand)]
-        action: FundAction,
+        action: WalletAction,
     },
     /// Manage session events
     Sessionevents {
@@ -110,7 +110,7 @@ async fn main() {
         Commands::Model { action } => handle_model(action, &api_client, json_output).await,
         Commands::Account { action } => handle_account(action, &api_client, json_output).await,
         Commands::Apikey { action } => handle_apikey(action, &api_client, json_output).await,
-        Commands::Fund { action } => handle_fund(action, &api_client, json_output).await,
+        Commands::Wallet { action } => handle_wallet(action, &api_client, json_output).await,
         Commands::Sessionevents { action } => {
             handle_session_event(action, &api_client, json_output).await
         }

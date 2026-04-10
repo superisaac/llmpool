@@ -3,7 +3,7 @@
   "info": {
     "title": "LLMPool Admin API",
     "version": "1.0.0",
-    "description": "Admin REST API for managing LLMPool resources: upstreams, models, accounts, API keys, funds, session events, subscription plans, and subscriptions."
+    "description": "Admin REST API for managing LLMPool resources: upstreams, models, accounts, API keys, wallets, session events, subscription plans, and subscriptions."
   },
   "servers": [
     {
@@ -51,12 +51,13 @@
           "updated_at": { "type": "string", "format": "date-time" }
         }
       },
-      "FundResponse": {
+      "WalletResponse": {
         "type": "object",
+        "description": "Account wallet containing the current balance. Balance can be negative (indicating debt).",
         "properties": {
           "id": { "type": "integer" },
           "account_id": { "type": "integer" },
-          "balance": { "type": "string" },
+          "balance": { "type": "string", "description": "Current balance as a decimal string. Can be negative (debt)." },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
@@ -128,8 +129,9 @@
           "id": { "type": "integer" },
           "account_id": { "type": "integer" },
           "unique_request_id": { "type": "string" },
-          "content": { "type": "object" },
+          "content": { "type": "object", "description": "JSON content describing the balance change (type, amount, tokens, etc.)" },
           "is_applied": { "type": "boolean" },
+          "subscription_id": { "type": "integer", "description": "ID of the subscription used for this change (0 if none)" },
           "created_at": { "type": "string", "format": "date-time" }
         }
       },
@@ -185,6 +187,20 @@
           "used_money": { "type": "string", "description": "Decimal string" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "TagsResponse": {
+        "type": "object",
+        "properties": {
+          "upstream_id": { "type": "integer" },
+          "tags": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "UpstreamWithModelsResponse": {
+        "type": "object",
+        "properties": {
+          "upstream": { "$ref": "#/components/schemas/UpstreamResponse" },
+          "models": { "type": "array", "items": { "$ref": "#/components/schemas/ModelResponse" } }
         }
       }
     }
@@ -286,15 +302,16 @@
         }
       }
     },
-    "/accounts/{account_id}/fund": {
+    "/accounts/{account_id}/wallet": {
       "get": {
-        "summary": "Get account fund",
-        "operationId": "getAccountFund",
-        "tags": ["Funds"],
+        "summary": "Get account wallet",
+        "description": "Returns the wallet (balance) for the given account. If no wallet record exists yet, returns a default wallet with zero balance.",
+        "operationId": "getAccountWallet",
+        "tags": ["Wallets"],
         "parameters": [{ "name": "account_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
         "responses": {
-          "200": { "description": "Fund", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FundResponse" } } } },
-          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+          "200": { "description": "Wallet", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WalletResponse" } } } },
+          "404": { "description": "Account not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
     },
@@ -371,8 +388,9 @@
     "/deposits": {
       "post": {
         "summary": "Create deposit",
+        "description": "Adds to the account's wallet balance.",
         "operationId": "createDeposit",
-        "tags": ["Funds"],
+        "tags": ["Wallets"],
         "requestBody": {
           "required": true,
           "content": {
@@ -381,7 +399,7 @@
                 "type": "object",
                 "properties": {
                   "account_id": { "type": "integer" },
-                  "unique_request_id": { "type": "string" },
+                  "unique_request_id": { "type": "string", "description": "Client-provided idempotency key" },
                   "amount": { "type": "string", "description": "Positive decimal amount" }
                 },
                 "required": ["account_id", "unique_request_id", "amount"]
@@ -397,8 +415,9 @@
     "/withdrawals": {
       "post": {
         "summary": "Create withdrawal",
+        "description": "Deducts from the account's wallet balance.",
         "operationId": "createWithdrawal",
-        "tags": ["Funds"],
+        "tags": ["Wallets"],
         "requestBody": {
           "required": true,
           "content": {
@@ -407,7 +426,7 @@
                 "type": "object",
                 "properties": {
                   "account_id": { "type": "integer" },
-                  "unique_request_id": { "type": "string" },
+                  "unique_request_id": { "type": "string", "description": "Client-provided idempotency key" },
                   "amount": { "type": "string", "description": "Positive decimal amount" }
                 },
                 "required": ["account_id", "unique_request_id", "amount"]
@@ -423,8 +442,9 @@
     "/credits": {
       "post": {
         "summary": "Create credit",
+        "description": "Adds credit to the account's wallet balance (treated the same as a deposit).",
         "operationId": "createCredit",
-        "tags": ["Funds"],
+        "tags": ["Wallets"],
         "requestBody": {
           "required": true,
           "content": {
@@ -433,7 +453,7 @@
                 "type": "object",
                 "properties": {
                   "account_id": { "type": "integer" },
-                  "unique_request_id": { "type": "string" },
+                  "unique_request_id": { "type": "string", "description": "Client-provided idempotency key" },
                   "amount": { "type": "string", "description": "Positive decimal amount" }
                 },
                 "required": ["account_id", "unique_request_id", "amount"]
@@ -474,6 +494,7 @@
       },
       "post": {
         "summary": "Create upstream",
+        "description": "Creates a new upstream. Auto-detects available models and saves them to the database.",
         "operationId": "createUpstream",
         "tags": ["Upstreams"],
         "requestBody": {
@@ -496,7 +517,14 @@
           }
         },
         "responses": {
-          "201": { "description": "Upstream created with models" }
+          "201": {
+            "description": "Upstream created with models",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UpstreamWithModelsResponse" }
+              }
+            }
+          }
         }
       }
     },
@@ -536,6 +564,67 @@
         },
         "responses": {
           "200": { "description": "Updated upstream", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpstreamResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/upstream_by_name/{name}": {
+      "get": {
+        "summary": "Get upstream by name",
+        "operationId": "getUpstreamByName",
+        "tags": ["Upstreams"],
+        "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "Upstream", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpstreamResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/upstreams/{upstream_id}/tags": {
+      "get": {
+        "summary": "List upstream tags",
+        "operationId": "listUpstreamTags",
+        "tags": ["Upstreams"],
+        "parameters": [{ "name": "upstream_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "Tags", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagsResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      },
+      "post": {
+        "summary": "Add tag to upstream",
+        "operationId": "addUpstreamTag",
+        "tags": ["Upstreams"],
+        "parameters": [{ "name": "upstream_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "tag": { "type": "string" } },
+                "required": ["tag"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Updated tags", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagsResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/upstreams/{upstream_id}/tags/{tag}": {
+      "delete": {
+        "summary": "Remove tag from upstream",
+        "operationId": "removeUpstreamTag",
+        "tags": ["Upstreams"],
+        "parameters": [
+          { "name": "upstream_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "tag", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Updated tags", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TagsResponse" } } } },
           "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
         }
       }
@@ -608,6 +697,63 @@
         "responses": {
           "200": { "description": "Updated model", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelResponse" } } } },
           "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/models/path/{upstream_name}/{model_name}": {
+      "get": {
+        "summary": "Get model by upstream name and model name",
+        "operationId": "getModelByUpstreamAndName",
+        "tags": ["Models"],
+        "parameters": [
+          { "name": "upstream_name", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "model_name", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Model", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ModelResponse" } } } },
+          "404": { "description": "Not found", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } } }
+        }
+      }
+    },
+    "/models-tests": {
+      "post": {
+        "summary": "Test model features",
+        "description": "Tests the features of the specified models (by their database IDs) and updates the feature flags (has_chat_completion, has_embedding, has_image_generation, has_speech) in the database.",
+        "operationId": "testModels",
+        "tags": ["Models"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "model_ids": { "type": "array", "items": { "type": "integer" }, "description": "List of model database IDs to test" }
+                },
+                "required": ["model_ids"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Array of per-model test results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "model_id": { "type": "integer" },
+                      "model": { "$ref": "#/components/schemas/ModelResponse" },
+                      "error": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

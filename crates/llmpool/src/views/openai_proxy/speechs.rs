@@ -7,7 +7,7 @@ use axum::{
 use std::sync::Arc;
 use tracing::warn;
 
-use super::helpers::{AppState, check_fund_balance, select_model_clients};
+use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
 use crate::models::CapacityOption;
@@ -20,8 +20,8 @@ pub async fn create_speech(
     let model_name = speech_model_to_string(&payload.model);
     let account_id = ACCOUNT.with(|u| u.id);
 
-    // Check if the account has sufficient funds
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    // Check if the account has sufficient wallets
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

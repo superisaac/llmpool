@@ -1,7 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{BalanceChangeResponse, FundResponse, resolve_account_id};
+use super::{BalanceChangeResponse, WalletResponse, resolve_account_id};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -9,14 +9,14 @@ use crate::client::ApiClient;
 // ============================================================
 
 #[derive(Subcommand)]
-pub enum FundAction {
-    /// Show account fund balance
+pub enum WalletAction {
+    /// Show account wallet balance
     Show {
         /// Account name or account ID
         #[arg(long)]
         account: String,
     },
-    /// Deposit cash to an account's fund
+    /// Deposit cash to an account's wallet
     Deposit {
         /// Account name or account ID
         #[arg(long)]
@@ -28,7 +28,7 @@ pub enum FundAction {
         #[arg(long)]
         request_id: String,
     },
-    /// Withdraw cash from an account's fund
+    /// Withdraw cash from an account's wallet
     Withdraw {
         /// Account name or account ID
         #[arg(long)]
@@ -40,7 +40,7 @@ pub enum FundAction {
         #[arg(long)]
         request_id: String,
     },
-    /// Add a credit to an account's fund
+    /// Add a credit to an account's wallet
     Credit {
         /// Account name or account ID
         #[arg(long)]
@@ -83,8 +83,8 @@ struct CreateCreditRequest {
 // Display Helpers
 // ============================================================
 
-fn print_fund_detail(f: &FundResponse) {
-    println!("Fund for account ID {}:", f.account_id);
+fn print_wallet_detail(f: &WalletResponse) {
+    println!("Wallet for account ID {}:", f.account_id);
     println!();
     println!("  Balance:    {}", f.balance);
     if !f.created_at.is_empty() {
@@ -111,27 +111,27 @@ fn print_balance_change(bc: &BalanceChangeResponse, action: &str) {
 // Command Handler
 // ============================================================
 
-pub async fn handle_fund(
-    action: FundAction,
+pub async fn handle_wallet(
+    action: WalletAction,
     client: &ApiClient,
     json_output: bool,
 ) -> Result<(), String> {
     match action {
-        FundAction::Show { account } => {
+        WalletAction::Show { account } => {
             let account_id = resolve_account_id(&account, client).await?;
             if json_output {
                 let raw = client
-                    .get_raw(&format!("/accounts/{}/fund", account_id))
+                    .get_raw(&format!("/accounts/{}/wallet", account_id))
                     .await?;
                 println!("{}", raw);
             } else {
-                let resp: FundResponse = client
-                    .get(&format!("/accounts/{}/fund", account_id))
+                let resp: WalletResponse = client
+                    .get(&format!("/accounts/{}/wallet", account_id))
                     .await?;
-                print_fund_detail(&resp);
+                print_wallet_detail(&resp);
             }
         }
-        FundAction::Deposit {
+        WalletAction::Deposit {
             account,
             amount,
             request_id,
@@ -150,7 +150,7 @@ pub async fn handle_fund(
                 print_balance_change(&resp, "Deposit");
             }
         }
-        FundAction::Withdraw {
+        WalletAction::Withdraw {
             account,
             amount,
             request_id,
@@ -169,7 +169,7 @@ pub async fn handle_fund(
                 print_balance_change(&resp, "Withdrawal");
             }
         }
-        FundAction::Credit {
+        WalletAction::Credit {
             account,
             amount,
             request_id,

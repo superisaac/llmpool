@@ -4,7 +4,7 @@ use tracing::{info, warn};
 use crate::db::{self, DbPool, RedisPool};
 use crate::defer::BalanceChangeTask;
 use crate::models::BalanceChangeContent;
-use crate::redis_utils::caches::fund as fund_cache;
+use crate::redis_utils::caches::wallet as wallet_cache;
 
 /// Handle a balance change entry from the async task queue.
 ///
@@ -88,8 +88,8 @@ pub async fn settle_balance_change(
     };
 
     // 4. Apply the balance change to the account's balance within the same transaction
-    let updated_fund =
-        match db::fund::apply_balance_change_with_tx(&mut tx, &balance_change.clone(), &content)
+    let updated_wallet =
+        match db::wallet::apply_balance_change_with_tx(&mut tx, &balance_change.clone(), &content)
             .await
         {
             Ok(ub) => ub,
@@ -106,7 +106,7 @@ pub async fn settle_balance_change(
 
     // // 5. Mark the balance change as applied
     // if let Err(e) =
-    //     db::fund::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await
+    //     db::wallet::mark_balance_change_applied_with_tx(&mut tx, balance_change.id).await
     // {
     //     warn!(
     //         error = %e,
@@ -122,19 +122,23 @@ pub async fn settle_balance_change(
             info!(
                 balance_change_id = balance_change_id,
                 account_id = balance_change.account_id,
-                balance = %updated_fund.balance,
+                balance = %updated_wallet.balance,
                 "Successfully applied balance change"
             );
 
-            // Update the fund cache with the latest balance
-            if let Err(e) =
-                fund_cache::set_fund_info(&redis_pool, updated_fund.account_id, updated_fund).await
+            // Update the wallet cache with the latest balance
+            if let Err(e) = wallet_cache::set_wallet_info(
+                &redis_pool,
+                updated_wallet.account_id,
+                updated_wallet,
+            )
+            .await
             {
                 warn!(
                     error = %e,
                     balance_change_id = balance_change_id,
                     account_id = balance_change.account_id,
-                    "Failed to update fund cache after balance change"
+                    "Failed to update wallet cache after balance change"
                 );
             }
         }

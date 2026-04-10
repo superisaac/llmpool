@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
 // ============================================================
-// Fund
+// Wallet
 // ============================================================
 
-/// Represents a user's fund record
+/// Represents a user's wallet record
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct Fund {
+pub struct Wallet {
     pub id: i32,
     pub account_id: i32,
     pub balance: BigDecimal,
@@ -17,16 +17,16 @@ pub struct Fund {
     pub updated_at: NaiveDateTime,
 }
 
-/// Used to insert a new fund
+/// Used to insert a new wallet
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NewFund {
+pub struct NewWallet {
     pub account_id: i32,
     pub balance: BigDecimal,
 }
 
-/// Used to update an existing fund
+/// Used to update an existing wallet
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateFund {
+pub struct UpdateWallet {
     pub balance: Option<BigDecimal>,
     pub updated_at: Option<NaiveDateTime>,
 }

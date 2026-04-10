@@ -1,6 +1,6 @@
 # llmpool-ctl — CLI Management Tool
 
-`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing upstreams, models, accounts, API keys, and account funds without needing to make raw HTTP requests.
+`llmpool-ctl` is a command-line tool for managing LLMPool via the Admin REST API. It provides a convenient interface for managing upstreams, models, accounts, API keys, and account wallets without needing to make raw HTTP requests.
 
 ## Prerequisites
 
@@ -250,28 +250,30 @@ llmpool-ctl apikey add --account alice --label "dev key"
 
 ---
 
-### Fund Management
+### Wallet Management
 
-Manage account balances — view balance, deposit cash, withdraw cash, and add credit.
+Manage account wallets — view balance, deposit cash, withdraw cash, and add credit.
 
-#### `fund show`
+Each account has a single wallet with a `balance` field (a decimal value that can be negative, indicating debt). Deposits and credits increase the balance; withdrawals and token spending decrease it.
 
-Show an account's fund balance (cash, credit, debt).
+#### `wallet show`
+
+Show an account's wallet balance.
 
 ```bash
-llmpool-ctl fund show --account alice
+llmpool-ctl wallet show --account alice
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--account` | Yes | Account name or numeric account ID |
 
-#### `fund deposit`
+#### `wallet deposit`
 
-Deposit cash to an account's fund.
+Deposit cash to an account's wallet.
 
 ```bash
-llmpool-ctl fund deposit --account alice --amount "100.00" --request-id "dep-001"
+llmpool-ctl wallet deposit --account alice --amount "100.00" --request-id "dep-001"
 ```
 
 | Flag | Required | Description |
@@ -280,12 +282,12 @@ llmpool-ctl fund deposit --account alice --amount "100.00" --request-id "dep-001
 | `--amount` | Yes | Amount to deposit |
 | `--request-id` | Yes | Unique request ID for idempotency |
 
-#### `fund withdraw`
+#### `wallet withdraw`
 
-Withdraw cash from an account's fund.
+Withdraw cash from an account's wallet.
 
 ```bash
-llmpool-ctl fund withdraw --account alice --amount "50.00" --request-id "wd-001"
+llmpool-ctl wallet withdraw --account alice --amount "50.00" --request-id "wd-001"
 ```
 
 | Flag | Required | Description |
@@ -294,12 +296,12 @@ llmpool-ctl fund withdraw --account alice --amount "50.00" --request-id "wd-001"
 | `--amount` | Yes | Amount to withdraw |
 | `--request-id` | Yes | Unique request ID for idempotency |
 
-#### `fund credit`
+#### `wallet credit`
 
-Add credit to an account's fund.
+Add credit to an account's wallet (treated the same as a deposit).
 
 ```bash
-llmpool-ctl fund credit --account alice --amount "200.00" --request-id "cr-001"
+llmpool-ctl wallet credit --account alice --amount "200.00" --request-id "cr-001"
 ```
 
 | Flag | Required | Description |
@@ -376,7 +378,7 @@ llmpool-ctl subscription-plan update \
 | `--output-token-limit` | No | New output token limit |
 | `--money-limit` | No | New money limit |
 | `--sort-order` | No | New sort order |
-| `--status` | No | New status: `created`, `started`, `deducted`, `active`, `canceled`, `expired` |
+| `--status` | No | New status: `active`, `deactive` |
 
 #### `subscription-plan cancel`
 
@@ -410,7 +412,7 @@ llmpool-ctl subscription list --account alice --status active
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--account` | No | Filter by account name or numeric ID |
-| `--status` | No | Filter by status: `active`, `filled`, `canceled` |
+| `--status` | No | Filter by status: `active`, `deactive`, `canceled` |
 
 #### `subscription show`
 
@@ -442,13 +444,13 @@ llmpool-ctl subscription add --account alice --plan-id 1
 Update a subscription's status.
 
 ```bash
-llmpool-ctl subscription update --subscription-id 1 --status filled
+llmpool-ctl subscription update --subscription-id 1 --status active
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--subscription-id` | Yes | Subscription ID |
-| `--status` | Yes | New status: `active`, `filled`, `canceled` |
+| `--status` | Yes | New status: `active`, `deactive` |
 
 #### `subscription cancel`
 
@@ -471,7 +473,7 @@ All commands support `--format json` for machine-readable output, useful for scr
 ```bash
 llmpool-ctl --format json upstream list
 llmpool-ctl --format json account list
-llmpool-ctl --format json fund show --account alice
+llmpool-ctl --format json wallet show --account alice
 ```
 
 ## Name or ID Resolution
@@ -505,8 +507,8 @@ llmpool-ctl account add alice
 llmpool-ctl apikey add --account alice --label "development"
 
 # Deposit funds
-llmpool-ctl fund deposit --account alice --amount "100.00" --request-id "initial-deposit"
+llmpool-ctl wallet deposit --account alice --amount "100.00" --request-id "initial-deposit"
 
 # Check balance
-llmpool-ctl fund show --account alice
+llmpool-ctl wallet show --account alice
 ```

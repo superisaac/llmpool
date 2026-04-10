@@ -156,11 +156,11 @@ struct CreateAccountRequest {
     name: String,
 }
 
-// --- Fund Response DTO ---
+// --- Wallet Response DTO ---
 
-/// Response DTO for an account's fund
+/// Response DTO for an account's wallet
 #[derive(Serialize)]
-struct FundResponse {
+struct WalletResponse {
     id: i32,
     account_id: i32,
     balance: String,
@@ -168,8 +168,8 @@ struct FundResponse {
     updated_at: String,
 }
 
-impl From<crate::models::Fund> for FundResponse {
-    fn from(f: crate::models::Fund) -> Self {
+impl From<crate::models::Wallet> for WalletResponse {
+    fn from(f: crate::models::Wallet) -> Self {
         Self {
             id: f.id,
             account_id: f.account_id,
@@ -544,13 +544,13 @@ async fn get_account_by_name(
     }
 }
 
-// --- Fund Handlers ---
+// --- Wallet Handlers ---
 
-/// GET /api/v1/accounts/:account_id/fund
+/// GET /api/v1/accounts/:account_id/wallet
 ///
-/// Returns the fund (asset) information for a given account.
-/// If the account has no fund record yet, returns a default fund with zero balances.
-async fn get_account_fund(
+/// Returns the wallet (asset) information for a given account.
+/// If the account has no wallet record yet, returns a default wallet with zero balances.
+async fn get_account_wallet(
     State(state): State<Arc<AppState>>,
     Path(account_id): Path<i32>,
 ) -> Response {
@@ -574,11 +574,11 @@ async fn get_account_fund(
         }
     }
 
-    match db::fund::find_account_fund(&state.pool, account_id).await {
-        Ok(Some(fund)) => Json(FundResponse::from(fund)).into_response(),
+    match db::wallet::find_account_wallet(&state.pool, account_id).await {
+        Ok(Some(wallet)) => Json(WalletResponse::from(wallet)).into_response(),
         Ok(None) => {
-            // Account exists but has no fund record yet, return default zero balances
-            Json(FundResponse {
+            // Account exists but has no wallet record yet, return default zero balances
+            Json(WalletResponse {
                 id: 0,
                 account_id: account_id,
                 balance: "0".to_string(),
@@ -588,11 +588,11 @@ async fn get_account_fund(
             .into_response()
         }
         Err(e) => {
-            warn!(error = %e, "Failed to get fund for account");
+            warn!(error = %e, "Failed to get wallet for account");
             error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query account fund",
+                "Failed to query account wallet",
             )
         }
     }
@@ -1640,7 +1640,7 @@ async fn create_deposit(
 
 /// POST /api/v1/withdrawals
 ///
-/// Creates a withdrawal for an account. This first checks that the account's fund has
+/// Creates a withdrawal for an account. This first checks that the account's wallet has
 /// sufficient cash (cash >= amount). If not, returns an error. Otherwise, creates
 /// a BalanceChange record and enqueues a BalanceChangeTask to apply it asynchronously.
 ///
@@ -1682,25 +1682,25 @@ async fn create_withdraw(
         }
     }
 
-    // Check that the account's fund has sufficient balance
-    match db::fund::find_account_fund(&state.pool, payload.account_id).await {
-        Ok(Some(fund)) => {
-            if fund.balance < payload.amount {
+    // Check that the account's wallet has sufficient balance
+    match db::wallet::find_account_wallet(&state.pool, payload.account_id).await {
+        Ok(Some(wallet)) => {
+            if wallet.balance < payload.amount {
                 return error_response(
                     StatusCode::BAD_REQUEST,
-                    "insufficient_funds",
+                    "insufficient_wallets",
                     &format!(
                         "Insufficient balance. Available: {}, requested: {}",
-                        fund.balance, payload.amount
+                        wallet.balance, payload.amount
                     ),
                 );
             }
         }
         Ok(None) => {
-            // Account has no fund record, so balance is effectively 0
+            // Account has no wallet record, so balance is effectively 0
             return error_response(
                 StatusCode::BAD_REQUEST,
-                "insufficient_funds",
+                "insufficient_wallets",
                 &format!(
                     "Insufficient balance. Available: 0, requested: {}",
                     payload.amount
@@ -1708,11 +1708,11 @@ async fn create_withdraw(
             );
         }
         Err(e) => {
-            warn!(error = %e, "Failed to query account fund");
+            warn!(error = %e, "Failed to query account wallet");
             return error_response(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "database_error",
-                "Failed to query account fund",
+                "Failed to query account wallet",
             );
         }
     }
@@ -1782,7 +1782,7 @@ async fn create_withdraw(
 ///
 /// Creates a credit for an account. This creates a BalanceChange record and enqueues
 /// a BalanceChangeTask to apply it asynchronously. Unlike deposits which add to
-/// the cash field, credits add to the credit field of the account's fund.
+/// the cash field, credits add to the credit field of the account's wallet.
 ///
 /// Request body (JSON):
 /// - `account_id` (required): The ID of the account to credit
@@ -2765,7 +2765,7 @@ pub fn get_router(
             "/accounts/{account_id}",
             get(get_account_by_id).put(update_account_by_id),
         )
-        .route("/accounts/{account_id}/fund", get(get_account_fund))
+        .route("/accounts/{account_id}/wallet", get(get_account_wallet))
         .route(
             "/accounts/{account_id}/apikeys",
             get(list_account_apikeys).post(create_account_apikey),

@@ -2,9 +2,9 @@
 
 LLMPool provides three sets of APIs:
 
-1. **OpenAI-Compatible API** — Standard OpenAI upstreams for AI model access
+1. **OpenAI-Compatible API** — Standard OpenAI endpoints for AI model access
 2. **Admin REST API** — RESTful management interface for administration
-3. **Passthrough API** — Proxy requests to upstream upstreams
+3. **Passthrough API** — Proxy requests to upstream backends
 
 Both the Admin REST API and Passthrough API use the `x-admin-token` header for JWT authentication.
 
@@ -28,7 +28,7 @@ The JWT token is validated against the `[admin] jwt_secret` in the configuration
 
 ---
 
-## OpenAI-Compatible Upstreams
+## OpenAI-Compatible Endpoints
 
 LLMPool exposes standard OpenAI-compatible APIs. You can use any OpenAI SDK or compatible client directly:
 
@@ -96,12 +96,12 @@ print(response.choices[0].message.content)
 
 ## Admin REST API
 
-The Admin API is a RESTful interface under `/api/v1/` and requires JWT authentication via the `x-admin-token` header. All list upstreams support pagination via `page` and `page_size` query parameters.
+The Admin API is a RESTful interface under `/api/v1/` and requires JWT authentication via the `x-admin-token` header. All list endpoints support pagination via `page` and `page_size` query parameters.
 
 ### Upstreams
 
 ```bash
-# List all OpenAI upstreams (paginated)
+# List all upstreams (paginated)
 curl http://localhost:19324/api/v1/upstreams \
   -H "x-admin-token: <jwt-token>"
 
@@ -109,7 +109,7 @@ curl http://localhost:19324/api/v1/upstreams \
 curl "http://localhost:19324/api/v1/upstreams?page=1&page_size=10" \
   -H "x-admin-token: <jwt-token>"
 
-# Create a new upstream (auto-detects features and models)
+# Create a new upstream (auto-detects models)
 curl -X POST http://localhost:19324/api/v1/upstreams \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
@@ -118,19 +118,38 @@ curl -X POST http://localhost:19324/api/v1/upstreams \
     "api_key": "sk-xxx",
     "api_base": "https://api.openai.com/v1"
   }'
-```
 
-### Upstream Testing
+# Get upstream by ID
+curl http://localhost:19324/api/v1/upstreams/1 \
+  -H "x-admin-token: <jwt-token>"
 
-```bash
-# Test an upstream (detect features without saving)
-curl -X POST http://localhost:19324/api/v1/upstream-tests \
+# Get upstream by name
+curl http://localhost:19324/api/v1/upstream_by_name/OpenAI \
+  -H "x-admin-token: <jwt-token>"
+
+# Update an upstream
+curl -X PUT http://localhost:19324/api/v1/upstreams/1 \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
-  -d '{
-    "api_key": "sk-xxx",
-    "api_base": "https://api.openai.com/v1"
-  }'
+  -d '{"description": "Main OpenAI upstream", "status": "online"}'
+```
+
+### Upstream Tag Management
+
+```bash
+# List tags for an upstream
+curl http://localhost:19324/api/v1/upstreams/1/tags \
+  -H "x-admin-token: <jwt-token>"
+
+# Add a tag to an upstream
+curl -X POST http://localhost:19324/api/v1/upstreams/1/tags \
+  -H "x-admin-token: <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"tag": "production"}'
+
+# Remove a tag from an upstream
+curl -X DELETE http://localhost:19324/api/v1/upstreams/1/tags/production \
+  -H "x-admin-token: <jwt-token>"
 ```
 
 ### Model Testing
@@ -169,61 +188,73 @@ curl http://localhost:19324/api/v1/models/1 \
   -H "x-admin-token: <jwt-token>"
 
 # Get a model by upstream name and model name
-curl http://localhost:19324/api/v1/models/OpenAI/gpt-4o \
+curl http://localhost:19324/api/v1/models/path/OpenAI/gpt-4o \
   -H "x-admin-token: <jwt-token>"
 
-# Update a model's description
+# Update a model's description and pricing
 curl -X PUT http://localhost:19324/api/v1/models/1 \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{"description": "GPT-4o model for general chat"}'
 ```
 
-### Consumers
+### Accounts
 
 ```bash
-# List all consumers (paginated)
-curl http://localhost:19324/api/v1/consumers \
+# List all accounts (paginated)
+curl http://localhost:19324/api/v1/accounts \
   -H "x-admin-token: <jwt-token>"
 
-# Create a consumer
-curl -X POST http://localhost:19324/api/v1/consumers \
+# Create an account
+curl -X POST http://localhost:19324/api/v1/accounts \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{"name": "alice"}'
 
-# Create a consumer with initial credit
-curl -X POST http://localhost:19324/api/v1/consumers \
+# Get an account by ID
+curl http://localhost:19324/api/v1/accounts/1 \
+  -H "x-admin-token: <jwt-token>"
+
+# Get an account by name
+curl http://localhost:19324/api/v1/accounts_by_name/alice \
+  -H "x-admin-token: <jwt-token>"
+
+# Update an account
+curl -X PUT http://localhost:19324/api/v1/accounts/1 \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
-  -d '{"name": "alice", "initial_credit": "100.00"}'
-
-# Get a consumer by ID
-curl http://localhost:19324/api/v1/consumers/1 \
-  -H "x-admin-token: <jwt-token>"
-
-# Get a consumer by name
-curl http://localhost:19324/api/v1/consumers_by_name/alice \
-  -H "x-admin-token: <jwt-token>"
+  -d '{"is_active": false}'
 ```
 
-### Funds
+### Wallets
+
+Each account has a wallet that tracks its balance. The balance is a single decimal value that can be negative (indicating debt). Deposits and credits add to the balance; withdrawals and token spending deduct from it.
 
 ```bash
-# Get a consumer's fund (balance information)
-curl http://localhost:19324/api/v1/consumers/1/fund \
+# Get an account's wallet (balance information)
+curl http://localhost:19324/api/v1/accounts/1/wallet \
   -H "x-admin-token: <jwt-token>"
 ```
 
 ### API Keys
 
 ```bash
-# List API keys for a consumer (paginated)
-curl http://localhost:19324/api/v1/consumers/1/apikeys \
+# List API keys for an account (paginated)
+curl http://localhost:19324/api/v1/accounts/1/apikeys \
   -H "x-admin-token: <jwt-token>"
 
-# Create an API key for a consumer
-curl -X POST http://localhost:19324/api/v1/consumers/1/apikeys \
+# Create an API key for an account
+curl -X POST http://localhost:19324/api/v1/accounts/1/apikeys \
+  -H "x-admin-token: <jwt-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "dev key"}'
+
+# Get API key info by key string
+curl http://localhost:19324/api/v1/apikeys/lpx-xxx \
+  -H "x-admin-token: <jwt-token>"
+
+# Deactivate an API key
+curl -X DELETE http://localhost:19324/api/v1/apikeys/lpx-xxx \
   -H "x-admin-token: <jwt-token>"
 ```
 
@@ -232,32 +263,32 @@ curl -X POST http://localhost:19324/api/v1/consumers/1/apikeys \
 The `unique_request_id` field is a client-provided idempotency key for each balance change operation. It ensures that the same request is not processed more than once.
 
 ```bash
-# Create a deposit (adds to consumer's cash balance)
+# Create a deposit (adds to account's wallet balance)
 curl -X POST http://localhost:19324/api/v1/deposits \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "consumer_id": 1,
+    "account_id": 1,
     "unique_request_id": "deposit-20260326-001",
     "amount": "100.00"
   }'
 
-# Create a withdrawal (deducts from consumer's cash balance)
+# Create a withdrawal (deducts from account's wallet balance)
 curl -X POST http://localhost:19324/api/v1/withdrawals \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "consumer_id": 1,
+    "account_id": 1,
     "unique_request_id": "withdraw-20260326-001",
     "amount": "50.00"
   }'
 
-# Create a credit (adds to consumer's credit balance)
+# Create a credit (adds to account's wallet balance, same as deposit)
 curl -X POST http://localhost:19324/api/v1/credits \
   -H "x-admin-token: <jwt-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "consumer_id": 1,
+    "account_id": 1,
     "unique_request_id": "credit-20260326-001",
     "amount": "200.00"
   }'
@@ -287,42 +318,59 @@ curl "http://localhost:19324/api/v1/session-events?start=42&count=20" \
   -H "x-admin-token: <jwt-token>"
 ```
 
-The session events list upstream uses cursor-based pagination. The response includes:
+The session events list endpoint uses cursor-based pagination. The response includes:
 - `data`: Array of session event objects
 - `next_id`: The ID of the last event in the current page (use as `start` for the next request)
 - `has_more`: Whether there are more events after this page
 
 ### Admin REST API Reference
 
-| Method | Upstream | Description |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/upstreams` | List all OpenAI upstreams (paginated) |
-| `POST` | `/api/v1/upstreams` | Create a new upstream (auto-detects features) |
-| `POST` | `/api/v1/upstream-tests` | Test an upstream without saving |
+| `GET` | `/api/v1/upstreams` | List all upstreams (paginated) |
+| `POST` | `/api/v1/upstreams` | Create a new upstream (auto-detects models) |
+| `GET` | `/api/v1/upstreams/:upstream_id` | Get an upstream by ID |
+| `PUT` | `/api/v1/upstreams/:upstream_id` | Update an upstream |
+| `GET` | `/api/v1/upstream_by_name/:name` | Get an upstream by name |
+| `GET` | `/api/v1/upstreams/:upstream_id/tags` | List tags for an upstream |
+| `POST` | `/api/v1/upstreams/:upstream_id/tags` | Add a tag to an upstream |
+| `DELETE` | `/api/v1/upstreams/:upstream_id/tags/:tag` | Remove a tag from an upstream |
 | `POST` | `/api/v1/models-tests` | Test model features and update the LLMModel table |
 | `GET` | `/api/v1/models` | List models (filterable, paginated) |
 | `GET` | `/api/v1/models/:model_id` | Get a model by ID |
-| `PUT` | `/api/v1/models/:model_id` | Update a model (description) |
-| `GET` | `/api/v1/models/:upstream_name/*model_name` | Get a model by upstream name and model name |
-| `GET` | `/api/v1/consumers` | List all consumers (paginated) |
-| `POST` | `/api/v1/consumers` | Create a new consumer (with optional `initial_credit`) |
-| `GET` | `/api/v1/consumers/:consumer_id` | Get a consumer by ID |
-| `PUT` | `/api/v1/consumers/:consumer_id` | Update a consumer |
-| `GET` | `/api/v1/consumers_by_name/:name` | Get a consumer by name |
-| `GET` | `/api/v1/consumers/:consumer_id/fund` | Get a consumer's fund (cash, credit, debt) |
-| `GET` | `/api/v1/consumers/:consumer_id/apikeys` | List API keys for a consumer (paginated) |
-| `POST` | `/api/v1/consumers/:consumer_id/apikeys` | Create an API key for a consumer |
-| `POST` | `/api/v1/deposits` | Create a deposit for a consumer |
-| `POST` | `/api/v1/withdrawals` | Create a withdrawal for a consumer |
-| `POST` | `/api/v1/credits` | Create a credit for a consumer |
+| `PUT` | `/api/v1/models/:model_id` | Update a model (description, pricing, active status) |
+| `GET` | `/api/v1/models/path/:upstream_name/*model_name` | Get a model by upstream name and model name |
+| `GET` | `/api/v1/accounts` | List all accounts (paginated) |
+| `POST` | `/api/v1/accounts` | Create a new account |
+| `GET` | `/api/v1/accounts/:account_id` | Get an account by ID |
+| `PUT` | `/api/v1/accounts/:account_id` | Update an account |
+| `GET` | `/api/v1/accounts_by_name/:name` | Get an account by name |
+| `GET` | `/api/v1/accounts/:account_id/wallet` | Get an account's wallet (balance) |
+| `GET` | `/api/v1/accounts/:account_id/apikeys` | List API keys for an account (paginated) |
+| `POST` | `/api/v1/accounts/:account_id/apikeys` | Create an API key for an account |
+| `GET` | `/api/v1/apikeys/:apikey` | Get API key info by key string |
+| `DELETE` | `/api/v1/apikeys/:apikey` | Deactivate an API key |
+| `POST` | `/api/v1/deposits` | Create a deposit for an account |
+| `POST` | `/api/v1/withdrawals` | Create a withdrawal for an account |
+| `POST` | `/api/v1/credits` | Create a credit for an account |
 | `GET` | `/api/v1/session-events` | List session events (cursor-based pagination) |
 | `GET` | `/api/v1/session-events/:event_id` | Get a single session event by ID |
+| `GET` | `/api/v1/subscription-plans` | List subscription plans (paginated) |
+| `POST` | `/api/v1/subscription-plans` | Create a subscription plan |
+| `GET` | `/api/v1/subscription-plans/:plan_id` | Get a subscription plan by ID |
+| `PUT` | `/api/v1/subscription-plans/:plan_id` | Update a subscription plan |
+| `DELETE` | `/api/v1/subscription-plans/:plan_id` | Cancel a subscription plan |
+| `GET` | `/api/v1/subscriptions` | List subscriptions (filterable, paginated) |
+| `POST` | `/api/v1/subscriptions` | Create a subscription |
+| `GET` | `/api/v1/subscriptions/:subscription_id` | Get a subscription by ID |
+| `PUT` | `/api/v1/subscriptions/:subscription_id` | Update a subscription status |
+| `DELETE` | `/api/v1/subscriptions/:subscription_id` | Cancel a subscription |
 
-Most paginated upstreams accept the following query parameters:
+Most paginated endpoints accept the following query parameters:
 - `page` (default: 1) — Page number (1-based)
 - `page_size` (default: 20, max: 100) — Number of items per page
 
-The `/api/v1/session-events` upstream uses cursor-based pagination:
+The `/api/v1/session-events` endpoint uses cursor-based pagination:
 - `start` (default: 0) — Event ID to start after (exclusive)
 - `count` (default: 20, max: 100) — Number of items to return
 - `session` (optional) — Filter by session_id
@@ -331,7 +379,7 @@ The `/api/v1/session-events` upstream uses cursor-based pagination:
 
 ## Passthrough API
 
-The Passthrough API proxies requests to upstream OpenAI-compatible upstreams. It requires JWT authentication via the `x-admin-token` header (same as the Admin REST API). The `x-admin-token` header is **not** forwarded to the upstream upstream.
+The Passthrough API proxies requests to upstream OpenAI-compatible backends. It requires JWT authentication via the `x-admin-token` header (same as the Admin REST API). The `x-admin-token` header is **not** forwarded to the upstream backend.
 
 ### By Tag
 
@@ -365,7 +413,7 @@ curl -X POST http://localhost:19324/passthrough/1/v1/chat/completions \
 
 ### Passthrough API Reference
 
-| Method | Upstream | Description |
+| Method | Endpoint | Description |
 |--------|----------|-------------|
 | `ANY` | `/passthrough/tag/:tag/*rest` | Proxy to a random upstream matching the tag |
 | `ANY` | `/passthrough/:upstream_id/*rest` | Proxy to a specific upstream by ID |

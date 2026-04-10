@@ -1,3 +1,3 @@
 pub mod account;
 pub mod api_key;
-pub mod fund;
+pub mod wallet;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tracing::{info, warn};
 
 use super::client::{AnthropicApiError, CreateMessageBatchParams};
-use super::helpers::{AnthropicAppState, check_fund_balance, select_anthropic_clients};
+use super::helpers::{AnthropicAppState, check_wallet_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
 
@@ -27,7 +27,7 @@ pub async fn create_message_batch(
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -104,7 +104,7 @@ pub async fn create_message_batch(
 pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -159,7 +159,7 @@ pub async fn retrieve_message_batch(
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -212,7 +212,7 @@ pub async fn cancel_message_batch(
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 
@@ -268,7 +268,7 @@ pub async fn retrieve_message_batch_results(
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
-    if let Err(resp) = check_fund_balance(&state, account_id).await {
+    if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
 

@@ -129,39 +129,39 @@ pub struct AnthropicAppState {
     pub event_storage: RedisStorage<AnthropicEventTask>,
 }
 
-/// Check if the account has sufficient funds.
-/// Returns Ok(()) if funds are sufficient, Err(Response) with a payment-required error otherwise.
-pub async fn check_fund_balance(
+/// Check if the account has sufficient wallets.
+/// Returns Ok(()) if wallets are sufficient, Err(Response) with a payment-required error otherwise.
+pub async fn check_wallet_balance(
     state: &AnthropicAppState,
     account_id: i32,
 ) -> Result<(), Response> {
-    use crate::redis_utils::caches::fund as fund_cache;
+    use crate::redis_utils::caches::wallet as wallet_cache;
     use bigdecimal::BigDecimal;
 
-    let fund = match fund_cache::get_fund_info(&state.redis_pool, account_id).await {
+    let wallet = match wallet_cache::get_wallet_info(&state.redis_pool, account_id).await {
         Ok(Some(f)) => f,
-        _ => match db::fund::find_account_fund(&state.pool, account_id).await {
+        _ => match db::wallet::find_account_wallet(&state.pool, account_id).await {
             Ok(Some(f)) => f,
             Ok(None) => {
                 return Err((
                     StatusCode::PAYMENT_REQUIRED,
                     Json(serde_json::json!({
                         "error": {
-                            "message": "No fund record found for this account.",
-                            "type": "insufficient_funds",
-                            "code": "no_fund_record"
+                            "message": "No wallet record found for this account.",
+                            "type": "insufficient_wallets",
+                            "code": "no_wallet_record"
                         }
                     })),
                 )
                     .into_response());
             }
             Err(e) => {
-                warn!(error = %e, "Database error during fund lookup");
+                warn!(error = %e, "Database error during wallet lookup");
                 return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(serde_json::json!({
                         "error": {
-                            "message": "Internal server error during fund lookup.",
+                            "message": "Internal server error during wallet lookup.",
                             "type": "server_error",
                             "code": "internal_error"
                         }
@@ -172,14 +172,14 @@ pub async fn check_fund_balance(
         },
     };
 
-    if fund.balance.clone() <= BigDecimal::from(0) {
+    if wallet.balance.clone() <= BigDecimal::from(0) {
         return Err((
             StatusCode::PAYMENT_REQUIRED,
             Json(serde_json::json!({
                 "error": {
                     "message": "账户余额不够，请充值后继续使用。",
-                    "type": "insufficient_funds",
-                    "code": "insufficient_funds"
+                    "type": "insufficient_wallets",
+                    "code": "insufficient_wallets"
                 }
             })),
         )
