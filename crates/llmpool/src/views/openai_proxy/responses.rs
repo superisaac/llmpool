@@ -7,13 +7,14 @@ use axum::{
     Json,
     extract::{Path, State},
     http::StatusCode,
-    response::sse::{Event, KeepAlive, Sse},
+    response::sse::Event,
     response::{IntoResponse, Response as AxumResponse},
 };
 use futures::stream::{Stream, StreamExt};
 use std::convert::Infallible;
 use std::sync::Arc;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::db;
@@ -21,6 +22,11 @@ use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
 use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
+
+/// Generate a new UUIDv7-based response_id with a "resp-" prefix.
+fn new_response_id() -> String {
+    format!("resp-{}", Uuid::now_v7().to_string().replace('-', ""))
+}
 
 /// Handle POST /responses — create a new model response
 pub async fn create_response(
@@ -74,15 +80,45 @@ pub async fn create_response(
         );
         let mut upstream_payload = payload.clone();
         upstream_payload.model = Some(upstream_client.fullname.clone());
+        let upstream_id = upstream_client.upstream_id;
         match create_response_with_client(&upstream_client.client, &mut tracer, upstream_payload)
             .await
         {
-            Ok(response) => return response,
+            Ok((response_json, original_response_id)) => {
+                // Generate our own response_id and store the mapping in DB
+                let our_response_id = new_response_id();
+                match db::responses::create_response_meta(
+                    &state.pool,
+                    &our_response_id,
+                    &original_response_id,
+                    upstream_id,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        info!(
+                            response_id = %our_response_id,
+                            original_response_id = %original_response_id,
+                            upstream_id = %upstream_id,
+                            "Response meta stored"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "Failed to store response meta in DB");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+                // Replace the upstream response id with our own before returning
+                let mut value = response_json;
+                if let Some(obj) = value.as_object_mut() {
+                    obj.insert("id".to_string(), serde_json::Value::String(our_response_id));
+                }
+                return Json(value).into_response();
+            }
             Err(e) => {
                 // On network errors, mark the upstream as offline
                 if is_network_error(&e) {
                     let pool = state.pool.clone();
-                    let upstream_id = upstream_client.upstream_id;
                     tokio::spawn(async move {
                         if let Err(db_err) =
                             db::llm::mark_upstream_offline(&pool, upstream_id).await
@@ -128,10 +164,49 @@ pub async fn retrieve_response(
         return resp;
     }
 
-    // Use the first available upstream that supports the responses API
-    let upstream = match select_responses_upstream(&state).await {
+    // Look up the ResponseMeta to find the upstream and original_response_id
+    let meta =
+        match db::responses::get_response_meta_by_response_id(&state.pool, &response_id).await {
+            Ok(Some(m)) => m,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": format!("Response '{}' not found.", response_id),
+                            "type": "invalid_request_error",
+                            "code": "response_not_found"
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                warn!(response_id = %response_id, error = %e, "DB error looking up response meta");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+
+    // Fetch the upstream using the stored upstream_id
+    let upstream = match db::llm::get_upstream(&state.pool, meta.upstream_id).await {
         Ok(u) => u,
-        Err(resp) => return resp,
+        Err(sqlx::Error::RowNotFound) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": format!("Upstream {} not found.", meta.upstream_id),
+                        "type": "server_error",
+                        "code": "upstream_not_found"
+                    }
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            warn!(upstream_id = %meta.upstream_id, error = %e, "DB error looking up upstream");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     let api_key_id = API_CREDENTIAL.with(|k| k.id);
@@ -150,11 +225,16 @@ pub async fn retrieve_response(
     info!(
         upstream_name = %upstream.name,
         response_id = %response_id,
+        original_response_id = %meta.original_response_id,
         "Retrieving response"
     );
 
-    match client.responses().retrieve(&response_id).await {
-        Ok(response) => {
+    match client
+        .responses()
+        .retrieve(&meta.original_response_id)
+        .await
+    {
+        Ok(mut response) => {
             log_response_usage(&response);
 
             // Trace the response
@@ -162,6 +242,8 @@ pub async fn retrieve_response(
                 .add(OpenAIEventData::ResponsesResponse(response.clone()))
                 .await;
 
+            // Replace the upstream response id with our own before returning
+            response.id = response_id;
             Json(response).into_response()
         }
         Err(e) => {
@@ -177,37 +259,28 @@ fn is_network_error(e: &async_openai::error::OpenAIError) -> bool {
 }
 
 /// Execute a response creation request using the specified client.
-/// Returns Ok(AxumResponse) on success, Err on failure so the caller can retry.
+/// Returns Ok((response_json, original_response_id)) on success, Err on failure so the caller can retry.
 async fn create_response_with_client(
     client: &Client<OpenAIConfig>,
     tracer: &mut SessionTracer,
     payload: CreateResponse,
-) -> Result<AxumResponse, async_openai::error::OpenAIError> {
-    let is_stream = payload.stream.unwrap_or(false);
-
+) -> Result<(serde_json::Value, String), async_openai::error::OpenAIError> {
     // Log the incoming request
     tracer
         .add(OpenAIEventData::ResponsesRequest(payload.clone()))
         .await;
 
-    if is_stream {
-        let stream = client.responses().create_stream(payload).await?;
-        let tracer = tracer.clone();
-        let event_stream = transform_stream_with_logging(stream, tracer);
-        Ok(Sse::new(event_stream)
-            .keep_alive(KeepAlive::default())
-            .into_response())
-    } else {
-        let response = client.responses().create(payload).await?;
-        log_response_usage(&response);
+    let response = client.responses().create(payload).await?;
+    log_response_usage(&response);
 
-        // Log the response
-        tracer
-            .add(OpenAIEventData::ResponsesResponse(response.clone()))
-            .await;
+    // Log the response
+    tracer
+        .add(OpenAIEventData::ResponsesResponse(response.clone()))
+        .await;
 
-        Ok(Json(response).into_response())
-    }
+    let original_response_id = response.id.clone();
+    let response_json = serde_json::to_value(&response).unwrap_or_default();
+    Ok((response_json, original_response_id))
 }
 
 /// Log token usage from a Response if available.
@@ -222,31 +295,8 @@ fn log_response_usage(response: &Response) {
     }
 }
 
-/// Select the first upstream that has the responses API enabled.
-async fn select_responses_upstream(
-    state: &AppState,
-) -> Result<crate::models::LLMUpstream, AxumResponse> {
-    match db::llm::list_upstreams(&state.pool).await {
-        Ok(upstreams) if !upstreams.is_empty() => Ok(upstreams.into_iter().next().unwrap()),
-        Ok(_) => Err((
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(serde_json::json!({
-                "error": {
-                    "message": "No upstream configured.",
-                    "type": "server_error",
-                    "code": "no_upstream"
-                }
-            })),
-        )
-            .into_response()),
-        Err(e) => {
-            warn!(error = %e, "Failed to query upstreams for responses proxy");
-            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
-        }
-    }
-}
-
 /// Transform async-openai response stream into Axum SSE event stream with session logging.
+#[allow(dead_code)]
 fn transform_stream_with_logging(
     mut stream: impl Stream<Item = Result<ResponseStreamEvent, async_openai::error::OpenAIError>>
     + Unpin

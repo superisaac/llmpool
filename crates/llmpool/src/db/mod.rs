@@ -5,6 +5,7 @@ pub mod core;
 pub mod files;
 #[allow(dead_code)]
 pub mod llm;
+pub mod responses;
 pub mod session_event;
 pub mod subscription;
 pub mod wallet;

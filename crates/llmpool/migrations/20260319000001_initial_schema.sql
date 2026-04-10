@@ -108,6 +108,18 @@ CREATE TABLE IF NOT EXISTS file_metas (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_file_metas_file_id ON file_metas (file_id);
 CREATE INDEX IF NOT EXISTS idx_file_metas_original_file_id ON file_metas (original_file_id);
 
+-- Create response_metas table
+CREATE TABLE IF NOT EXISTS response_metas (
+    id BIGSERIAL PRIMARY KEY,
+    response_id VARCHAR NOT NULL,
+    original_response_id VARCHAR NOT NULL DEFAULT '',
+    upstream_id INTEGER NOT NULL DEFAULT 0,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_response_metas_response_id ON response_metas (response_id);
+CREATE INDEX IF NOT EXISTS idx_response_metas_original_response_id ON response_metas (original_response_id);
+
 -- Create batch_metas table
 CREATE TABLE IF NOT EXISTS batch_metas (
     id BIGSERIAL PRIMARY KEY,

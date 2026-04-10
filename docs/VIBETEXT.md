@@ -378,3 +378,18 @@ LLMModel 删除字段: model_id, 新增两个字段 cname 和 fullname, fullname
 在find_models_by_name_and_capacity查询中，使用cname. 在client请求upstream时，使用fullname.
 
 修改migrations文件即可，不需要新建migration文件.
+
+============
+创建一个DB model: ResponseMeta, 表结构如下:
+* id: i64,
+* response_id: string, uuidv7
+* original_response_id: string, upstream 生成的response_id
+* upstream_id: i64,
+* deleted: bool,
+* created_at: timestamp
+
+create_response 中，在返回的Response对象中提取id, 记录在original_response_id, 生成新的ResponseMeta对象, 将uuidv7生成的response_id返回给客户端，并保存到DB中.
+
+retrieve_response中，根据response_id, 从DB中获取ResponseMeta对象，找到对应的upstream并将original_response_id作为参数传递给upstream.
+
+直接修改过migrations 文件，不用新建migration文件。
