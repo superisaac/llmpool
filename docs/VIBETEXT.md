@@ -393,3 +393,14 @@ create_response 中，在返回的Response对象中提取id, 记录在original_r
 retrieve_response中，根据response_id, 从DB中获取ResponseMeta对象，找到对应的upstream并将original_response_id作为参数传递给upstream.
 
 直接修改过migrations 文件，不用新建migration文件。
+
+create_response() 中 CreateResponse.previous_response_id 也需要
+通过ResponseMeta 换成original_response_id, 并在Response中换回来。
+retrieve_response() 中，previouse_response_id需要通过ResponseMeta 换成original_response_id
+
+在db/responses.rs 里写两个方法
+* get_original_response_id(response_id: i32)
+* get_response_id_from_original_response_id(original_response_id: i32)
+用于original_response_id和response_id的的转换，并替换现有openai_proxy/respnses.rs中的方法
+
+实现代理方法 DELETE /v1/responses/:id, 去对应的Upstream delete responses 以后 标记ResponseMeta.deleted = true

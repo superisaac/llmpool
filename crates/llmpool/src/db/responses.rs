@@ -49,6 +49,49 @@ pub async fn get_response_meta_by_response_id(
     .await
 }
 
+/// Look up a ResponseMeta by the upstream's original_response_id.
+pub async fn get_response_meta_by_original_response_id(
+    pool: &DbPool,
+    original_response_id: &str,
+) -> Result<Option<ResponseMeta>, sqlx::Error> {
+    sqlx::query_as::<_, ResponseMeta>(
+        "SELECT * FROM response_metas WHERE original_response_id = $1 AND deleted = FALSE",
+    )
+    .bind(original_response_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Given our internal response_id, return the upstream's original_response_id.
+/// Returns None if no mapping exists.
+pub async fn get_original_response_id(
+    pool: &DbPool,
+    response_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT original_response_id FROM response_metas WHERE response_id = $1 AND deleted = FALSE",
+    )
+    .bind(response_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(v,)| v))
+}
+
+/// Given the upstream's original_response_id, return our internal response_id.
+/// Returns None if no mapping exists.
+pub async fn get_response_id_from_original_response_id(
+    pool: &DbPool,
+    original_response_id: &str,
+) -> Result<Option<String>, sqlx::Error> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT response_id FROM response_metas WHERE original_response_id = $1 AND deleted = FALSE",
+    )
+    .bind(original_response_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|(v,)| v))
+}
+
 /// Mark a ResponseMeta as deleted by our internal response_id.
 pub async fn mark_response_meta_deleted(
     pool: &DbPool,

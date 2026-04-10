@@ -71,6 +71,33 @@ pub async fn create_response(
 
     let api_key_id = API_CREDENTIAL.with(|k| k.id);
 
+    // If previous_response_id is set, translate our internal ID to the upstream's original ID
+    let our_previous_response_id = payload.previous_response_id.clone();
+    let original_previous_response_id = if let Some(ref prev_id) = our_previous_response_id {
+        match db::responses::get_original_response_id(&state.pool, prev_id).await {
+            Ok(Some(orig_id)) => Some(orig_id),
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": format!("Previous response '{}' not found.", prev_id),
+                            "type": "invalid_request_error",
+                            "code": "response_not_found"
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                warn!(prev_id = %prev_id, error = %e, "DB error looking up previous response meta");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    } else {
+        None
+    };
+
     for (i, upstream_client) in clients.iter().enumerate() {
         let mut tracer = SessionTracer::new(
             state.event_storage.clone(),
@@ -80,6 +107,8 @@ pub async fn create_response(
         );
         let mut upstream_payload = payload.clone();
         upstream_payload.model = Some(upstream_client.fullname.clone());
+        // Replace our internal previous_response_id with the upstream's original ID
+        upstream_payload.previous_response_id = original_previous_response_id.clone();
         let upstream_id = upstream_client.upstream_id;
         match create_response_with_client(&upstream_client.client, &mut tracer, upstream_payload)
             .await
@@ -112,6 +141,13 @@ pub async fn create_response(
                 let mut value = response_json;
                 if let Some(obj) = value.as_object_mut() {
                     obj.insert("id".to_string(), serde_json::Value::String(our_response_id));
+                    // Replace previous_response_id back to our internal ID
+                    if let Some(ref our_prev_id) = our_previous_response_id {
+                        obj.insert(
+                            "previous_response_id".to_string(),
+                            serde_json::Value::String(our_prev_id.clone()),
+                        );
+                    }
                 }
                 return Json(value).into_response();
             }
@@ -150,6 +186,87 @@ pub async fn create_response(
         }
     }
     unreachable!()
+}
+
+/// Handle DELETE /responses/:response_id — delete a model response by ID
+pub async fn delete_response(
+    State(state): State<Arc<AppState>>,
+    Path(response_id): Path<String>,
+) -> AxumResponse {
+    // Look up the ResponseMeta to find the upstream and original_response_id
+    let meta =
+        match db::responses::get_response_meta_by_response_id(&state.pool, &response_id).await {
+            Ok(Some(m)) => m,
+            Ok(None) => {
+                return (
+                    StatusCode::NOT_FOUND,
+                    Json(serde_json::json!({
+                        "error": {
+                            "message": format!("Response '{}' not found.", response_id),
+                            "type": "invalid_request_error",
+                            "code": "response_not_found"
+                        }
+                    })),
+                )
+                    .into_response();
+            }
+            Err(e) => {
+                warn!(response_id = %response_id, error = %e, "DB error looking up response meta");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+
+    // Fetch the upstream using the stored upstream_id
+    let upstream = match db::llm::get_upstream(&state.pool, meta.upstream_id).await {
+        Ok(u) => u,
+        Err(sqlx::Error::RowNotFound) => {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": {
+                        "message": format!("Upstream {} not found.", meta.upstream_id),
+                        "type": "server_error",
+                        "code": "upstream_not_found"
+                    }
+                })),
+            )
+                .into_response();
+        }
+        Err(e) => {
+            warn!(upstream_id = %meta.upstream_id, error = %e, "DB error looking up upstream");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let config = OpenAIConfig::new()
+        .with_api_key(upstream.api_key.clone())
+        .with_api_base(upstream.api_base.clone());
+    let client = Client::with_config(config);
+
+    info!(
+        upstream_name = %upstream.name,
+        response_id = %response_id,
+        original_response_id = %meta.original_response_id,
+        "Deleting response"
+    );
+
+    match client.responses().delete(&meta.original_response_id).await {
+        Ok(deleted) => {
+            // Mark the ResponseMeta as deleted in our DB
+            if let Err(e) =
+                db::responses::mark_response_meta_deleted(&state.pool, &response_id).await
+            {
+                warn!(response_id = %response_id, error = %e, "Failed to mark response meta as deleted");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+            info!(response_id = %response_id, "Response deleted and marked as deleted in DB");
+            Json(deleted).into_response()
+        }
+        Err(e) => {
+            warn!(response_id = %response_id, error = %e, "Failed to delete response from upstream");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
 }
 
 /// Handle GET /responses/:response_id — retrieve a model response by ID
@@ -244,6 +361,36 @@ pub async fn retrieve_response(
 
             // Replace the upstream response id with our own before returning
             response.id = response_id;
+
+            // Replace previous_response_id (upstream original) back to our internal ID
+            if let Some(ref upstream_prev_id) = response.previous_response_id.clone() {
+                match db::responses::get_response_id_from_original_response_id(
+                    &state.pool,
+                    upstream_prev_id,
+                )
+                .await
+                {
+                    Ok(Some(our_prev_id)) => {
+                        response.previous_response_id = Some(our_prev_id);
+                    }
+                    Ok(None) => {
+                        // No mapping found; leave as-is (may be an external ID)
+                        warn!(
+                            upstream_prev_id = %upstream_prev_id,
+                            "No ResponseMeta found for upstream previous_response_id"
+                        );
+                    }
+                    Err(e) => {
+                        warn!(
+                            upstream_prev_id = %upstream_prev_id,
+                            error = %e,
+                            "DB error looking up previous response meta by original_response_id"
+                        );
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+            }
+
             Json(response).into_response()
         }
         Err(e) => {

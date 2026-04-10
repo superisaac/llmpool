@@ -57,7 +57,7 @@ pub fn get_router(
         .route("/responses", post(responses::create_response))
         .route(
             "/responses/{response_id}",
-            get(responses::retrieve_response),
+            get(responses::retrieve_response).delete(responses::delete_response),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
