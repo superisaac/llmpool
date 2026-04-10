@@ -2,8 +2,12 @@ pub mod batches;
 pub mod client;
 pub mod helpers;
 pub mod messages;
+pub mod models;
 
-use axum::{Router, middleware, routing::post};
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
 use std::sync::Arc;
 
 use apalis_redis::RedisStorage;
@@ -36,10 +40,10 @@ pub fn get_router(
     });
 
     Router::new()
+        // GET /v1/models — List available models
+        .route("/models", get(models::list_models))
         // POST /v1/messages — Create a Message
         .route("/messages", post(messages::create_message))
-        // POST /v1/complete — Legacy Text Completions
-        .route("/complete", post(messages::create_completion))
         // POST /v1/messages/count_tokens — Count tokens
         .route(
             "/messages/count_tokens",

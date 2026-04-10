@@ -98,7 +98,7 @@ pub async fn find_account_by_name(
 /// Count total number of API keys for a account
 pub async fn count_api_credentials_by_account(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
 ) -> Result<i64, sqlx::Error> {
     let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM api_credentials WHERE account_id = $1")
         .bind(account_id)
@@ -111,7 +111,7 @@ pub async fn count_api_credentials_by_account(
 /// `offset` is the number of rows to skip, `limit` is the max number of rows to return.
 pub async fn list_api_credentials_by_account_paginated(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ApiCredential>, sqlx::Error> {
@@ -160,7 +160,7 @@ pub async fn deactivate_api_credential(
 /// Create a new API key for a account
 pub async fn create_api_credential_for_account(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
     label: &str,
 ) -> Result<ApiCredential, sqlx::Error> {
     let plaintext = generate_api_credential();

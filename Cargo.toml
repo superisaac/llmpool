@@ -41,4 +41,5 @@ aes-gcm = "0.10"
 base64 = "0.22"
 hex = "0.4"
 reqwest = { version = "0.12", features = ["stream"] }
-anthropic = "0.0.8"
+# anthropic = "0.0.8"
+anthropic-sdk-rust = { git="https://github.com/superisaac/anthropic-sdk-rust.git", tag="0.1.1"}

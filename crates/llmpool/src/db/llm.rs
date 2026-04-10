@@ -110,7 +110,7 @@ pub async fn list_upstreams_paginated(
 }
 
 /// Get an OpenAI upstream by ID (with decrypted api_key)
-pub async fn get_upstream(pool: &DbPool, upstream_id: i32) -> Result<LLMUpstream, sqlx::Error> {
+pub async fn get_upstream(pool: &DbPool, upstream_id: i64) -> Result<LLMUpstream, sqlx::Error> {
     let upstream = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
         .bind(upstream_id)
         .fetch_one(pool)
@@ -143,7 +143,7 @@ pub async fn get_upstream_by_api_base(
 /// Update an OpenAI upstream
 pub async fn update_upstream(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
     update: &UpdateLLMUpstream,
 ) -> Result<LLMUpstream, sqlx::Error> {
     // Fetch current values first (already decrypted by get_upstream)
@@ -186,7 +186,7 @@ pub async fn update_upstream(
 }
 
 /// Mark an upstream as offline by setting its status to "offline"
-pub async fn mark_upstream_offline(pool: &DbPool, upstream_id: i32) -> Result<(), sqlx::Error> {
+pub async fn mark_upstream_offline(pool: &DbPool, upstream_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE llm_upstreams SET status = 'offline', updated_at = NOW() WHERE id = $1")
         .bind(upstream_id)
         .execute(pool)
@@ -195,7 +195,7 @@ pub async fn mark_upstream_offline(pool: &DbPool, upstream_id: i32) -> Result<()
 }
 
 /// Mark an upstream as online by setting its status to "online"
-pub async fn mark_upstream_online(pool: &DbPool, upstream_id: i32) -> Result<(), sqlx::Error> {
+pub async fn mark_upstream_online(pool: &DbPool, upstream_id: i64) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE llm_upstreams SET status = 'online', updated_at = NOW() WHERE id = $1")
         .bind(upstream_id)
         .execute(pool)
@@ -213,7 +213,7 @@ pub async fn list_offline_upstreams(pool: &DbPool) -> Result<Vec<LLMUpstream>, s
 }
 
 /// Delete an OpenAI upstream
-pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sqlx::Error> {
+pub async fn delete_upstream(pool: &DbPool, upstream_id: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM llm_upstreams WHERE id = $1")
         .bind(upstream_id)
         .execute(pool)
@@ -229,8 +229,8 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sql
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     let cname = derive_cname(&new_model.fullname);
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, fullname, cname, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        "INSERT INTO llm_models (upstream_id, fullname, cname, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, max_tokens, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
@@ -242,6 +242,7 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .bind(new_model.has_embedding)
     .bind(new_model.has_messages)
     .bind(new_model.has_responses_api)
+    .bind(new_model.max_tokens)
     .bind(&new_model.input_token_price)
     .bind(&new_model.output_token_price)
     .bind(&new_model.batch_input_token_price)
@@ -250,17 +251,67 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .await
 }
 
-/// List all OpenAI models
-pub async fn list_models(pool: &DbPool) -> Result<Vec<LLMModel>, sqlx::Error> {
-    sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models")
-        .fetch_all(pool)
-        .await
+/// List all OpenAI models, optionally filtered by capacity options.
+/// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
+pub async fn list_models(
+    pool: &DbPool,
+    capacity: &CapacityOption,
+) -> Result<Vec<LLMModel>, sqlx::Error> {
+    let mut sql = String::from("SELECT * FROM llm_models WHERE 1=1");
+    let mut param_idx = 0u32;
+
+    if capacity.has_chat_completion == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_chat_completion = ${}", param_idx));
+    }
+    if capacity.has_embedding == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_embedding = ${}", param_idx));
+    }
+    if capacity.has_image_generation == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_image_generation = ${}", param_idx));
+    }
+    if capacity.has_speech == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_speech = ${}", param_idx));
+    }
+    if capacity.has_messages == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_messages = ${}", param_idx));
+    }
+    if capacity.has_responses_api == Some(true) {
+        param_idx += 1;
+        sql.push_str(&format!(" AND has_responses_api = ${}", param_idx));
+    }
+    let _ = param_idx;
+
+    let mut query = sqlx::query_as::<_, LLMModel>(&sql);
+    if capacity.has_chat_completion == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_embedding == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_image_generation == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_speech == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_messages == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_responses_api == Some(true) {
+        query = query.bind(true);
+    }
+    query.fetch_all(pool).await
 }
 
 /// List models belonging to a specific upstream
 pub async fn list_models_by_upstream(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<Vec<LLMModel>, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE upstream_id = $1")
         .bind(upstream_id)
@@ -269,7 +320,7 @@ pub async fn list_models_by_upstream(
 }
 
 /// Get an OpenAI model by ID
-pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<LLMModel, sqlx::Error> {
+pub async fn get_model(pool: &DbPool, model_id: i64) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
         .bind(model_id)
         .fetch_one(pool)
@@ -279,7 +330,7 @@ pub async fn get_model(pool: &DbPool, model_id: i32) -> Result<LLMModel, sqlx::E
 /// Get an OpenAI model by ID using a transaction
 pub async fn get_model_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    model_id: i32,
+    model_id: i64,
 ) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE id = $1")
         .bind(model_id)
@@ -290,7 +341,7 @@ pub async fn get_model_with_tx(
 /// Find a model by upstream_id and fullname string
 pub async fn find_model_by_upstream_and_model_id(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
     model_id_str: &str,
 ) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
@@ -322,7 +373,7 @@ pub async fn find_model_by_upstream_name_and_model_id(
 /// Update an OpenAI model
 pub async fn update_model(
     pool: &DbPool,
-    model_pk: i32,
+    model_pk: i64,
     update: &UpdateLLMModel,
 ) -> Result<LLMModel, sqlx::Error> {
     // Fetch current values first
@@ -346,6 +397,7 @@ pub async fn update_model(
     let has_responses_api = update
         .has_responses_api
         .unwrap_or(current.has_responses_api);
+    let max_tokens = update.max_tokens.unwrap_or(current.max_tokens);
     let input_token_price = update
         .input_token_price
         .as_ref()
@@ -372,11 +424,11 @@ pub async fn update_model(
         "UPDATE llm_models
          SET fullname = $1, cname = $2, is_active = $3, has_image_generation = $4, has_speech = $5,
              has_chat_completion = $6, has_embedding = $7, has_messages = $8,
-             has_responses_api = $9,
-             input_token_price = $10, output_token_price = $11,
-             batch_input_token_price = $12, batch_output_token_price = $13,
-             description = $14, updated_at = $15
-         WHERE id = $16
+             has_responses_api = $9, max_tokens = $10,
+             input_token_price = $11, output_token_price = $12,
+             batch_input_token_price = $13, batch_output_token_price = $14,
+             description = $15, updated_at = $16
+         WHERE id = $17
          RETURNING *",
     )
     .bind(fullname)
@@ -388,6 +440,7 @@ pub async fn update_model(
     .bind(has_embedding)
     .bind(has_messages)
     .bind(has_responses_api)
+    .bind(max_tokens)
     .bind(input_token_price)
     .bind(output_token_price)
     .bind(batch_input_token_price)
@@ -412,7 +465,7 @@ pub async fn find_first_model_by_name(
 
 /// Filter options for listing models
 pub struct ListModelsFilter {
-    pub upstream_id: Option<i32>,
+    pub upstream_id: Option<i64>,
     pub upstream_name: Option<String>,
     pub name: Option<String>,
     pub is_active: Option<bool>,
@@ -520,7 +573,7 @@ pub async fn list_models_filtered_paginated(
 }
 
 /// Delete an OpenAI model
-pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Error> {
+pub async fn delete_model(pool: &DbPool, model_pk: i64) -> Result<u64, sqlx::Error> {
     let result = sqlx::query("DELETE FROM llm_models WHERE id = $1")
         .bind(model_pk)
         .execute(pool)
@@ -531,7 +584,7 @@ pub async fn delete_model(pool: &DbPool, model_pk: i32) -> Result<u64, sqlx::Err
 /// Get an upstream with all its models
 pub async fn get_upstream_with_models(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<(LLMUpstream, Vec<LLMModel>), sqlx::Error> {
     let upstream = get_upstream(pool, upstream_id).await?;
     let models = list_models_by_upstream(pool, upstream_id).await?;
@@ -541,7 +594,7 @@ pub async fn get_upstream_with_models(
 /// Get the tags of an upstream by its ID.
 pub async fn get_upstream_tags(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<Vec<String>, sqlx::Error> {
     let upstream = sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE id = $1")
         .bind(upstream_id)
@@ -554,7 +607,7 @@ pub async fn get_upstream_tags(
 /// Returns the updated upstream.
 pub async fn add_upstream_tag(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
     tag: &str,
 ) -> Result<LLMUpstream, sqlx::Error> {
     // Use array_append only if the tag is not already present
@@ -579,7 +632,7 @@ pub async fn add_upstream_tag(
 /// Returns the updated upstream.
 pub async fn remove_upstream_tag(
     pool: &DbPool,
-    upstream_id: i32,
+    upstream_id: i64,
     tag: &str,
 ) -> Result<LLMUpstream, sqlx::Error> {
     let upstream = sqlx::query_as::<_, LLMUpstream>(
@@ -614,8 +667,8 @@ pub async fn find_upstreams_by_tag(
 #[derive(Debug, Clone, sqlx::FromRow)]
 struct ModelUpstreamRow {
     // LLMModel fields
-    pub id: i32,
-    pub upstream_id: i32,
+    pub id: i64,
+    pub upstream_id: i64,
     pub fullname: String,
     pub cname: String,
     pub is_active: bool,
@@ -625,6 +678,7 @@ struct ModelUpstreamRow {
     pub has_embedding: bool,
     pub has_messages: bool,
     pub has_responses_api: bool,
+    pub max_tokens: i64,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
     pub batch_input_token_price: bigdecimal::BigDecimal,
@@ -633,7 +687,7 @@ struct ModelUpstreamRow {
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
     // LLMUpstream fields (aliased)
-    pub ep_id: i32,
+    pub ep_id: i64,
     pub ep_name: String,
     pub ep_api_base: String,
     pub ep_encrypted_api_key: String,
@@ -660,6 +714,7 @@ impl ModelUpstreamRow {
             has_embedding: self.has_embedding,
             has_messages: self.has_messages,
             has_responses_api: self.has_responses_api,
+            max_tokens: self.max_tokens,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
             batch_input_token_price: self.batch_input_token_price,
@@ -702,7 +757,7 @@ pub async fn find_models_by_name_and_capacity(
     let mut sql = String::from(
         "SELECT m.id, m.upstream_id, m.fullname, m.cname, m.is_active, m.has_image_generation, m.has_speech,
                 m.has_chat_completion, m.has_embedding, m.has_messages, m.has_responses_api,
-                m.input_token_price, m.output_token_price,
+                m.max_tokens, m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,

@@ -25,7 +25,7 @@ fn new_batch_id() -> String {
 /// Returns an error Response if not found or DB error.
 async fn get_upstream_by_id(
     state: &AppState,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<crate::models::LLMUpstream, Response> {
     match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Ok(upstream),

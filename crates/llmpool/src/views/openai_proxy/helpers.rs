@@ -23,7 +23,7 @@ pub struct AppState {
 /// Check if the account has sufficient wallets (cash + credit > 0).
 /// Tries Redis cache first, falls back to DB on cache miss.
 /// Returns Ok(()) if wallets are sufficient, Err(Response) with a payment-required error otherwise.
-pub async fn check_wallet_balance(state: &AppState, account_id: i32) -> Result<(), Response> {
+pub async fn check_wallet_balance(state: &AppState, account_id: i64) -> Result<(), Response> {
     use crate::redis_utils::caches::wallet as wallet_cache;
     use bigdecimal::BigDecimal;
 
@@ -150,7 +150,7 @@ pub(super) fn build_client_from_model_upstream(
     upstream: &crate::models::LLMUpstream,
 ) -> (
     async_openai::Client<async_openai::config::OpenAIConfig>,
-    i32,
+    i64,
 ) {
     use async_openai::{Client, config::OpenAIConfig};
 
@@ -187,9 +187,9 @@ pub(super) fn build_client_from_model_upstream(
 pub(super) struct UpstreamClient {
     pub client: async_openai::Client<async_openai::config::OpenAIConfig>,
     /// The LLMModel primary key
-    pub model_db_id: i32,
+    pub model_db_id: i64,
     /// The LLMUpstream primary key (used to mark upstream offline on network errors)
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     /// The full model identifier to use when sending requests to the upstream
     pub fullname: String,
 }
@@ -227,7 +227,7 @@ pub(super) async fn select_model_clients(
 
     // Fetch output token usage from Redis for all models in a single MGET, then sort ascending
     // and take the `count` with the lowest usage.
-    let model_ids: Vec<i32> = models.iter().map(|(m, _)| m.id).collect();
+    let model_ids: Vec<i64> = models.iter().map(|(m, _)| m.id).collect();
     let usages = get_output_token_usage_batch(redis_pool, &model_ids).await;
 
     let mut models_with_usage: Vec<(i64, &(crate::models::LLMModel, crate::models::LLMUpstream))> =

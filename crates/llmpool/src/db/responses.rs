@@ -10,7 +10,7 @@ pub struct ResponseMeta {
     pub id: i64,
     pub response_id: String,
     pub original_response_id: String,
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     pub deleted: bool,
     pub created_at: NaiveDateTime,
 }
@@ -22,7 +22,7 @@ pub async fn create_response_meta(
     pool: &DbPool,
     response_id: &str,
     original_response_id: &str,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<ResponseMeta, sqlx::Error> {
     sqlx::query_as::<_, ResponseMeta>(
         "INSERT INTO response_metas (response_id, original_response_id, upstream_id)

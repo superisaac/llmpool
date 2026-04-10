@@ -11,13 +11,13 @@ use crate::client::ApiClient;
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct SubscriptionPlanResponse {
-    pub id: i32,
+    pub id: i64,
     pub status: String,
     pub description: String,
     pub total_token_limit: i64,
-    pub time_span: i32,
+    pub time_span: i64,
     pub money_limit: String,
-    pub sort_order: i32,
+    pub sort_order: i64,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -25,15 +25,15 @@ pub struct SubscriptionPlanResponse {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct SubscriptionResponse {
-    pub id: i32,
-    pub account_id: i32,
-    pub plan_id: i32,
+    pub id: i64,
+    pub account_id: i64,
+    pub plan_id: i64,
     pub status: String,
     pub start_at: Option<String>,
     pub end_at: Option<String>,
     pub used_total_tokens: i64,
     pub total_token_limit: i64,
-    pub sort_order: i32,
+    pub sort_order: i64,
     pub used_money: String,
     pub created_at: String,
     pub updated_at: String,
@@ -51,7 +51,7 @@ pub enum SubscriptionPlanAction {
     Show {
         /// Subscription plan ID
         #[arg(long)]
-        plan_id: i32,
+        plan_id: i64,
     },
     /// Add a new subscription plan
     Add {
@@ -63,19 +63,19 @@ pub enum SubscriptionPlanAction {
         total_token_limit: i64,
         /// Time span in seconds (0 = unlimited)
         #[arg(long, default_value = "0")]
-        time_span: i32,
+        time_span: i64,
         /// Money limit (0 = unlimited)
         #[arg(long, default_value = "0")]
         money_limit: String,
         /// Sort order (higher = higher priority)
         #[arg(long, default_value = "0")]
-        sort_order: i32,
+        sort_order: i64,
     },
     /// Update a subscription plan
     Update {
         /// Subscription plan ID
         #[arg(long)]
-        plan_id: i32,
+        plan_id: i64,
         /// New description
         #[arg(long)]
         description: Option<String>,
@@ -84,13 +84,13 @@ pub enum SubscriptionPlanAction {
         total_token_limit: Option<i64>,
         /// New time span in seconds
         #[arg(long)]
-        time_span: Option<i32>,
+        time_span: Option<i64>,
         /// New money limit
         #[arg(long)]
         money_limit: Option<String>,
         /// New sort order
         #[arg(long)]
-        sort_order: Option<i32>,
+        sort_order: Option<i64>,
         /// New status (active, deactive)
         #[arg(long)]
         status: Option<String>,
@@ -99,7 +99,7 @@ pub enum SubscriptionPlanAction {
     Cancel {
         /// Subscription plan ID
         #[arg(long)]
-        plan_id: i32,
+        plan_id: i64,
     },
 }
 
@@ -118,7 +118,7 @@ pub enum SubscriptionAction {
     Show {
         /// Subscription ID
         #[arg(long)]
-        subscription_id: i32,
+        subscription_id: i64,
     },
     /// Create a new subscription for an account
     Add {
@@ -127,13 +127,13 @@ pub enum SubscriptionAction {
         account: String,
         /// Subscription plan ID
         #[arg(long)]
-        plan_id: i32,
+        plan_id: i64,
     },
     /// Update a subscription's status
     Update {
         /// Subscription ID
         #[arg(long)]
-        subscription_id: i32,
+        subscription_id: i64,
         /// New status (active, deactive)
         #[arg(long)]
         status: String,
@@ -142,7 +142,7 @@ pub enum SubscriptionAction {
     Cancel {
         /// Subscription ID
         #[arg(long)]
-        subscription_id: i32,
+        subscription_id: i64,
     },
 }
 
@@ -154,9 +154,9 @@ pub enum SubscriptionAction {
 struct CreateSubscriptionPlanRequest {
     description: String,
     total_token_limit: i64,
-    time_span: i32,
+    time_span: i64,
     money_limit: String,
-    sort_order: i32,
+    sort_order: i64,
 }
 
 #[derive(Serialize)]
@@ -166,19 +166,19 @@ struct UpdateSubscriptionPlanRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     total_token_limit: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    time_span: Option<i32>,
+    time_span: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     money_limit: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    sort_order: Option<i32>,
+    sort_order: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     status: Option<String>,
 }
 
 #[derive(Serialize)]
 struct CreateSubscriptionRequest {
-    account_id: i32,
-    plan_id: i32,
+    account_id: i64,
+    plan_id: i64,
 }
 
 #[derive(Serialize)]

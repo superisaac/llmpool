@@ -10,8 +10,8 @@ use sqlx::FromRow;
 /// Represents a user's wallet record
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Wallet {
-    pub id: i32,
-    pub account_id: i32,
+    pub id: i64,
+    pub account_id: i64,
     pub balance: BigDecimal,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -20,7 +20,7 @@ pub struct Wallet {
 /// Used to insert a new wallet
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewWallet {
-    pub account_id: i32,
+    pub account_id: i64,
     pub balance: BigDecimal,
 }
 
@@ -66,12 +66,12 @@ pub enum BalanceChangeContent {
 /// Represents a balance change record
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct BalanceChange {
-    pub id: i32,
-    pub account_id: i32,
+    pub id: i64,
+    pub account_id: i64,
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
-    pub subscription_id: i32,
+    pub subscription_id: i64,
     pub created_at: NaiveDateTime,
 }
 
@@ -85,7 +85,7 @@ pub struct BalanceChange {
 /// Used to insert a new balance change
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewBalanceChange {
-    pub account_id: i32,
+    pub account_id: i64,
     pub unique_request_id: String,
     pub content: serde_json::Value,
 }
@@ -93,7 +93,7 @@ pub struct NewBalanceChange {
 impl NewBalanceChange {
     /// Create a new balance change from a BalanceChangeContent enum with a given unique_request_id
     pub fn from_content(
-        account_id: i32,
+        account_id: i64,
         unique_request_id: String,
         content: &BalanceChangeContent,
     ) -> Result<Self, serde_json::Error> {

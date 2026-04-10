@@ -251,7 +251,7 @@ async fn passthrough_by_tag_handler(
 /// The upstream URL is rewritten to: {upstream.api_base}/{rest}
 async fn passthrough_by_upstream_id_handler(
     State(state): State<Arc<PassthroughState>>,
-    Path((upstream_id, rest)): Path<(i32, String)>,
+    Path((upstream_id, rest)): Path<(i64, String)>,
     req: Request,
 ) -> Response {
     // 1. Find upstream by ID

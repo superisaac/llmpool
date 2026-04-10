@@ -10,7 +10,7 @@ pub struct BatchMeta {
     pub id: i64,
     pub batch_id: String,
     pub original_batch_id: String,
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     pub status: String,
     pub created_at: NaiveDateTime,
 }
@@ -22,7 +22,7 @@ pub async fn create_batch_meta(
     pool: &DbPool,
     batch_id: &str,
     original_batch_id: &str,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<BatchMeta, sqlx::Error> {
     sqlx::query_as::<_, BatchMeta>(
         "INSERT INTO batch_metas (batch_id, original_batch_id, upstream_id)

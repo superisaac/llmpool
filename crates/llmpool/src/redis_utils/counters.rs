@@ -11,7 +11,7 @@ use crate::db::RedisPool;
 /// Missing keys or errors default to `0`.
 ///
 /// Key pattern: `tokenusage:output:<model_id>:<hour>` where `<hour>` is `YYYYMMDDHH` (UTC).
-pub async fn get_output_token_usage_batch(redis_pool: &RedisPool, model_ids: &[i32]) -> Vec<i64> {
+pub async fn get_output_token_usage_batch(redis_pool: &RedisPool, model_ids: &[i64]) -> Vec<i64> {
     if model_ids.is_empty() {
         return vec![];
     }
@@ -48,7 +48,7 @@ pub async fn get_output_token_usage_batch(redis_pool: &RedisPool, model_ids: &[i
 /// where `<hour>` is formatted as `YYYYMMDDHH` (UTC).
 pub async fn increment_token_usage(
     redis_pool: &RedisPool,
-    model_id: i32,
+    model_id: i64,
     input_tokens: i64,
     output_tokens: i64,
 ) {

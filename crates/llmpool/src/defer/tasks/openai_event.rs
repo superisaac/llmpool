@@ -235,7 +235,7 @@ pub async fn handle_openai_event(
 
         // 4. Enqueue a settle_balance_change task to apply the balance change asynchronously
         let entry = BalanceChangeTask {
-            balance_change_id: balance_change.id as i64,
+            balance_change_id: balance_change.id,
         };
         let mut storage: RedisStorage<BalanceChangeTask> = (*balance_change_storage).clone();
         if let Err(e) = storage.push(entry).await {

@@ -103,50 +103,6 @@ pub struct Message {
 }
 
 // ---------------------------------------------------------------------------
-// POST /v1/complete — Create a Text Completion (legacy)
-// ---------------------------------------------------------------------------
-
-/// Request body for `POST /v1/complete`
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompletionRequest {
-    /// The model to use
-    pub model: String,
-    /// The prompt to complete (must follow Human/Assistant format)
-    pub prompt: String,
-    /// Maximum tokens to generate
-    pub max_tokens_to_sample: u32,
-    /// Stop sequences
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stop_sequences: Option<Vec<String>>,
-    /// Sampling temperature
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    /// Top-p nucleus sampling
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_p: Option<f32>,
-    /// Top-k sampling
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub top_k: Option<u32>,
-    /// Whether to stream the response
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream: Option<bool>,
-    /// Metadata
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-/// Response body for `POST /v1/complete`
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CompletionResponse {
-    #[serde(rename = "type")]
-    pub completion_type: String,
-    pub id: String,
-    pub completion: String,
-    pub stop_reason: Option<String>,
-    pub model: String,
-}
-
-// ---------------------------------------------------------------------------
 // POST /v1/messages/batches — Create a Message Batch
 // ---------------------------------------------------------------------------
 
@@ -453,38 +409,6 @@ impl AnthropicApiClient {
         params: &CreateMessageParams,
     ) -> Result<reqwest::Response, AnthropicApiError> {
         let url = format!("{}/v1/messages", self.api_base);
-        let builder = self.http_client.post(&url);
-        let resp = self.auth_headers(builder).json(params).send().await?;
-        Self::check_response(resp).await
-    }
-
-    // -----------------------------------------------------------------------
-    // POST /v1/complete  (legacy Text Completions)
-    // -----------------------------------------------------------------------
-
-    /// [Legacy] Create a Text Completion.
-    ///
-    /// The Text Completions API is a legacy API. Prefer the Messages API for
-    /// new integrations.
-    pub async fn create_completion(
-        &self,
-        params: &CompletionRequest,
-    ) -> Result<CompletionResponse, AnthropicApiError> {
-        let url = format!("{}/v1/complete", self.api_base);
-        let builder = self.http_client.post(&url);
-        let resp = self.auth_headers(builder).json(params).send().await?;
-        let resp = Self::check_response(resp).await?;
-        Ok(resp.json::<CompletionResponse>().await?)
-    }
-
-    /// [Legacy] Create a Text Completion and return the raw `reqwest::Response`.
-    ///
-    /// Useful when `stream: true` is set in `params`.
-    pub async fn create_completion_raw(
-        &self,
-        params: &CompletionRequest,
-    ) -> Result<reqwest::Response, AnthropicApiError> {
-        let url = format!("{}/v1/complete", self.api_base);
         let builder = self.http_client.post(&url);
         let resp = self.auth_headers(builder).json(params).send().await?;
         Self::check_response(resp).await

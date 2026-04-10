@@ -60,21 +60,21 @@ pub enum WalletAction {
 
 #[derive(Serialize)]
 struct CreateDepositRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: String,
 }
 
 #[derive(Serialize)]
 struct CreateWithdrawRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: String,
 }
 
 #[derive(Serialize)]
 struct CreateCreditRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: String,
 }

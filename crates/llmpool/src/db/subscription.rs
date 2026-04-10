@@ -11,9 +11,9 @@ pub async fn create_subscription_plan(
     pool: &DbPool,
     description: &str,
     total_token_limit: i64,
-    time_span: i32,
+    time_span: i64,
     money_limit: &bigdecimal::BigDecimal,
-    sort_order: i32,
+    sort_order: i64,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>(
         r#"
@@ -35,7 +35,7 @@ pub async fn create_subscription_plan(
 /// Get a subscription plan by ID
 pub async fn get_subscription_plan_by_id(
     pool: &DbPool,
-    plan_id: i32,
+    plan_id: i64,
 ) -> Result<Option<SubscriptionPlan>, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>("SELECT * FROM subscription_plans WHERE id = $1")
         .bind(plan_id)
@@ -69,12 +69,12 @@ pub async fn list_subscription_plans_paginated(
 /// Update a subscription plan by ID
 pub async fn update_subscription_plan(
     pool: &DbPool,
-    plan_id: i32,
+    plan_id: i64,
     description: Option<&str>,
     total_token_limit: Option<i64>,
-    time_span: Option<i32>,
+    time_span: Option<i64>,
     money_limit: Option<&bigdecimal::BigDecimal>,
-    sort_order: Option<i32>,
+    sort_order: Option<i64>,
     status: Option<&str>,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>(
@@ -105,7 +105,7 @@ pub async fn update_subscription_plan(
 /// Deactivate (soft-delete) a subscription plan by setting status = 'deactive'
 pub async fn cancel_subscription_plan(
     pool: &DbPool,
-    plan_id: i32,
+    plan_id: i64,
 ) -> Result<SubscriptionPlan, sqlx::Error> {
     sqlx::query_as::<_, SubscriptionPlan>(
         r#"
@@ -126,8 +126,8 @@ pub async fn cancel_subscription_plan(
 /// Create a new subscription for an account
 pub async fn create_subscription(
     pool: &DbPool,
-    account_id: i32,
-    plan_id: i32,
+    account_id: i64,
+    plan_id: i64,
 ) -> Result<Subscription, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(
         r#"
@@ -145,7 +145,7 @@ pub async fn create_subscription(
 /// Get a subscription by ID
 pub async fn get_subscription_by_id(
     pool: &DbPool,
-    subscription_id: i32,
+    subscription_id: i64,
 ) -> Result<Option<Subscription>, sqlx::Error> {
     sqlx::query_as::<_, Subscription>("SELECT * FROM subscriptions WHERE id = $1")
         .bind(subscription_id)
@@ -156,13 +156,13 @@ pub async fn get_subscription_by_id(
 /// Count subscriptions with optional filters
 pub async fn count_subscriptions(
     pool: &DbPool,
-    account_id: Option<i32>,
+    account_id: Option<i64>,
     status: Option<&str>,
 ) -> Result<i64, sqlx::Error> {
     let row: (i64,) = sqlx::query_as(
         r#"
         SELECT COUNT(*) FROM subscriptions
-        WHERE ($1::INT IS NULL OR account_id = $1)
+        WHERE ($1::BIGINT IS NULL OR account_id = $1)
           AND ($2::VARCHAR IS NULL OR status = $2)
         "#,
     )
@@ -176,7 +176,7 @@ pub async fn count_subscriptions(
 /// List subscriptions with optional filters and pagination
 pub async fn list_subscriptions_paginated(
     pool: &DbPool,
-    account_id: Option<i32>,
+    account_id: Option<i64>,
     status: Option<&str>,
     offset: i64,
     limit: i64,
@@ -184,7 +184,7 @@ pub async fn list_subscriptions_paginated(
     sqlx::query_as::<_, Subscription>(
         r#"
         SELECT * FROM subscriptions
-        WHERE ($1::INT IS NULL OR account_id = $1)
+        WHERE ($1::BIGINT IS NULL OR account_id = $1)
           AND ($2::VARCHAR IS NULL OR status = $2)
         ORDER BY sort_order DESC, id DESC
         LIMIT $3 OFFSET $4
@@ -201,7 +201,7 @@ pub async fn list_subscriptions_paginated(
 /// Update a subscription's status
 pub async fn update_subscription_status(
     pool: &DbPool,
-    subscription_id: i32,
+    subscription_id: i64,
     status: &str,
 ) -> Result<Subscription, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(
@@ -220,7 +220,7 @@ pub async fn update_subscription_status(
 /// Deactivate a subscription by setting status = 'deactive'
 pub async fn cancel_subscription(
     pool: &DbPool,
-    subscription_id: i32,
+    subscription_id: i64,
 ) -> Result<Subscription, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(
         r#"
@@ -246,7 +246,7 @@ pub async fn cancel_subscription(
 /// Returns None if no such subscription exists.
 pub async fn get_current_subscription(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
     consumed_tokens: i64,
 ) -> Result<Option<Subscription>, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(
@@ -273,7 +273,7 @@ pub async fn get_current_subscription(
 /// Same logic as `get_current_subscription` but operates within a provided transaction.
 pub async fn get_current_subscription_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    account_id: i32,
+    account_id: i64,
     consumed_tokens: i64,
 ) -> Result<Option<Subscription>, sqlx::Error> {
     sqlx::query_as::<_, Subscription>(

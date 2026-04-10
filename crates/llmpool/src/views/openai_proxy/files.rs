@@ -43,7 +43,7 @@ pub fn new_file_id() -> String {
 pub async fn wrap_file(
     state: &AppState,
     file_id: Option<String>,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<Option<db::files::FileMeta>, Response> {
     let original_file_id = match file_id {
         Some(id) => id,
@@ -132,7 +132,7 @@ async fn resolve_file_meta(
 /// Returns an error Response if not found or DB error.
 async fn get_upstream_by_id(
     state: &AppState,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<crate::models::LLMUpstream, Response> {
     match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Ok(upstream),

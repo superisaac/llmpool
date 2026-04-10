@@ -121,7 +121,7 @@ pub async fn handle_account(
         }
         AccountAction::Show { account } => {
             if json_output {
-                let path = if let Ok(id) = account.parse::<i32>() {
+                let path = if let Ok(id) = account.parse::<i64>() {
                     format!("/accounts/{}", id)
                 } else {
                     format!("/accounts_by_name/{}", account)
@@ -129,7 +129,7 @@ pub async fn handle_account(
                 let raw = client.get_raw(&path).await?;
                 println!("{}", raw);
             } else {
-                let resp: AccountResponse = if let Ok(id) = account.parse::<i32>() {
+                let resp: AccountResponse = if let Ok(id) = account.parse::<i64>() {
                     client.get(&format!("/accounts/{}", id)).await?
                 } else {
                     client

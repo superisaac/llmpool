@@ -45,7 +45,7 @@ pub async fn check_messages_api_support(api_key: &str, api_base: &str) -> bool {
 /// and return the updated `LLMModel`.
 pub async fn detect_and_update_model_features(
     pool: &DbPool,
-    model_pk: i32,
+    model_pk: i64,
 ) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
     // 1. Fetch the model record
     let model = db::llm::get_model(pool, model_pk).await?;
@@ -66,6 +66,7 @@ pub async fn detect_and_update_model_features(
         has_embedding: None,
         has_messages: Some(has_messages),
         has_responses_api: None,
+        max_tokens: None,
         input_token_price: None,
         output_token_price: None,
         batch_input_token_price: None,

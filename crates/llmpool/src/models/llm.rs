@@ -13,7 +13,7 @@ fn default_provider() -> String {
 /// Represents an OpenAI-compatible API upstream
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LLMUpstream {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub api_base: String,
     pub encrypted_api_key: String,
@@ -54,6 +54,10 @@ fn default_status() -> String {
     "online".to_string()
 }
 
+fn default_max_tokens() -> i64 {
+    100000
+}
+
 /// Used to update an existing OpenAI upstream
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateLLMUpstream {
@@ -71,8 +75,8 @@ pub struct UpdateLLMUpstream {
 /// Represents a model available on an OpenAI-compatible upstream
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LLMModel {
-    pub id: i32,
-    pub upstream_id: i32,
+    pub id: i64,
+    pub upstream_id: i64,
     /// The full model identifier (e.g. "provider/model-name"), used when sending requests to upstream
     pub fullname: String,
     /// The short name after "/" in fullname; equals fullname if no "/" present. Used for client-facing model name matching.
@@ -86,6 +90,7 @@ pub struct LLMModel {
     pub has_messages: bool,
     /// Whether the model supports the OpenAI /v1/responses API
     pub has_responses_api: bool,
+    pub max_tokens: i64,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -98,7 +103,7 @@ pub struct LLMModel {
 /// Used to insert a new OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewLLMModel {
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     /// The full model identifier (e.g. "provider/model-name")
     pub fullname: String,
     pub has_image_generation: bool,
@@ -111,6 +116,8 @@ pub struct NewLLMModel {
     /// Whether the model supports the OpenAI /v1/responses API
     #[serde(default)]
     pub has_responses_api: bool,
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: i64,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -146,6 +153,7 @@ pub struct UpdateLLMModel {
     pub has_messages: Option<bool>,
     /// Whether the model supports the OpenAI /v1/responses API
     pub has_responses_api: Option<bool>,
+    pub max_tokens: Option<i64>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
     pub batch_input_token_price: Option<BigDecimal>,

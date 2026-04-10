@@ -28,7 +28,7 @@ pub enum ModelAction {
     Update {
         /// ID of the model to update
         #[arg(long)]
-        model_id: i32,
+        model_id: i64,
         /// Enable or disable the model
         #[arg(long)]
         is_active: Option<bool>,
@@ -78,7 +78,7 @@ struct UpdateModelRequestBody {
 
 #[derive(Serialize)]
 struct TestModelsRequestBody {
-    model_ids: Vec<i32>,
+    model_ids: Vec<i64>,
 }
 
 // ============================================================
@@ -243,9 +243,9 @@ pub async fn handle_model(
 /// Otherwise, it is treated as a path of the form `upstream_name/model_name` and
 /// the API endpoint `GET /api/v1/models/path/{upstream_name}/{model_name}` is called
 /// to look up the model ID.
-async fn resolve_model_id(model: &str, client: &ApiClient) -> Result<i32, String> {
+async fn resolve_model_id(model: &str, client: &ApiClient) -> Result<i64, String> {
     // If it's a plain integer, use it directly as the model ID
-    if let Ok(id) = model.parse::<i32>() {
+    if let Ok(id) = model.parse::<i64>() {
         return Ok(id);
     }
 

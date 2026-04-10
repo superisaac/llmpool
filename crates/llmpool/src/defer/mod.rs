@@ -19,8 +19,7 @@ use tracing::warn;
 
 use crate::config;
 use crate::views::anthropic_proxy::client::{
-    CompletionRequest, CompletionResponse, CreateMessageBatchParams, CreateMessageParams, Message,
-    MessageBatch,
+    CreateMessageBatchParams, CreateMessageParams, Message, MessageBatch,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,9 +49,9 @@ pub enum OpenAIEventData {
 pub struct OpenAIEventTask {
     pub session_id: String,
     pub session_index: i32,
-    pub account_id: i32,
-    pub model_id: i32,
-    pub api_key_id: i32,
+    pub account_id: i64,
+    pub model_id: i64,
+    pub api_key_id: i64,
     pub event_data: OpenAIEventData,
 }
 
@@ -71,10 +70,6 @@ pub enum AnthropicEventData {
         input_tokens: u64,
         output_tokens: u64,
     },
-    /// Legacy completion request
-    CreateCompletionRequest(CompletionRequest),
-    /// Legacy completion response
-    CreateCompletionResponse(CompletionResponse),
     /// Batch message request
     CreateMessageBatchRequest(CreateMessageBatchParams),
     /// Batch message response
@@ -86,9 +81,9 @@ pub enum AnthropicEventData {
 pub struct AnthropicEventTask {
     pub session_id: String,
     pub session_index: i32,
-    pub account_id: i32,
-    pub model_id: i32,
-    pub api_key_id: i32,
+    pub account_id: i64,
+    pub model_id: i64,
+    pub api_key_id: i64,
     pub event_data: AnthropicEventData,
 }
 

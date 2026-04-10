@@ -9,9 +9,9 @@ use crate::defer::{AnthropicEventData, AnthropicEventTask};
 pub struct SessionTracer {
     pub session_id: String,
     pub session_index: i32,
-    pub account_id: i32,
-    pub model_id: i32,
-    pub api_key_id: i32,
+    pub account_id: i64,
+    pub model_id: i64,
+    pub api_key_id: i64,
     pub storage: RedisStorage<AnthropicEventTask>,
 }
 
@@ -19,9 +19,9 @@ impl SessionTracer {
     /// Create a new SessionTracer with a UUIDv7-based session_id
     pub fn new(
         storage: RedisStorage<AnthropicEventTask>,
-        account_id: i32,
-        model_id: i32,
-        api_key_id: i32,
+        account_id: i64,
+        model_id: i64,
+        api_key_id: i64,
     ) -> Self {
         let session_id = Uuid::now_v7().to_string();
         let session_index = 0;

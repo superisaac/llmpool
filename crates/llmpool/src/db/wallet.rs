@@ -10,7 +10,7 @@ use crate::models::{BalanceChange, BalanceChangeContent, NewWallet, UpdateWallet
 /// Find a account's wallet by account_id
 pub async fn find_account_wallet(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
 ) -> Result<Option<Wallet>, sqlx::Error> {
     sqlx::query_as::<_, Wallet>("SELECT * FROM wallets WHERE account_id = $1")
         .bind(account_id)
@@ -21,8 +21,8 @@ pub async fn find_account_wallet(
 /// Mark a balance change as applied using an existing transaction
 pub async fn mark_balance_change_applied_with_tx(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    id: i32,
-    subscription_id: i32,
+    id: i64,
+    subscription_id: i64,
 ) -> Result<(), sqlx::Error> {
     sqlx::query("UPDATE balance_changes SET is_applied = TRUE, subscription_id = $2 WHERE id = $1")
         .bind(id)
@@ -90,7 +90,7 @@ pub async fn apply_balance_change_with_tx(
         }
     };
 
-    let mut subscription_id: i32 = 0;
+    let mut subscription_id: i64 = 0;
     // Compute new balance; balance can be negative (debt)
     let new_balance = match content {
         BalanceChangeContent::SpendToken(spend) => {

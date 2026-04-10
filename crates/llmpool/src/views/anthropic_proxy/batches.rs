@@ -7,14 +7,10 @@ use axum::{
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::client::{AnthropicApiError, CreateMessageBatchParams};
+use super::client::{CreateMessageBatchParams, ListMessageBatchesParams};
 use super::helpers::{AnthropicAppState, check_wallet_balance, select_anthropic_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
-
-fn is_network_error(e: &AnthropicApiError) -> bool {
-    matches!(e, AnthropicApiError::Network(_))
-}
 
 // ---------------------------------------------------------------------------
 // POST /v1/messages/batches — Create a Message Batch
@@ -25,6 +21,8 @@ pub async fn create_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     Json(payload): Json<CreateMessageBatchParams>,
 ) -> Response {
+    use super::client::AnthropicApiClient;
+
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -55,9 +53,11 @@ pub async fn create_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = &upstream_client.client;
+    let sdk_config = upstream_client.client.config();
+    let legacy_client =
+        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match api_client.create_message_batch(&payload).await {
+    match legacy_client.create_message_batch(&payload).await {
         Ok(batch) => {
             info!(
                 batch_id = %batch.id,
@@ -67,7 +67,7 @@ pub async fn create_message_batch(
             Json(batch).into_response()
         }
         Err(e) => {
-            if is_network_error(&e) {
+            if matches!(e, super::client::AnthropicApiError::Network(_)) {
                 let pool = state.pool.clone();
                 let upstream_id = upstream_client.upstream_id;
                 tokio::spawn(async move {
@@ -102,6 +102,8 @@ pub async fn create_message_batch(
 
 /// GET /v1/messages/batches — list message batches from the configured Anthropic upstream
 pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -> Response {
+    use super::client::AnthropicApiClient;
+
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -126,10 +128,12 @@ pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -
     }
 
     let upstream_client = &clients[0];
-    let api_client = &upstream_client.client;
+    let sdk_config = upstream_client.client.config();
+    let legacy_client =
+        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    let params = super::client::ListMessageBatchesParams::default();
-    match api_client.list_message_batches(&params).await {
+    let params = ListMessageBatchesParams::default();
+    match legacy_client.list_message_batches(&params).await {
         Ok(list) => Json(list).into_response(),
         Err(e) => {
             warn!(error = %e, "Anthropic list message batches failed");
@@ -157,6 +161,8 @@ pub async fn retrieve_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
+    use super::client::AnthropicApiClient;
+
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -180,9 +186,14 @@ pub async fn retrieve_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = &upstream_client.client;
+    let sdk_config = upstream_client.client.config();
+    let legacy_client =
+        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match api_client.retrieve_message_batch(&message_batch_id).await {
+    match legacy_client
+        .retrieve_message_batch(&message_batch_id)
+        .await
+    {
         Ok(batch) => Json(batch).into_response(),
         Err(e) => {
             warn!(batch_id = %message_batch_id, error = %e, "Anthropic retrieve message batch failed");
@@ -210,6 +221,8 @@ pub async fn cancel_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
+    use super::client::AnthropicApiClient;
+
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -233,9 +246,11 @@ pub async fn cancel_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let api_client = &upstream_client.client;
+    let sdk_config = upstream_client.client.config();
+    let legacy_client =
+        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match api_client.cancel_message_batch(&message_batch_id).await {
+    match legacy_client.cancel_message_batch(&message_batch_id).await {
         Ok(batch) => {
             info!(batch_id = %message_batch_id, "Anthropic message batch cancelled");
             Json(batch).into_response()
@@ -266,6 +281,8 @@ pub async fn retrieve_message_batch_results(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
+    use super::client::AnthropicApiClient;
+
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -289,9 +306,11 @@ pub async fn retrieve_message_batch_results(
     }
 
     let upstream_client = &clients[0];
-    let api_client = &upstream_client.client;
+    let sdk_config = upstream_client.client.config();
+    let legacy_client =
+        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match api_client
+    match legacy_client
         .retrieve_message_batch_results_raw(&message_batch_id)
         .await
     {

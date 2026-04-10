@@ -1,3 +1,4 @@
+use anthropic_sdk::{Anthropic, ClientConfig};
 use apalis_redis::RedisStorage;
 use axum::{
     Json,
@@ -12,27 +13,32 @@ use crate::models::{CapacityOption, LLMModel, LLMUpstream};
 
 use crate::defer::AnthropicEventTask;
 
-use super::client::AnthropicApiClient;
-
 // --- Upstream client for Anthropic ---
 
 pub struct AnthropicUpstreamClient {
-    /// The Anthropic API client (possibly configured with a proxy)
-    pub client: AnthropicApiClient,
+    /// The Anthropic SDK client
+    pub client: Anthropic,
     /// The LLMModel primary key
-    pub model_db_id: i32,
+    pub model_db_id: i64,
     /// The LLMUpstream primary key (used to mark upstream offline on network errors)
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     /// The full model identifier to use when sending requests to the upstream
     pub fullname: String,
 }
 
 /// Build an `AnthropicUpstreamClient` from a (LLMModel, LLMUpstream) pair.
-/// If the upstream has proxies configured, a random one is selected and used.
+/// Uses `anthropic-sdk-rust`'s `Anthropic` client with `ClientConfig`.
+/// If the upstream has proxies configured, a random one is selected and used via
+/// `ClientConfig::with_proxy_url()`.
 pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> AnthropicUpstreamClient {
     use rand::seq::IndexedRandom;
 
-    let client = if !upstream.proxies.is_empty() {
+    // Build the ClientConfig with the upstream's API key and base URL
+    let mut config = ClientConfig::new(upstream.api_key.clone())
+        .with_base_url(upstream.api_base.trim_end_matches('/').to_string());
+
+    // If proxies are configured, pick a random one and pass it to the SDK
+    if !upstream.proxies.is_empty() {
         let mut rng = rand::rng();
         if let Some(proxy_url) = upstream.proxies.choose(&mut rng) {
             tracing::info!(
@@ -40,22 +46,11 @@ pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> Anthr
                 proxy = %proxy_url,
                 "Anthropic proxy: using proxy for upstream"
             );
-            let proxy = reqwest::Proxy::all(proxy_url.as_str()).expect("Invalid proxy URL");
-            let http_client = reqwest::Client::builder()
-                .proxy(proxy)
-                .build()
-                .expect("Failed to build reqwest client with proxy");
-            AnthropicApiClient::with_http_client(
-                http_client,
-                upstream.api_key.clone(),
-                upstream.api_base.clone(),
-            )
-        } else {
-            AnthropicApiClient::with_base_url(upstream.api_key.clone(), upstream.api_base.clone())
+            config = config.with_proxy_url(proxy_url.clone());
         }
-    } else {
-        AnthropicApiClient::with_base_url(upstream.api_key.clone(), upstream.api_base.clone())
-    };
+    }
+
+    let client = Anthropic::with_config(config).expect("Failed to build Anthropic SDK client");
 
     AnthropicUpstreamClient {
         client,
@@ -100,7 +95,7 @@ pub async fn select_anthropic_clients(
             }
         };
 
-    let model_ids: Vec<i32> = models.iter().map(|(m, _)| m.id).collect();
+    let model_ids: Vec<i64> = models.iter().map(|(m, _)| m.id).collect();
     let usages = get_output_token_usage_batch(redis_pool, &model_ids).await;
 
     let mut models_with_usage: Vec<(i64, &(LLMModel, LLMUpstream))> =
@@ -136,7 +131,7 @@ pub struct AnthropicAppState {
 /// Returns Ok(()) if wallets are sufficient, Err(Response) with a payment-required error otherwise.
 pub async fn check_wallet_balance(
     state: &AnthropicAppState,
-    account_id: i32,
+    account_id: i64,
 ) -> Result<(), Response> {
     use crate::redis_utils::caches::wallet as wallet_cache;
     use bigdecimal::BigDecimal;
@@ -180,7 +175,7 @@ pub async fn check_wallet_balance(
             StatusCode::PAYMENT_REQUIRED,
             Json(serde_json::json!({
                 "error": {
-                    "message": "账户余额不够，请充值后继续使用。",
+                    "message": "Balance is insufficient, please fund your wallet",
                     "type": "insufficient_wallets",
                     "code": "insufficient_wallets"
                 }

@@ -9,8 +9,8 @@ use sqlx::FromRow;
 /// Represents an API access key associated with a user
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct ApiCredential {
-    pub id: i32,
-    pub account_id: Option<i32>,
+    pub id: i64,
+    pub account_id: Option<i64>,
     pub encrypted_api_key: String,
     pub ellipsed_api_key: String,
     pub api_key_hash: String,
@@ -28,7 +28,7 @@ pub struct ApiCredential {
 /// Used to insert a new API key
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewApiCredential {
-    pub account_id: Option<i32>,
+    pub account_id: Option<i64>,
     pub apikey: String,
     pub label: String,
     pub expires_at: Option<NaiveDateTime>,

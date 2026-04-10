@@ -21,13 +21,13 @@ pub enum SubscriptionPlanStatus {
 /// Represents a subscription plan
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct SubscriptionPlan {
-    pub id: i32,
+    pub id: i64,
     pub status: String,
     pub description: String,
     pub total_token_limit: i64,
-    pub time_span: i32,
+    pub time_span: i64,
     pub money_limit: BigDecimal,
-    pub sort_order: i32,
+    pub sort_order: i64,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -52,15 +52,15 @@ pub enum SubscriptionStatus {
 /// Represents a user's subscription record
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Subscription {
-    pub id: i32,
-    pub account_id: i32,
-    pub plan_id: i32,
+    pub id: i64,
+    pub account_id: i64,
+    pub plan_id: i64,
     pub status: String,
     pub start_at: Option<NaiveDateTime>,
     pub end_at: Option<NaiveDateTime>,
     pub used_total_tokens: i64,
     pub total_token_limit: i64,
-    pub sort_order: i32,
+    pub sort_order: i64,
     pub used_money: BigDecimal,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

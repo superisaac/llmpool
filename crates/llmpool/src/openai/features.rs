@@ -228,6 +228,7 @@ pub async fn list_and_save_without_detect(
                     has_embedding: false,
                     has_messages: false,
                     has_responses_api: false,
+                    max_tokens: 100000,
                     input_token_price: default_token_price.clone(),
                     output_token_price: default_token_price.clone(),
                     batch_input_token_price: default_token_price.clone(),
@@ -247,7 +248,7 @@ pub async fn list_and_save_without_detect(
 /// are updated; all other fields remain unchanged.
 pub async fn detect_and_update_model_features(
     pool: &DbPool,
-    model_pk: i32,
+    model_pk: i64,
 ) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
     // 1. Fetch the model record
     let model = db::llm::get_model(pool, model_pk).await?;
@@ -282,6 +283,7 @@ pub async fn detect_and_update_model_features(
         has_embedding: Some(features.has_embedding),
         has_messages: None,
         has_responses_api: Some(features.has_responses_api),
+        max_tokens: None,
         input_token_price: None,
         output_token_price: None,
         batch_input_token_price: None,

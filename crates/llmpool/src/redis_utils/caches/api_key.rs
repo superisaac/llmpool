@@ -11,8 +11,8 @@ const APIKEY_CACHE_TTL: u64 = 900;
 /// This is stored in Redis to avoid repeated database lookups on every request.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiKeyInfo {
-    pub id: i32,
-    pub account_id: Option<i32>,
+    pub id: i64,
+    pub account_id: Option<i64>,
     /// SHA-256 hex hash of the plaintext API key. Used as the cache key and for comparison.
     pub api_key_hash: String,
     pub label: String,

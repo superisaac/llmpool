@@ -155,16 +155,16 @@
       "SubscriptionPlanResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer" },
+          "id": { "type": "integer", "format": "int64" },
           "status": {
             "type": "string",
             "enum": ["active", "deactive"]
           },
           "description": { "type": "string" },
-          "total_token_limit": { "type": "integer", "description": "0 means unlimited" },
-          "time_span": { "type": "integer", "description": "Time span in seconds; 0 means unlimited" },
+          "total_token_limit": { "type": "integer", "format": "int64", "description": "0 means unlimited" },
+          "time_span": { "type": "integer", "format": "int64", "description": "Time span in seconds; 0 means unlimited" },
           "money_limit": { "type": "string", "description": "Decimal string; 0 means unlimited" },
-          "sort_order": { "type": "integer", "description": "Higher value = higher priority" },
+          "sort_order": { "type": "integer", "format": "int64", "description": "Higher value = higher priority" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
@@ -172,18 +172,18 @@
       "SubscriptionResponse": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer" },
-          "account_id": { "type": "integer" },
-          "plan_id": { "type": "integer" },
+          "id": { "type": "integer", "format": "int64" },
+          "account_id": { "type": "integer", "format": "int64" },
+          "plan_id": { "type": "integer", "format": "int64" },
           "status": {
             "type": "string",
             "enum": ["active", "deactive"]
           },
           "start_at": { "type": "string", "format": "date-time", "nullable": true },
           "end_at": { "type": "string", "format": "date-time", "nullable": true },
-          "used_total_tokens": { "type": "integer" },
-          "total_token_limit": { "type": "integer", "description": "0 means unlimited" },
-          "sort_order": { "type": "integer" },
+          "used_total_tokens": { "type": "integer", "format": "int64" },
+          "total_token_limit": { "type": "integer", "format": "int64", "description": "0 means unlimited" },
+          "sort_order": { "type": "integer", "format": "int64" },
           "used_money": { "type": "string", "description": "Decimal string" },
           "created_at": { "type": "string", "format": "date-time" },
           "updated_at": { "type": "string", "format": "date-time" }

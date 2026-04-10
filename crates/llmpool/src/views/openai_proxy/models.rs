@@ -10,10 +10,15 @@ use std::sync::Arc;
 
 use super::helpers::AppState;
 use crate::db;
+use crate::models::llm::CapacityOption;
 
 /// Handle /v1/models upstream, return available model list from database
 pub async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
-    let res = db::llm::list_models(&state.pool).await;
+    let capacity = CapacityOption {
+        has_chat_completion: Some(true),
+        ..Default::default()
+    };
+    let res = db::llm::list_models(&state.pool, &capacity).await;
 
     match res {
         Ok(models) => {

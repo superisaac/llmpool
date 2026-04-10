@@ -9,7 +9,7 @@ const FUND_CACHE_TTL: u64 = 300;
 
 type CacheError = Box<dyn std::error::Error + Send + Sync>;
 
-fn wallet_cache_key(account_id: i32) -> String {
+fn wallet_cache_key(account_id: i64) -> String {
     format!("wallet:info:{}", account_id)
 }
 
@@ -17,7 +17,7 @@ fn wallet_cache_key(account_id: i32) -> String {
 /// Returns Ok(Some(wallet)) if found, Ok(None) if not cached, Err on Redis error.
 pub async fn get_wallet_info(
     redis_pool: &RedisPool,
-    account_id: i32,
+    account_id: i64,
 ) -> Result<Option<Wallet>, CacheError> {
     let mut conn = redis_pool.get().await.map_err(|e| {
         warn!(error = %e, "Failed to get Redis connection for wallet cache get");
@@ -46,7 +46,7 @@ pub async fn get_wallet_info(
 /// The entry will expire after FUND_CACHE_TTL seconds.
 pub async fn set_wallet_info(
     redis_pool: &RedisPool,
-    account_id: i32,
+    account_id: i64,
     info: Wallet,
 ) -> Result<(), CacheError> {
     let mut conn = redis_pool.get().await.map_err(|e| {

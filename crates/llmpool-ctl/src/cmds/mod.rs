@@ -52,7 +52,7 @@ pub struct CursorResponse<T> {
 
 #[derive(Debug, Deserialize)]
 pub struct UpstreamResponse {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub api_base: String,
     pub provider: String,
@@ -67,8 +67,8 @@ pub struct UpstreamResponse {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct ModelResponse {
-    pub id: i32,
-    pub upstream_id: i32,
+    pub id: i64,
+    pub upstream_id: i64,
     pub fullname: String,
     pub cname: String,
     pub is_active: bool,
@@ -88,14 +88,14 @@ pub struct ModelResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ModelTestResult {
-    pub model_id: i32,
+    pub model_id: i64,
     pub model: Option<ModelResponse>,
     pub error: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AccountResponse {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub is_active: bool,
     pub created_at: String,
@@ -105,8 +105,8 @@ pub struct AccountResponse {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct WalletResponse {
-    pub id: i32,
-    pub account_id: i32,
+    pub id: i64,
+    pub account_id: i64,
     pub balance: String,
     pub created_at: String,
     pub updated_at: String,
@@ -114,8 +114,8 @@ pub struct WalletResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct BalanceChangeResponse {
-    pub id: i32,
-    pub account_id: i32,
+    pub id: i64,
+    pub account_id: i64,
     pub unique_request_id: String,
     pub content: serde_json::Value,
     pub is_applied: bool,
@@ -146,15 +146,15 @@ pub struct TestUpstreamResponse {
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct TagsResponse {
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     pub tags: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 pub struct ApiCredentialResponse {
-    pub id: i32,
-    pub account_id: Option<i32>,
+    pub id: i64,
+    pub account_id: Option<i64>,
     pub apikey: String,
     pub label: String,
     pub is_active: bool,
@@ -242,8 +242,8 @@ pub fn print_models(models: &[ModelResponse]) {
 pub async fn resolve_upstream_id(
     upstream: &str,
     client: &crate::client::ApiClient,
-) -> Result<i32, String> {
-    if let Ok(id) = upstream.parse::<i32>() {
+) -> Result<i64, String> {
+    if let Ok(id) = upstream.parse::<i64>() {
         return Ok(id);
     }
     let resp: UpstreamResponse = client
@@ -256,8 +256,8 @@ pub async fn resolve_upstream_id(
 pub async fn resolve_account_id(
     account: &str,
     client: &crate::client::ApiClient,
-) -> Result<i32, String> {
-    if let Ok(id) = account.parse::<i32>() {
+) -> Result<i64, String> {
+    if let Ok(id) = account.parse::<i64>() {
         return Ok(id);
     }
     let resp: AccountResponse = client

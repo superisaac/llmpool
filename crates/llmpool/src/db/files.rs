@@ -11,7 +11,7 @@ pub struct FileMeta {
     pub file_id: String,
     pub original_file_id: String,
     pub purpose: String,
-    pub upstream_id: i32,
+    pub upstream_id: i64,
     pub deleted: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -25,7 +25,7 @@ pub async fn create_file_meta(
     file_id: &str,
     original_file_id: &str,
     purpose: &str,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<FileMeta, sqlx::Error> {
     sqlx::query_as::<_, FileMeta>(
         "INSERT INTO file_metas (file_id, original_file_id, purpose, upstream_id)
@@ -55,7 +55,7 @@ pub async fn get_file_meta_by_file_id(
 pub async fn get_file_meta_by_original_file_id(
     pool: &DbPool,
     original_file_id: &str,
-    upstream_id: i32,
+    upstream_id: i64,
 ) -> Result<Option<FileMeta>, sqlx::Error> {
     sqlx::query_as::<_, FileMeta>(
         "SELECT * FROM file_metas WHERE original_file_id = $1 AND upstream_id = $2 AND deleted = FALSE ORDER BY id DESC LIMIT 1",

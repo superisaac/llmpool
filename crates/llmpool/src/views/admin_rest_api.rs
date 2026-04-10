@@ -95,7 +95,7 @@ struct PaginationInfo {
 /// Response DTO for an upstream (excludes sensitive api_key field)
 #[derive(Serialize)]
 struct UpstreamResponse {
-    id: i32,
+    id: i64,
     name: String,
     api_base: String,
     provider: String,
@@ -129,7 +129,7 @@ impl From<crate::models::LLMUpstream> for UpstreamResponse {
 /// Response DTO for an account
 #[derive(Serialize)]
 struct AccountResponse {
-    id: i32,
+    id: i64,
     name: String,
     is_active: bool,
     created_at: String,
@@ -159,8 +159,8 @@ struct CreateAccountRequest {
 /// Response DTO for an account's wallet
 #[derive(Serialize)]
 struct WalletResponse {
-    id: i32,
-    account_id: i32,
+    id: i64,
+    account_id: i64,
     balance: String,
     created_at: String,
     updated_at: String,
@@ -183,8 +183,8 @@ impl From<crate::models::Wallet> for WalletResponse {
 /// Response DTO for an API key (shows ellipsed key; plaintext only on creation)
 #[derive(Serialize)]
 struct ApiCredentialResponse {
-    id: i32,
-    account_id: Option<i32>,
+    id: i64,
+    account_id: Option<i64>,
     /// Ellipsed representation of the API key (e.g. "lpx-ab...cd").
     /// Only populated with the full plaintext key immediately after creation.
     apikey: String,
@@ -215,8 +215,8 @@ impl From<crate::models::ApiCredential> for ApiCredentialResponse {
 /// Response DTO returned only on API key creation — includes the full plaintext key.
 #[derive(Serialize)]
 struct ApiCredentialCreatedResponse {
-    id: i32,
-    account_id: Option<i32>,
+    id: i64,
+    account_id: Option<i64>,
     /// Full plaintext API key. Only returned once at creation time; store it securely.
     apikey: String,
     /// Ellipsed representation for display purposes.
@@ -426,7 +426,7 @@ async fn create_account(
 /// Returns a single account by their ID.
 async fn get_account_by_id(
     State(state): State<Arc<AppState>>,
-    Path(account_id): Path<i32>,
+    Path(account_id): Path<i64>,
 ) -> Response {
     match db::account::get_account_by_id(&state.pool, account_id).await {
         Ok(Some(account)) => Json(AccountResponse::from(account)).into_response(),
@@ -462,7 +462,7 @@ struct UpdateAccountRequest {
 /// - `is_active` (optional): Whether the account is active
 async fn update_account_by_id(
     State(state): State<Arc<AppState>>,
-    Path(account_id): Path<i32>,
+    Path(account_id): Path<i64>,
     Json(payload): Json<UpdateAccountRequest>,
 ) -> Response {
     // Validate name if provided
@@ -550,7 +550,7 @@ async fn get_account_by_name(
 /// If the account has no wallet record yet, returns a default wallet with zero balances.
 async fn get_account_wallet(
     State(state): State<Arc<AppState>>,
-    Path(account_id): Path<i32>,
+    Path(account_id): Path<i64>,
 ) -> Response {
     // Verify the account exists
     match db::account::get_account_by_id(&state.pool, account_id).await {
@@ -607,7 +607,7 @@ async fn get_account_wallet(
 /// - `page_size` (optional, default: 20, max: 100): Number of items per page
 async fn list_account_apikeys(
     State(state): State<Arc<AppState>>,
-    Path(account_id): Path<i32>,
+    Path(account_id): Path<i64>,
     Query(params): Query<PaginationParams>,
 ) -> Response {
     // Verify the account exists
@@ -704,7 +704,7 @@ struct CreateApiKeyRequest {
 /// - `label` (optional): A label describing the purpose of this API key
 async fn create_account_apikey(
     State(state): State<Arc<AppState>>,
-    Path(account_id): Path<i32>,
+    Path(account_id): Path<i64>,
     Json(payload): Json<CreateApiKeyRequest>,
 ) -> Response {
     // Verify the account exists
@@ -820,7 +820,7 @@ async fn delete_apikey(State(state): State<Arc<AppState>>, Path(apikey): Path<St
 #[derive(Debug, Deserialize)]
 struct ListModelsParams {
     /// Filter by upstream ID
-    upstream_id: Option<i32>,
+    upstream_id: Option<i64>,
     /// Filter by upstream name
     upstream_name: Option<String>,
     /// Filter by model name (model_id)
@@ -937,8 +937,8 @@ fn default_provider() -> String {
 /// Response DTO for a saved model
 #[derive(Serialize)]
 struct ModelResponse {
-    id: i32,
-    upstream_id: i32,
+    id: i64,
+    upstream_id: i64,
     fullname: String,
     cname: String,
     is_active: bool,
@@ -1123,13 +1123,13 @@ async fn create_upstream(
 /// Request body for testing model features
 #[derive(Deserialize)]
 struct TestModelsRequest {
-    model_ids: Vec<i32>,
+    model_ids: Vec<i64>,
 }
 
 /// Response DTO for a single model test result
 #[derive(Serialize)]
 struct ModelTestResult {
-    model_id: i32,
+    model_id: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     model: Option<ModelResponse>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1218,7 +1218,7 @@ async fn get_upstream_by_name(
 /// Returns a single upstream by its ID.
 async fn get_upstream_by_id(
     State(state): State<Arc<AppState>>,
-    Path(upstream_id): Path<i32>,
+    Path(upstream_id): Path<i64>,
 ) -> Response {
     match db::llm::get_upstream(&state.pool, upstream_id).await {
         Ok(upstream) => Json(UpstreamResponse::from(upstream)).into_response(),
@@ -1261,7 +1261,7 @@ struct UpdateUpstreamRequest {
 /// - `status` (optional): Status of the upstream (online, offline, maintenance)
 async fn update_upstream_by_id(
     State(state): State<Arc<AppState>>,
-    Path(upstream_id): Path<i32>,
+    Path(upstream_id): Path<i64>,
     Json(payload): Json<UpdateUpstreamRequest>,
 ) -> Response {
     // Validate status if provided
@@ -1362,7 +1362,7 @@ async fn get_model_by_upstream_and_name(
 /// Returns a single model by its ID.
 async fn get_model_by_id(
     State(state): State<Arc<AppState>>,
-    Path(model_id): Path<i32>,
+    Path(model_id): Path<i64>,
 ) -> Response {
     match db::llm::get_model(&state.pool, model_id).await {
         Ok(model) => Json(ModelResponse::from(model)).into_response(),
@@ -1405,7 +1405,7 @@ struct UpdateModelRequest {
 /// - `batch_output_token_price` (optional): Price per output token for batch requests
 async fn update_model_by_id(
     State(state): State<Arc<AppState>>,
-    Path(model_id): Path<i32>,
+    Path(model_id): Path<i64>,
     Json(payload): Json<UpdateModelRequest>,
 ) -> Response {
     // Validate prices if provided (must not be negative)
@@ -1455,6 +1455,7 @@ async fn update_model_by_id(
         has_embedding: None,
         has_messages: None,
         has_responses_api: None,
+        max_tokens: None,
         input_token_price: payload.input_token_price,
         output_token_price: payload.output_token_price,
         batch_input_token_price: payload.batch_input_token_price,
@@ -1486,7 +1487,7 @@ async fn update_model_by_id(
 /// Request body for creating a deposit
 #[derive(Deserialize)]
 struct CreateDepositRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1494,7 +1495,7 @@ struct CreateDepositRequest {
 /// Request body for creating a withdrawal
 #[derive(Deserialize)]
 struct CreateWithdrawRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1502,7 +1503,7 @@ struct CreateWithdrawRequest {
 /// Request body for creating a credit
 #[derive(Deserialize)]
 struct CreateCreditRequest {
-    account_id: i32,
+    account_id: i64,
     unique_request_id: String,
     amount: BigDecimal,
 }
@@ -1510,8 +1511,8 @@ struct CreateCreditRequest {
 /// Response DTO for a balance change (deposit)
 #[derive(Serialize)]
 struct BalanceChangeResponse {
-    id: i32,
-    account_id: i32,
+    id: i64,
+    account_id: i64,
     unique_request_id: String,
     content: serde_json::Value,
     is_applied: bool,
@@ -1885,7 +1886,7 @@ async fn create_credit(
 /// Response DTO for upstream tags
 #[derive(Serialize)]
 struct TagsResponse {
-    upstream_id: i32,
+    upstream_id: i64,
     tags: Vec<String>,
 }
 
@@ -1900,7 +1901,7 @@ struct AddTagRequest {
 /// Returns the list of tags for a given upstream.
 async fn list_upstream_tags(
     State(state): State<Arc<AppState>>,
-    Path(upstream_id): Path<i32>,
+    Path(upstream_id): Path<i64>,
 ) -> Response {
     match db::llm::get_upstream_tags(&state.pool, upstream_id).await {
         Ok(tags) => Json(TagsResponse { upstream_id, tags }).into_response(),
@@ -1928,7 +1929,7 @@ async fn list_upstream_tags(
 /// - `tag` (required): The tag string to add
 async fn add_upstream_tag(
     State(state): State<Arc<AppState>>,
-    Path(upstream_id): Path<i32>,
+    Path(upstream_id): Path<i64>,
     Json(payload): Json<AddTagRequest>,
 ) -> Response {
     if payload.tag.trim().is_empty() {
@@ -1971,7 +1972,7 @@ async fn add_upstream_tag(
 /// Removes a tag from the specified upstream.
 async fn remove_upstream_tag(
     State(state): State<Arc<AppState>>,
-    Path((upstream_id, tag)): Path<(i32, String)>,
+    Path((upstream_id, tag)): Path<(i64, String)>,
 ) -> Response {
     match db::llm::remove_upstream_tag(&state.pool, upstream_id, &tag).await {
         Ok(upstream) => Json(TagsResponse {
@@ -2003,9 +2004,9 @@ struct SessionEventResponse {
     id: i64,
     session_id: String,
     session_index: i32,
-    account_id: i32,
-    model_id: i32,
-    api_key_id: i32,
+    account_id: i64,
+    model_id: i64,
+    api_key_id: i64,
     input_token_price: String,
     input_tokens: i64,
     output_token_price: String,
@@ -2149,13 +2150,13 @@ async fn list_session_events(
 /// Response DTO for a subscription plan
 #[derive(Serialize)]
 struct SubscriptionPlanResponse {
-    id: i32,
+    id: i64,
     status: String,
     description: String,
     total_token_limit: i64,
-    time_span: i32,
+    time_span: i64,
     money_limit: String,
-    sort_order: i32,
+    sort_order: i64,
     created_at: String,
     updated_at: String,
 }
@@ -2246,7 +2247,7 @@ async fn list_subscription_plans(
 /// Returns a single subscription plan by its ID.
 async fn get_subscription_plan(
     State(state): State<Arc<AppState>>,
-    Path(plan_id): Path<i32>,
+    Path(plan_id): Path<i64>,
 ) -> Response {
     match db::subscription::get_subscription_plan_by_id(&state.pool, plan_id).await {
         Ok(Some(plan)) => Json(SubscriptionPlanResponse::from(plan)).into_response(),
@@ -2273,10 +2274,10 @@ struct CreateSubscriptionPlanRequest {
     #[serde(default)]
     total_token_limit: i64,
     #[serde(default)]
-    time_span: i32,
+    time_span: i64,
     money_limit: BigDecimal,
     #[serde(default)]
-    sort_order: i32,
+    sort_order: i64,
 }
 
 /// POST /api/v1/subscription-plans
@@ -2325,9 +2326,9 @@ async fn create_subscription_plan(
 struct UpdateSubscriptionPlanRequest {
     description: Option<String>,
     total_token_limit: Option<i64>,
-    time_span: Option<i32>,
+    time_span: Option<i64>,
     money_limit: Option<BigDecimal>,
-    sort_order: Option<i32>,
+    sort_order: Option<i64>,
     status: Option<String>,
 }
 
@@ -2339,7 +2340,7 @@ const VALID_PLAN_STATUSES: &[&str] = &["active", "deactive"];
 /// Updates an existing subscription plan. Only provided fields are updated.
 async fn update_subscription_plan(
     State(state): State<Arc<AppState>>,
-    Path(plan_id): Path<i32>,
+    Path(plan_id): Path<i64>,
     Json(payload): Json<UpdateSubscriptionPlanRequest>,
 ) -> Response {
     if let Some(ref status) = payload.status {
@@ -2399,7 +2400,7 @@ async fn update_subscription_plan(
 /// Cancels a subscription plan by setting its status to 'canceled'.
 async fn cancel_subscription_plan(
     State(state): State<Arc<AppState>>,
-    Path(plan_id): Path<i32>,
+    Path(plan_id): Path<i64>,
 ) -> Response {
     match db::subscription::cancel_subscription_plan(&state.pool, plan_id).await {
         Ok(plan) => Json(SubscriptionPlanResponse::from(plan)).into_response(),
@@ -2426,15 +2427,15 @@ async fn cancel_subscription_plan(
 /// Response DTO for a subscription
 #[derive(Serialize)]
 struct SubscriptionResponse {
-    id: i32,
-    account_id: i32,
-    plan_id: i32,
+    id: i64,
+    account_id: i64,
+    plan_id: i64,
     status: String,
     start_at: Option<String>,
     end_at: Option<String>,
     used_total_tokens: i64,
     total_token_limit: i64,
-    sort_order: i32,
+    sort_order: i64,
     used_money: String,
     created_at: String,
     updated_at: String,
@@ -2468,7 +2469,7 @@ impl From<Subscription> for SubscriptionResponse {
 /// Query parameters for listing subscriptions
 #[derive(Debug, Deserialize)]
 struct ListSubscriptionsParams {
-    account_id: Option<i32>,
+    account_id: Option<i64>,
     status: Option<String>,
     #[serde(default = "default_page")]
     page: i64,
@@ -2558,7 +2559,7 @@ async fn list_subscriptions(
 /// Returns a single subscription by its ID.
 async fn get_subscription(
     State(state): State<Arc<AppState>>,
-    Path(subscription_id): Path<i32>,
+    Path(subscription_id): Path<i64>,
 ) -> Response {
     match db::subscription::get_subscription_by_id(&state.pool, subscription_id).await {
         Ok(Some(sub)) => Json(SubscriptionResponse::from(sub)).into_response(),
@@ -2581,8 +2582,8 @@ async fn get_subscription(
 /// Request body for creating a subscription
 #[derive(Deserialize)]
 struct CreateSubscriptionRequest {
-    account_id: i32,
-    plan_id: i32,
+    account_id: i64,
+    plan_id: i64,
 }
 
 /// POST /api/v1/subscriptions
@@ -2668,7 +2669,7 @@ const VALID_SUBSCRIPTION_STATUSES: &[&str] = &["active", "deactive"];
 /// - `status` (required): New status (active, deactive)
 async fn update_subscription(
     State(state): State<Arc<AppState>>,
-    Path(subscription_id): Path<i32>,
+    Path(subscription_id): Path<i64>,
     Json(payload): Json<UpdateSubscriptionRequest>,
 ) -> Response {
     if !VALID_SUBSCRIPTION_STATUSES.contains(&payload.status.as_str()) {
@@ -2712,7 +2713,7 @@ async fn update_subscription(
 /// Cancels a subscription by setting its status to 'canceled'.
 async fn cancel_subscription(
     State(state): State<Arc<AppState>>,
-    Path(subscription_id): Path<i32>,
+    Path(subscription_id): Path<i64>,
 ) -> Response {
     match db::subscription::cancel_subscription(&state.pool, subscription_id).await {
         Ok(sub) => Json(SubscriptionResponse::from(sub)).into_response(),

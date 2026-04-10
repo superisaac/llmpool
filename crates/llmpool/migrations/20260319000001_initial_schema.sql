@@ -1,6 +1,6 @@
 -- Create llm_upstreams table
 CREATE TABLE IF NOT EXISTS llm_upstreams (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
     api_base VARCHAR NOT NULL,
     encrypted_api_key VARCHAR NOT NULL DEFAULT '',
@@ -18,8 +18,8 @@ CREATE INDEX IF NOT EXISTS idx_llm_upstreams_tags ON llm_upstreams USING GIN (ta
 
 -- Create llm_models table
 CREATE TABLE IF NOT EXISTS llm_models (
-    id SERIAL PRIMARY KEY,
-    upstream_id INTEGER NOT NULL REFERENCES llm_upstreams(id) ON DELETE CASCADE,
+    id BIGSERIAL PRIMARY KEY,
+    upstream_id BIGINT NOT NULL REFERENCES llm_upstreams(id) ON DELETE CASCADE,
     fullname VARCHAR NOT NULL,
     cname VARCHAR NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
     has_embedding BOOLEAN NOT NULL DEFAULT FALSE,
     has_messages BOOLEAN NOT NULL DEFAULT FALSE,
     has_responses_api BOOLEAN NOT NULL DEFAULT FALSE,
+    max_tokens BIGINT NOT NULL DEFAULT 100000,
     input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     output_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     batch_input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
@@ -42,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_llm_models_upstream_id ON llm_models (upstream_id
 
 -- Create accounts table
 CREATE TABLE IF NOT EXISTS accounts (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     name VARCHAR NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -52,8 +53,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_name ON accounts (name);
 
 -- Create api_credentials table
 CREATE TABLE IF NOT EXISTS api_credentials (
-    id SERIAL PRIMARY KEY,
-    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT REFERENCES accounts(id) ON DELETE CASCADE,
     encrypted_api_key VARCHAR NOT NULL DEFAULT '',
     ellipsed_api_key VARCHAR NOT NULL DEFAULT '',
     api_key_hash VARCHAR NOT NULL DEFAULT '',
@@ -71,9 +72,9 @@ CREATE UNLOGGED TABLE IF NOT EXISTS session_events (
     id BIGSERIAL PRIMARY KEY,
     session_id VARCHAR NOT NULL,
     session_index INT NOT NULL DEFAULT 0,
-    account_id INT NOT NULL,
-    model_id INT NOT NULL,
-    api_credential_id INT NOT NULL DEFAULT 0,
+    account_id BIGINT NOT NULL,
+    model_id BIGINT NOT NULL,
+    api_key_id BIGINT NOT NULL DEFAULT 0,
     input_token_price NUMERIC NOT NULL DEFAULT 0,
     input_tokens BIGINT NOT NULL DEFAULT 0,
     output_token_price NUMERIC NOT NULL DEFAULT 0,
@@ -86,8 +87,8 @@ CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events (sess
 
 -- Create wallets table
 CREATE TABLE IF NOT EXISTS wallets (
-    id SERIAL PRIMARY KEY,
-    account_id INT NOT NULL REFERENCES accounts(id),
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT NOT NULL REFERENCES accounts(id),
     balance DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -100,7 +101,7 @@ CREATE TABLE IF NOT EXISTS file_metas (
     file_id VARCHAR NOT NULL,
     original_file_id VARCHAR NOT NULL DEFAULT '',
     purpose VARCHAR NOT NULL DEFAULT '',
-    upstream_id INTEGER NOT NULL DEFAULT 0,
+    upstream_id BIGINT NOT NULL DEFAULT 0,
     deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -113,7 +114,7 @@ CREATE TABLE IF NOT EXISTS response_metas (
     id BIGSERIAL PRIMARY KEY,
     response_id VARCHAR NOT NULL,
     original_response_id VARCHAR NOT NULL DEFAULT '',
-    upstream_id INTEGER NOT NULL DEFAULT 0,
+    upstream_id BIGINT NOT NULL DEFAULT 0,
     deleted BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -125,7 +126,7 @@ CREATE TABLE IF NOT EXISTS batch_metas (
     id BIGSERIAL PRIMARY KEY,
     batch_id VARCHAR NOT NULL,
     original_batch_id VARCHAR NOT NULL DEFAULT '',
-    upstream_id INTEGER NOT NULL DEFAULT 0,
+    upstream_id BIGINT NOT NULL DEFAULT 0,
     status VARCHAR NOT NULL DEFAULT 'pending',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -134,12 +135,12 @@ CREATE INDEX IF NOT EXISTS idx_batch_metas_original_batch_id ON batch_metas (ori
 
 -- Create balance_changes table
 CREATE TABLE IF NOT EXISTS balance_changes (
-    id SERIAL PRIMARY KEY,
-    account_id INT NOT NULL REFERENCES accounts(id),
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT NOT NULL REFERENCES accounts(id),
     unique_request_id VARCHAR NOT NULL,
     content JSONB NOT NULL DEFAULT '{}',
     is_applied BOOLEAN NOT NULL DEFAULT FALSE,
-    subscription_id INT NOT NULL DEFAULT 0,
+    subscription_id BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_balance_changes_account_id ON balance_changes (account_id);
@@ -148,13 +149,13 @@ CREATE INDEX IF NOT EXISTS idx_balance_changes_subscription_id ON balance_change
 
 -- Create subscription_plans table
 CREATE TABLE IF NOT EXISTS subscription_plans (
-    id SERIAL PRIMARY KEY,
+    id BIGSERIAL PRIMARY KEY,
     status VARCHAR NOT NULL DEFAULT 'active',
     description VARCHAR NOT NULL DEFAULT '',
     total_token_limit BIGINT NOT NULL DEFAULT 0,
     time_span INTEGER NOT NULL DEFAULT 0,
     money_limit DECIMAL NOT NULL DEFAULT 0,
-    sort_order INTEGER NOT NULL DEFAULT 0,
+    sort_order BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -163,15 +164,15 @@ CREATE INDEX IF NOT EXISTS idx_subscription_plans_sort_order ON subscription_pla
 
 -- Create subscriptions table
 CREATE TABLE IF NOT EXISTS subscriptions (
-    id SERIAL PRIMARY KEY,
-    account_id INT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    plan_id INT NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
+    id BIGSERIAL PRIMARY KEY,
+    account_id BIGINT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    plan_id BIGINT NOT NULL REFERENCES subscription_plans(id) ON DELETE CASCADE,
     status VARCHAR NOT NULL DEFAULT 'pending',
     start_at TIMESTAMP,
     end_at TIMESTAMP,
     used_total_tokens BIGINT NOT NULL DEFAULT 0,
     total_token_limit BIGINT NOT NULL DEFAULT 0,
-    sort_order INTEGER NOT NULL DEFAULT 0,
+    sort_order BIGINT NOT NULL DEFAULT 0,
     used_money DECIMAL NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()

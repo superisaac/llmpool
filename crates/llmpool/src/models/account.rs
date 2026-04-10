@@ -9,7 +9,7 @@ use sqlx::FromRow;
 /// Represents an account
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct Account {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub is_active: bool,
     pub created_at: NaiveDateTime,

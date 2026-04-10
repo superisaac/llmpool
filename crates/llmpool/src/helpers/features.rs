@@ -6,7 +6,7 @@ use crate::db::DbPool;
 /// Returns the final `LLMModel` after both updates have been applied.
 pub async fn detect_and_update_model_features(
     pool: &DbPool,
-    model_pk: i32,
+    model_pk: i64,
 ) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
     // OpenAI feature detection (chat, embedding, image, speech)
     crate::openai::features::detect_and_update_model_features(pool, model_pk).await?;

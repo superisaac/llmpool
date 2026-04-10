@@ -15,7 +15,7 @@ pub async fn create_account(
 /// Get an account by ID
 pub async fn get_account_by_id(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
 ) -> Result<Option<Account>, sqlx::Error> {
     sqlx::query_as::<_, Account>("SELECT * FROM accounts WHERE id = $1")
         .bind(account_id)
@@ -59,7 +59,7 @@ pub async fn list_accounts_paginated(
 /// Update an account by ID. Only the provided fields will be updated.
 pub async fn update_account(
     pool: &DbPool,
-    account_id: i32,
+    account_id: i64,
     update: &UpdateAccount,
 ) -> Result<Account, sqlx::Error> {
     sqlx::query_as::<_, Account>(
