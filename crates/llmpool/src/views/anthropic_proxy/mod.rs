@@ -1,5 +1,6 @@
 pub mod batches;
 pub mod client;
+pub mod files;
 pub mod helpers;
 pub mod messages;
 pub mod models;
@@ -51,25 +52,36 @@ pub fn get_router(
         )
         // POST /v1/messages/batches — Create a Message Batch
         // GET  /v1/messages/batches — List Message Batches
-        // .route(
-        //     "/messages/batches",
-        //     post(batches::create_message_batch).get(batches::list_message_batches),
-        // )
-        // // GET  /v1/messages/batches/:id — Retrieve a Message Batch
-        // .route(
-        //     "/messages/batches/:message_batch_id",
-        //     get(batches::retrieve_message_batch),
-        // )
-        // // POST /v1/messages/batches/:id/cancel — Cancel a Message Batch
-        // .route(
-        //     "/messages/batches/:message_batch_id/cancel",
-        //     post(batches::cancel_message_batch),
-        // )
-        // // GET  /v1/messages/batches/:id/results — Retrieve Batch Results
-        // .route(
-        //     "/messages/batches/:message_batch_id/results",
-        //     get(batches::retrieve_message_batch_results),
-        // )
+        .route(
+            "/messages/batches",
+            post(batches::create_message_batch), //.get(batches::list_message_batches),
+        )
+        // GET  /v1/messages/batches/:id — Retrieve a Message Batch
+        .route(
+            "/messages/batches/:message_batch_id",
+            get(batches::retrieve_message_batch),
+        )
+        // POST /v1/messages/batches/:id/cancel — Cancel a Message Batch
+        .route(
+            "/messages/batches/:message_batch_id/cancel",
+            post(batches::cancel_message_batch),
+        )
+        // GET  /v1/messages/batches/:id/results — Retrieve Batch Results
+        .route(
+            "/messages/batches/:message_batch_id/results",
+            get(batches::retrieve_message_batch_results),
+        )
+        // POST /v1/files — Upload a file
+        // GET  /v1/files — List files
+        .route("/files", post(files::upload_file).get(files::list_files))
+        // GET    /v1/files/:file_id — Retrieve file metadata
+        // DELETE /v1/files/:file_id — Delete a file
+        .route(
+            "/files/:file_id",
+            get(files::retrieve_file).delete(files::delete_file),
+        )
+        // GET /v1/files/:file_id/content — Download file content
+        .route("/files/:file_id/content", get(files::file_content))
         .route_layer(middleware::from_fn_with_state(
             auth_state,
             auth_anthropic_api,

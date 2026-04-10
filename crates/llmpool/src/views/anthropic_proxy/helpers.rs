@@ -1,10 +1,11 @@
-use anthropic_sdk::{Anthropic, ClientConfig};
+use anthropic_sdk::{Anthropic, AnthropicError, ClientConfig};
 use apalis_redis::RedisStorage;
 use axum::{
     Json,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use serde::{Deserialize, Serialize};
 use tracing::warn;
 
 use crate::db;
@@ -117,6 +118,198 @@ pub async fn select_anthropic_clients(
             build_anthropic_client(model, upstream)
         })
         .collect()
+}
+
+// --- Generic SDK HTTP request helper ---
+
+/// Make a POST request to the Anthropic API using the SDK client's configuration
+/// (API key, base URL, proxy settings) but calling an arbitrary endpoint.
+///
+/// This is used for endpoints not yet exposed by `anthropic-sdk-rust` (e.g.
+/// `POST /v1/messages/count_tokens`) and for batch operations that use our own
+/// proxy response types.
+pub async fn anthropic_sdk_request<Req, Resp>(
+    client: &Anthropic,
+    path: &str,
+    body: &Req,
+) -> Result<Resp, AnthropicError>
+where
+    Req: Serialize,
+    Resp: for<'de> Deserialize<'de>,
+{
+    use anthropic_sdk::AuthMethod;
+
+    let config = client.config();
+    let base_url = config.base_url.trim_end_matches('/');
+    let url = format!("{}{}", base_url, path);
+
+    // Build a reqwest client with optional proxy
+    let mut http_builder = reqwest::Client::builder();
+    if let Some(ref proxy_url) = config.proxy_url {
+        if let Ok(proxy) = reqwest::Proxy::all(proxy_url.as_str()) {
+            http_builder = http_builder.proxy(proxy);
+        }
+    }
+    let http_client = http_builder
+        .build()
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    // Build the request with proper auth headers
+    let mut req_builder = http_client
+        .post(&url)
+        .header("content-type", "application/json")
+        .header("anthropic-version", "2023-06-01");
+
+    req_builder = match config.auth_method {
+        AuthMethod::Bearer => {
+            req_builder.header("authorization", format!("Bearer {}", config.api_key))
+        }
+        AuthMethod::Token => req_builder.header("token", &config.api_key),
+        // AuthMethod::Anthropic and default
+        _ => req_builder.header("x-api-key", &config.api_key),
+    };
+
+    let response = req_builder
+        .json(body)
+        .send()
+        .await
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let status_code = status.as_u16();
+        let body_text = response.text().await.unwrap_or_default();
+        return Err(AnthropicError::from_status(status_code, body_text));
+    }
+
+    let result: Resp = response
+        .json()
+        .await
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    Ok(result)
+}
+
+/// Make a GET request to the Anthropic API using the SDK client's configuration.
+pub async fn anthropic_sdk_get_request<Resp>(
+    client: &Anthropic,
+    path: &str,
+) -> Result<Resp, AnthropicError>
+where
+    Resp: for<'de> Deserialize<'de>,
+{
+    use anthropic_sdk::AuthMethod;
+
+    let config = client.config();
+    let base_url = config.base_url.trim_end_matches('/');
+    let url = format!("{}{}", base_url, path);
+
+    // Build a reqwest client with optional proxy
+    let mut http_builder = reqwest::Client::builder();
+    if let Some(ref proxy_url) = config.proxy_url {
+        if let Ok(proxy) = reqwest::Proxy::all(proxy_url.as_str()) {
+            http_builder = http_builder.proxy(proxy);
+        }
+    }
+    let http_client = http_builder
+        .build()
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    let mut req_builder = http_client
+        .get(&url)
+        .header("content-type", "application/json")
+        .header("anthropic-version", "2023-06-01");
+
+    req_builder = match config.auth_method {
+        AuthMethod::Bearer => {
+            req_builder.header("authorization", format!("Bearer {}", config.api_key))
+        }
+        AuthMethod::Token => req_builder.header("token", &config.api_key),
+        _ => req_builder.header("x-api-key", &config.api_key),
+    };
+
+    let response = req_builder
+        .send()
+        .await
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let status_code = status.as_u16();
+        let body_text = response.text().await.unwrap_or_default();
+        return Err(AnthropicError::from_status(status_code, body_text));
+    }
+
+    let result: Resp = response
+        .json()
+        .await
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    Ok(result)
+}
+
+/// Make a raw GET request and return the raw `reqwest::Response` (for streaming JSONL, etc.).
+pub async fn anthropic_sdk_get_raw(
+    client: &Anthropic,
+    path: &str,
+) -> Result<reqwest::Response, AnthropicError> {
+    use anthropic_sdk::AuthMethod;
+
+    let config = client.config();
+    let base_url = config.base_url.trim_end_matches('/');
+    let url = format!("{}{}", base_url, path);
+
+    let mut http_builder = reqwest::Client::builder();
+    if let Some(ref proxy_url) = config.proxy_url {
+        if let Ok(proxy) = reqwest::Proxy::all(proxy_url.as_str()) {
+            http_builder = http_builder.proxy(proxy);
+        }
+    }
+    let http_client = http_builder
+        .build()
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    let mut req_builder = http_client
+        .get(&url)
+        .header("anthropic-version", "2023-06-01");
+
+    req_builder = match config.auth_method {
+        AuthMethod::Bearer => {
+            req_builder.header("authorization", format!("Bearer {}", config.api_key))
+        }
+        AuthMethod::Token => req_builder.header("token", &config.api_key),
+        _ => req_builder.header("x-api-key", &config.api_key),
+    };
+
+    let response = req_builder
+        .send()
+        .await
+        .map_err(|e| AnthropicError::Connection {
+            message: e.to_string(),
+        })?;
+
+    let status = response.status();
+    if !status.is_success() {
+        let status_code = status.as_u16();
+        let body_text = response.text().await.unwrap_or_default();
+        return Err(AnthropicError::from_status(status_code, body_text));
+    }
+
+    Ok(response)
 }
 
 // --- Server State ---

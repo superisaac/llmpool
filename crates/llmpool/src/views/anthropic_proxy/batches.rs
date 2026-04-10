@@ -7,10 +7,47 @@ use axum::{
 use std::sync::Arc;
 use tracing::{info, warn};
 
-use super::client::{CreateMessageBatchParams, ListMessageBatchesParams};
-use super::helpers::{AnthropicAppState, check_wallet_balance, select_anthropic_clients};
+use super::client::{CreateMessageBatchParams, ListMessageBatchesResponse, MessageBatch};
+use super::helpers::{
+    AnthropicAppState, anthropic_sdk_get_raw, anthropic_sdk_get_request, anthropic_sdk_request,
+    check_wallet_balance, select_anthropic_clients,
+};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
+
+/// Map an `anthropic_sdk::AnthropicError` to an Axum error response.
+fn sdk_error_response(e: &anthropic_sdk::AnthropicError) -> Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(serde_json::json!({
+            "type": "error",
+            "error": {
+                "type": "api_error",
+                "message": e.to_string()
+            }
+        })),
+    )
+        .into_response()
+}
+
+/// Spawn a task to mark an upstream offline when a network error is detected.
+fn maybe_mark_offline(
+    e: &anthropic_sdk::AnthropicError,
+    pool: crate::db::DbPool,
+    upstream_id: i64,
+) {
+    if matches!(e, anthropic_sdk::AnthropicError::Connection { .. }) {
+        tokio::spawn(async move {
+            if let Err(db_err) = db::llm::mark_upstream_offline(&pool, upstream_id).await {
+                warn!(
+                    upstream_id = upstream_id,
+                    error = %db_err,
+                    "Failed to mark anthropic upstream as offline"
+                );
+            }
+        });
+    }
+}
 
 // ---------------------------------------------------------------------------
 // POST /v1/messages/batches — Create a Message Batch
@@ -21,8 +58,6 @@ pub async fn create_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     Json(payload): Json<CreateMessageBatchParams>,
 ) -> Response {
-    use super::client::AnthropicApiClient;
-
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -53,11 +88,14 @@ pub async fn create_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match legacy_client.create_message_batch(&payload).await {
+    match anthropic_sdk_request::<CreateMessageBatchParams, MessageBatch>(
+        &upstream_client.client,
+        "/v1/messages/batches",
+        &payload,
+    )
+    .await
+    {
         Ok(batch) => {
             info!(
                 batch_id = %batch.id,
@@ -67,31 +105,9 @@ pub async fn create_message_batch(
             Json(batch).into_response()
         }
         Err(e) => {
-            if matches!(e, super::client::AnthropicApiError::Network(_)) {
-                let pool = state.pool.clone();
-                let upstream_id = upstream_client.upstream_id;
-                tokio::spawn(async move {
-                    if let Err(db_err) = db::llm::mark_upstream_offline(&pool, upstream_id).await {
-                        warn!(
-                            upstream_id = upstream_id,
-                            error = %db_err,
-                            "Failed to mark anthropic upstream as offline"
-                        );
-                    }
-                });
-            }
+            maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(error = %e, "Anthropic message batch creation failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": "Internal server error while proxying batch to upstream."
-                    }
-                })),
-            )
-                .into_response()
+            sdk_error_response(&e)
         }
     }
 }
@@ -102,8 +118,6 @@ pub async fn create_message_batch(
 
 /// GET /v1/messages/batches — list message batches from the configured Anthropic upstream
 pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -> Response {
-    use super::client::AnthropicApiClient;
-
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -128,26 +142,18 @@ pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    let params = ListMessageBatchesParams::default();
-    match legacy_client.list_message_batches(&params).await {
+    match anthropic_sdk_get_request::<ListMessageBatchesResponse>(
+        &upstream_client.client,
+        "/v1/messages/batches",
+    )
+    .await
+    {
         Ok(list) => Json(list).into_response(),
         Err(e) => {
+            maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(error = %e, "Anthropic list message batches failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": "Internal server error while listing batches."
-                    }
-                })),
-            )
-                .into_response()
+            sdk_error_response(&e)
         }
     }
 }
@@ -161,8 +167,6 @@ pub async fn retrieve_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
-    use super::client::AnthropicApiClient;
-
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -186,28 +190,14 @@ pub async fn retrieve_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
+    let path = format!("/v1/messages/batches/{}", message_batch_id);
 
-    match legacy_client
-        .retrieve_message_batch(&message_batch_id)
-        .await
-    {
+    match anthropic_sdk_get_request::<MessageBatch>(&upstream_client.client, &path).await {
         Ok(batch) => Json(batch).into_response(),
         Err(e) => {
+            maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(batch_id = %message_batch_id, error = %e, "Anthropic retrieve message batch failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": "Internal server error while retrieving batch."
-                    }
-                })),
-            )
-                .into_response()
+            sdk_error_response(&e)
         }
     }
 }
@@ -221,8 +211,6 @@ pub async fn cancel_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
-    use super::client::AnthropicApiClient;
-
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -246,28 +234,24 @@ pub async fn cancel_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
+    let path = format!("/v1/messages/batches/{}/cancel", message_batch_id);
 
-    match legacy_client.cancel_message_batch(&message_batch_id).await {
+    // Cancel is a POST with an empty body
+    match anthropic_sdk_request::<serde_json::Value, MessageBatch>(
+        &upstream_client.client,
+        &path,
+        &serde_json::Value::Null,
+    )
+    .await
+    {
         Ok(batch) => {
             info!(batch_id = %message_batch_id, "Anthropic message batch cancelled");
             Json(batch).into_response()
         }
         Err(e) => {
+            maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(batch_id = %message_batch_id, error = %e, "Anthropic cancel message batch failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": "Internal server error while cancelling batch."
-                    }
-                })),
-            )
-                .into_response()
+            sdk_error_response(&e)
         }
     }
 }
@@ -281,8 +265,6 @@ pub async fn retrieve_message_batch_results(
     State(state): State<Arc<AnthropicAppState>>,
     axum::extract::Path(message_batch_id): axum::extract::Path<String>,
 ) -> Response {
-    use super::client::AnthropicApiClient;
-
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
@@ -306,14 +288,9 @@ pub async fn retrieve_message_batch_results(
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
+    let path = format!("/v1/messages/batches/{}/results", message_batch_id);
 
-    match legacy_client
-        .retrieve_message_batch_results_raw(&message_batch_id)
-        .await
-    {
+    match anthropic_sdk_get_raw(&upstream_client.client, &path).await {
         Ok(upstream_resp) => {
             // Stream the JSONL body directly back to the client
             let status = upstream_resp.status();
@@ -325,18 +302,9 @@ pub async fn retrieve_message_batch_results(
             response
         }
         Err(e) => {
+            maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(batch_id = %message_batch_id, error = %e, "Anthropic retrieve batch results failed");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({
-                    "type": "error",
-                    "error": {
-                        "type": "api_error",
-                        "message": "Internal server error while retrieving batch results."
-                    }
-                })),
-            )
-                .into_response()
+            sdk_error_response(&e)
         }
     }
 }

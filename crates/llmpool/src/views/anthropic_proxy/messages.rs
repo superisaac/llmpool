@@ -12,8 +12,12 @@ use tracing::{info, warn};
 
 use anthropic_sdk::{MessageCreateParams, MessageStreamEvent};
 
-use super::client::{CountMessageTokensParams, CreateMessageParams, Message, Usage};
-use super::helpers::{AnthropicAppState, check_wallet_balance, select_anthropic_clients};
+use super::client::{
+    CountMessageTokensParams, CountMessageTokensResponse, CreateMessageParams, Message, Usage,
+};
+use super::helpers::{
+    AnthropicAppState, anthropic_sdk_request, check_wallet_balance, select_anthropic_clients,
+};
 use crate::anthropic::session_tracer::SessionTracer;
 use crate::db;
 use crate::defer::AnthropicEventData;
@@ -303,14 +307,12 @@ pub async fn create_message(
 
 /// POST /v1/messages/count_tokens — count tokens for a message without creating it
 ///
-/// `anthropic-sdk-rust` does not expose a `count_tokens` endpoint, so we fall back
-/// to the existing reqwest-based client.
+/// Uses the `anthropic-sdk-rust` client's underlying HTTP client to call
+/// `POST /v1/messages/count_tokens` with proper authentication headers.
 pub async fn count_message_tokens(
     State(state): State<Arc<AnthropicAppState>>,
     Json(payload): Json<CountMessageTokensParams>,
 ) -> Response {
-    use super::client::{AnthropicApiClient, AnthropicApiError};
-
     let model_name = payload.model.clone();
     let account_id = ACCOUNT.with(|u| u.id);
 
@@ -335,11 +337,14 @@ pub async fn count_message_tokens(
     }
 
     let upstream_client = &clients[0];
-    let sdk_config = upstream_client.client.config();
-    let legacy_client =
-        AnthropicApiClient::with_base_url(sdk_config.api_key.clone(), sdk_config.base_url.clone());
 
-    match legacy_client.count_message_tokens(&payload).await {
+    match anthropic_sdk_request::<CountMessageTokensParams, CountMessageTokensResponse>(
+        &upstream_client.client,
+        "/v1/messages/count_tokens",
+        &payload,
+    )
+    .await
+    {
         Ok(result) => {
             info!(
                 input_tokens = result.input_tokens,
@@ -349,7 +354,7 @@ pub async fn count_message_tokens(
             Json(result).into_response()
         }
         Err(e) => {
-            if matches!(e, AnthropicApiError::Network(_)) {
+            if matches!(e, anthropic_sdk::AnthropicError::Connection { .. }) {
                 let pool = state.pool.clone();
                 let upstream_id = upstream_client.upstream_id;
                 tokio::spawn(async move {
