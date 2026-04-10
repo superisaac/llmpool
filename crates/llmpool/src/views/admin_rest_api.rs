@@ -1120,10 +1120,12 @@ async fn create_upstream(
 
 // --- Model Test Handler ---
 
-/// Request body for testing model features
+/// Request body for testing a single model's features
 #[derive(Deserialize)]
-struct TestModelsRequest {
-    model_ids: Vec<i64>,
+struct TestModelRequest {
+    /// Provider to use for feature detection: "openai" (default) or "anthropic"
+    #[serde(default = "default_provider")]
+    provider: String,
 }
 
 /// Response DTO for a single model test result
@@ -1136,51 +1138,62 @@ struct ModelTestResult {
     error: Option<String>,
 }
 
-/// POST /api/v1/models-tests
+/// Valid provider values for model testing
+const VALID_TEST_PROVIDERS: &[&str] = &["openai", "anthropic"];
+
+/// POST /api/v1/models/{model_id}/tests
 ///
-/// Tests the features of the specified models (by their database IDs) and updates
-/// the feature flags (has_chat_completion, has_embedding, has_image_generation, has_speech)
-/// in the LLMModel table. All other fields remain unchanged.
+/// Tests the features of the specified model (by its database ID) and updates
+/// the feature flags in the LLMModel table. All other fields remain unchanged.
+///
+/// Path parameters:
+/// - `model_id` (required): The database ID of the model to test
 ///
 /// Request body (JSON):
-/// - `model_ids` (required): List of model database IDs to test
-async fn test_models(
+/// - `provider` (optional, default: "openai"): Provider to use for feature detection.
+///   Must be one of "openai" or "anthropic".
+///   When "openai", detects has_chat_completion, has_embedding, has_image_generation, has_speech, has_responses_api.
+///   When "anthropic", detects has_messages.
+async fn test_model(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<TestModelsRequest>,
+    Path(model_id): Path<i64>,
+    Json(payload): Json<TestModelRequest>,
 ) -> Response {
-    if payload.model_ids.is_empty() {
+    if !VALID_TEST_PROVIDERS.contains(&payload.provider.as_str()) {
         return error_response(
             StatusCode::BAD_REQUEST,
             "validation_error",
-            "model_ids cannot be empty",
+            &format!(
+                "Invalid provider '{}'. Must be one of: {}",
+                payload.provider,
+                VALID_TEST_PROVIDERS.join(", ")
+            ),
         );
     }
 
-    let mut results: Vec<ModelTestResult> = Vec::new();
+    let result = if payload.provider == "anthropic" {
+        crate::anthropic::features::detect_and_update_model_features(&state.pool, model_id).await
+    } else {
+        crate::openai::features::detect_and_update_model_features(&state.pool, model_id).await
+    };
 
-    for model_id in &payload.model_ids {
-        match crate::openai::features::detect_and_update_model_features(&state.pool, *model_id)
-            .await
-        {
-            Ok(updated_model) => {
-                results.push(ModelTestResult {
-                    model_id: *model_id,
-                    model: Some(ModelResponse::from(updated_model)),
-                    error: None,
-                });
-            }
-            Err(e) => {
-                warn!(error = %e, model_id = model_id, "Failed to test model features");
-                results.push(ModelTestResult {
-                    model_id: *model_id,
-                    model: None,
-                    error: Some(e.to_string()),
-                });
-            }
+    match result {
+        Ok(updated_model) => Json(ModelTestResult {
+            model_id,
+            model: Some(ModelResponse::from(updated_model)),
+            error: None,
+        })
+        .into_response(),
+        Err(e) => {
+            warn!(error = %e, model_id = model_id, "Failed to test model features");
+            Json(ModelTestResult {
+                model_id,
+                model: None,
+                error: Some(e.to_string()),
+            })
+            .into_response()
         }
     }
-
-    Json(results).into_response()
 }
 
 // --- Upstream Get/Update Handlers ---
@@ -2756,6 +2769,7 @@ pub fn get_router(
             "/models/{model_id}",
             get(get_model_by_id).put(update_model_by_id),
         )
+        .route("/models/{model_id}/tests", post(test_model))
         .route(
             "/models/path/{upstream_name}/{*model_name}",
             get(get_model_by_upstream_and_name),
@@ -2780,7 +2794,6 @@ pub fn get_router(
             "/upstreams/{upstream_id}/tags/{tag}",
             delete(remove_upstream_tag),
         )
-        .route("/models-tests", post(test_models))
         .route("/session-events", get(list_session_events))
         .route("/session-events/{event_id}", get(get_session_event_by_id))
         .route("/deposits", post(create_deposit))

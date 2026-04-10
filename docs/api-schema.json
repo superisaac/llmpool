@@ -715,12 +715,15 @@
         }
       }
     },
-    "/models-tests": {
+    "/models/{model_id}/tests": {
       "post": {
         "summary": "Test model features",
-        "description": "Tests the features of the specified models (by their database IDs) and updates the feature flags (has_chat_completion, has_embedding, has_image_generation, has_speech) in the database.",
-        "operationId": "testModels",
+        "description": "Tests the features of the specified model (by its database ID) and updates the feature flags in the database. When provider is 'openai', detects has_chat_completion, has_embedding, has_image_generation, has_speech, has_responses_api. When provider is 'anthropic', detects has_messages.",
+        "operationId": "testModel",
         "tags": ["Models"],
+        "parameters": [
+          { "name": "model_id", "in": "path", "required": true, "schema": { "type": "integer" }, "description": "Database ID of the model to test" }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -728,31 +731,40 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "model_ids": { "type": "array", "items": { "type": "integer" }, "description": "List of model database IDs to test" }
-                },
-                "required": ["model_ids"]
+                  "provider": {
+                    "type": "string",
+                    "enum": ["openai", "anthropic"],
+                    "default": "openai",
+                    "description": "Provider to use for feature detection"
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Array of per-model test results",
+            "description": "Model test result",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "model_id": { "type": "integer" },
-                      "model": { "$ref": "#/components/schemas/ModelResponse" },
-                      "error": { "type": "string" }
-                    }
+                  "type": "object",
+                  "properties": {
+                    "model_id": { "type": "integer" },
+                    "model": { "$ref": "#/components/schemas/ModelResponse" },
+                    "error": { "type": "string" }
                   }
                 }
               }
             }
+          },
+          "400": {
+            "description": "Invalid provider value",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
+          },
+          "404": {
+            "description": "Model not found",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           }
         }
       }

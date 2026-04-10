@@ -53,6 +53,9 @@ pub enum ModelAction {
         /// Model path (upstream_name/model_name) or model database ID
         #[arg(long)]
         model: String,
+        /// Provider to use for feature detection: "openai" (default) or "anthropic"
+        #[arg(long, default_value = "openai")]
+        provider: String,
     },
 }
 
@@ -77,8 +80,8 @@ struct UpdateModelRequestBody {
 }
 
 #[derive(Serialize)]
-struct TestModelsRequestBody {
-    model_ids: Vec<i64>,
+struct TestModelRequestBody {
+    provider: String,
 }
 
 // ============================================================
@@ -207,26 +210,21 @@ pub async fn handle_model(
                 print_model_full(&resp, "Model updated successfully!");
             }
         }
-        ModelAction::Detect { model } => {
+        ModelAction::Detect { model, provider } => {
             // Resolve model path or ID to a numeric model ID
             let model_id = resolve_model_id(&model, client).await?;
 
-            let body = TestModelsRequestBody {
-                model_ids: vec![model_id],
-            };
+            let body = TestModelRequestBody { provider };
+            let path = format!("/models/{}/tests", model_id);
 
             if json_output {
-                let raw = client.post_raw("/models-tests", &body).await?;
+                let raw = client.post_raw(&path, &body).await?;
                 println!("{}", raw);
             } else {
                 println!("Detecting features for model {}...", model);
-                let results: Vec<ModelTestResult> = client.post("/models-tests", &body).await?;
+                let result: ModelTestResult = client.post(&path, &body).await?;
                 println!();
-                if let Some(result) = results.first() {
-                    print_model_detect_result(result);
-                } else {
-                    println!("No results returned.");
-                }
+                print_model_detect_result(&result);
             }
         }
     }
