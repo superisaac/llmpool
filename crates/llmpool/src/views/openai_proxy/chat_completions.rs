@@ -126,7 +126,6 @@ async fn chat_completions_with_client(
             .into_response())
     } else {
         let response = client.chat().create(payload).await?;
-
         if let Some(ref usage) = response.usage {
             info!(
                 prompt_tokens = usage.prompt_tokens,

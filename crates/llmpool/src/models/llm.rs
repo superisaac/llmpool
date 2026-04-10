@@ -24,7 +24,6 @@ pub struct LLMUpstream {
     pub api_key: String,
 
     pub provider: String,
-    pub has_responses_api: bool,
     pub tags: Vec<String>,
     pub proxies: Vec<String>,
     pub status: String,
@@ -41,7 +40,6 @@ pub struct NewLLMUpstream {
     pub api_key: String,
     #[serde(default = "default_provider")]
     pub provider: String,
-    pub has_responses_api: bool,
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
@@ -63,7 +61,6 @@ pub struct UpdateLLMUpstream {
     pub api_base: Option<String>,
     pub api_key: Option<String>,
     pub provider: Option<String>,
-    pub has_responses_api: Option<bool>,
     pub tags: Option<Vec<String>>,
     pub proxies: Option<Vec<String>>,
     pub status: Option<String>,
@@ -84,6 +81,8 @@ pub struct LLMModel {
     pub has_embedding: bool,
     /// Whether the model supports the Anthropic /v1/messages API
     pub has_messages: bool,
+    /// Whether the model supports the OpenAI /v1/responses API
+    pub has_responses_api: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -105,6 +104,9 @@ pub struct NewLLMModel {
     /// Whether the model supports the Anthropic /v1/messages API
     #[serde(default)]
     pub has_messages: bool,
+    /// Whether the model supports the OpenAI /v1/responses API
+    #[serde(default)]
+    pub has_responses_api: bool,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
     pub batch_input_token_price: BigDecimal,
@@ -121,6 +123,9 @@ pub struct CapacityOption {
     pub has_speech: Option<bool>,
     /// Whether the model supports the Anthropic /v1/messages API
     pub has_messages: Option<bool>,
+    /// Whether the model supports the OpenAI /v1/responses API
+    #[serde(default)]
+    pub has_responses_api: Option<bool>,
 }
 
 /// Used to update an existing OpenAI model
@@ -134,6 +139,8 @@ pub struct UpdateLLMModel {
     pub has_embedding: Option<bool>,
     /// Whether the model supports the Anthropic /v1/messages API
     pub has_messages: Option<bool>,
+    /// Whether the model supports the OpenAI /v1/responses API
+    pub has_responses_api: Option<bool>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
     pub batch_input_token_price: Option<BigDecimal>,

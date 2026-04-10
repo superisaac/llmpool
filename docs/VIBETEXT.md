@@ -363,3 +363,11 @@ CapacityOption增加一个字段, has_messages, find_models_by_name_and_capacity
 ==========
 BalanceChange 增加字段subscription_id, 记录apply的对应subscription id. 修改migrations文件即可，不需要新建migration文件
 mark_balance_change_applied_with_tx 增加参数subscription_id
+
+==========
+仿照 /openai/v1/chat/completions, 实现 openai responses api: POST /api/v1/responses 以及 GET /api/v1/responses/:id, 实现在openai_proxy/responses.rs
+
+LLMModel 添加字段: has_responses_api, LLMUpstream中删除has_responses_api字段. openai/features.rs 中 ModelFeature 添加字段: has_responses_api, 在detect_model_features中添加判断.
+CapacityOptions 添加字段: has_responses_api, 默认为false. 在responses.rs中中使用has_responses_api作为select_model_clients的过滤器。更新 api-schema.json 以及 llmpool-ctl 命令
+
+修改migrations文件即可，不需要新建migration文件.

@@ -56,7 +56,6 @@ pub struct UpstreamResponse {
     pub name: String,
     pub api_base: String,
     pub provider: String,
-    pub has_responses_api: bool,
     pub tags: Vec<String>,
     pub proxies: Vec<String>,
     pub status: String,
@@ -76,6 +75,7 @@ pub struct ModelResponse {
     pub has_embedding: bool,
     pub has_image_generation: bool,
     pub has_speech: bool,
+    pub has_responses_api: bool,
     pub input_token_price: String,
     pub output_token_price: String,
     pub batch_input_token_price: String,
@@ -139,7 +139,6 @@ pub struct ModelFeaturesResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct TestUpstreamResponse {
-    pub has_responses_api: bool,
     pub models: Vec<ModelFeaturesResponse>,
 }
 

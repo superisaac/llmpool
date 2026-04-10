@@ -9,6 +9,7 @@ use async_openai::{
     },
     types::embeddings::{CreateEmbeddingRequest, CreateEmbeddingResponse},
     types::images::{CreateImageRequest, ImagesResponse},
+    types::responses::{CreateResponse, Response},
 };
 use serde::{Deserialize, Serialize};
 
@@ -38,6 +39,10 @@ pub enum OpenAIEventData {
 
     BatchRequest(BatchRequest),
     Batch(Batch),
+
+    ResponsesRequest(CreateResponse),
+    ResponsesResponse(Response),
+    ResponsesStreamDone,
 }
 
 /// An event entry to be processed asynchronously via the task queue.

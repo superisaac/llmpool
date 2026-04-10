@@ -153,18 +153,17 @@ fn print_upstreams(upstreams: &[UpstreamResponse]) {
     }
 
     println!(
-        "{:<5} {:<20} {:<40} {:<12} {:<8} {:<20} {:<20}",
-        "ID", "Name", "API Base", "Status", "Resp.API", "Tags", "Proxies"
+        "{:<5} {:<20} {:<40} {:<12} {:<20} {:<20}",
+        "ID", "Name", "API Base", "Status", "Tags", "Proxies"
     );
-    println!("{}", "-".repeat(125));
+    println!("{}", "-".repeat(117));
     for ep in upstreams {
         println!(
-            "{:<5} {:<20} {:<40} {:<12} {:<8} {:<20} {:<20}",
+            "{:<5} {:<20} {:<40} {:<12} {:<20} {:<20}",
             ep.id,
             truncate(&ep.name, 18),
             truncate(&ep.api_base, 38),
             ep.status,
-            if ep.has_responses_api { "yes" } else { "no" },
             truncate(&ep.tags.join(","), 18),
             truncate(&ep.proxies.join(","), 18),
         );
@@ -172,15 +171,6 @@ fn print_upstreams(upstreams: &[UpstreamResponse]) {
 }
 
 fn print_test_result(result: &TestUpstreamResponse) {
-    println!(
-        "Responses API: {}",
-        if result.has_responses_api {
-            "yes"
-        } else {
-            "no"
-        }
-    );
-    println!();
     if result.models.is_empty() {
         println!("No models detected.");
         return;
@@ -211,14 +201,6 @@ fn print_upstream_with_models(resp: &UpstreamWithModelsResponse) {
     println!("  API Base:       {}", resp.upstream.api_base);
     println!("  Provider:       {}", resp.upstream.provider);
     println!("  Status:         {}", resp.upstream.status);
-    println!(
-        "  Responses API:  {}",
-        if resp.upstream.has_responses_api {
-            "yes"
-        } else {
-            "no"
-        }
-    );
     println!("  Tags:           {}", resp.upstream.tags.join(", "));
     println!("  Proxies:        {}", resp.upstream.proxies.join(", "));
     println!("  Description:    {}", resp.upstream.description);
@@ -237,10 +219,6 @@ fn print_upstream_detail(ep: &UpstreamResponse) {
     println!("  API Base:       {}", ep.api_base);
     println!("  Provider:       {}", ep.provider);
     println!("  Status:         {}", ep.status);
-    println!(
-        "  Responses API:  {}",
-        if ep.has_responses_api { "yes" } else { "no" }
-    );
     println!("  Tags:           {}", ep.tags.join(", "));
     println!("  Proxies:        {}", ep.proxies.join(", "));
     println!("  Description:    {}", ep.description);

@@ -65,6 +65,7 @@ pub async fn detect_and_update_model_features(
         has_chat_completion: None,
         has_embedding: None,
         has_messages: Some(has_messages),
+        has_responses_api: None,
         input_token_price: None,
         output_token_price: None,
         batch_input_token_price: None,
@@ -72,6 +73,6 @@ pub async fn detect_and_update_model_features(
         description: None,
         updated_at: Some(Utc::now().naive_utc()),
     };
-    let updated_model = db::llm::update_model(pool, model_pk, &update).await?;
-    Ok(updated_model)
+    let updated = db::llm::update_model(pool, model_pk, &update).await?;
+    Ok(updated)
 }

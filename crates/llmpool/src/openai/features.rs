@@ -27,6 +27,7 @@ pub struct ModelFeatures {
     pub has_speech: bool,
     pub has_embedding: bool,
     pub has_chat_completion: bool,
+    pub has_responses_api: bool,
 }
 
 /// Detect model features through actual upstream calls
@@ -38,6 +39,7 @@ async fn detect_model_features(
     let has_speech = check_speech_support(client, model).await;
     let has_embedding = check_embedding_support(client, model).await;
     let has_chat_completion = check_chat_completion_support(client, model).await;
+    let has_responses_api = check_responses_api_support(client, model).await;
 
     ModelFeatures {
         model: model.clone(),
@@ -45,6 +47,7 @@ async fn detect_model_features(
         has_speech,
         has_embedding,
         has_chat_completion,
+        has_responses_api,
     }
 }
 
@@ -137,6 +140,26 @@ async fn check_embedding_support(
     }
 }
 
+/// Check if the model supports the OpenAI /v1/responses API
+async fn check_responses_api_support(
+    client: &Client<async_openai::config::OpenAIConfig>,
+    model: &Model,
+) -> bool {
+    use async_openai::types::responses::{CreateResponse, InputParam};
+
+    let payload = CreateResponse {
+        model: Some(model.id.clone()),
+        input: InputParam::Text("a".to_string()),
+        max_output_tokens: Some(1),
+        ..Default::default()
+    };
+
+    match client.responses().create(payload).await {
+        Ok(_) => true,
+        Err(e) => !is_unsupported_error(&e),
+    }
+}
+
 /// Fetch the model list from the upstream and save each model to the database without
 /// performing any feature detection. All feature flags are set to `false`.
 /// This will upsert the upstream (by api_base) and insert any new models (by upstream_id + model_id).
@@ -156,7 +179,7 @@ pub async fn list_and_save_without_detect(
     let mut models = response.data;
     models.sort_by(|a, b| a.id.cmp(&b.id));
 
-    // 2. Upsert the LLMUpstream (has_responses_api stays false when not detecting)
+    // 2. Upsert the LLMUpstream
     let upstream = match db::llm::get_upstream_by_api_base(pool, api_base).await {
         Ok(existing) => {
             let update = UpdateLLMUpstream {
@@ -164,7 +187,6 @@ pub async fn list_and_save_without_detect(
                 api_base: None,
                 api_key: Some(api_key.to_string()),
                 provider: None,
-                has_responses_api: None,
                 tags: None,
                 proxies: None,
                 status: None,
@@ -179,7 +201,6 @@ pub async fn list_and_save_without_detect(
                 api_base: api_base.to_string(),
                 api_key: api_key.to_string(),
                 provider: "openai".to_string(),
-                has_responses_api: false,
                 tags: vec![],
                 proxies: vec![],
                 status: "online".to_string(),
@@ -206,6 +227,7 @@ pub async fn list_and_save_without_detect(
                     has_chat_completion: false,
                     has_embedding: false,
                     has_messages: false,
+                    has_responses_api: false,
                     input_token_price: default_token_price.clone(),
                     output_token_price: default_token_price.clone(),
                     batch_input_token_price: default_token_price.clone(),
@@ -259,6 +281,7 @@ pub async fn detect_and_update_model_features(
         has_chat_completion: Some(features.has_chat_completion),
         has_embedding: Some(features.has_embedding),
         has_messages: None,
+        has_responses_api: Some(features.has_responses_api),
         input_token_price: None,
         output_token_price: None,
         batch_input_token_price: None,

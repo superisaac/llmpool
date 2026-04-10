@@ -50,15 +50,14 @@ pub async fn create_upstream(
 ) -> Result<LLMUpstream, sqlx::Error> {
     let encrypted_key = encrypt_api_key(&new_upstream.api_key)?;
     let upstream = sqlx::query_as::<_, LLMUpstream>(
-        "INSERT INTO llm_upstreams (name, api_base, encrypted_api_key, provider, has_responses_api, tags, proxies, status, description)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        "INSERT INTO llm_upstreams (name, api_base, encrypted_api_key, provider, tags, proxies, status, description)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
          RETURNING *",
     )
     .bind(&new_upstream.name)
     .bind(&new_upstream.api_base)
     .bind(&encrypted_key)
     .bind(&new_upstream.provider)
-    .bind(new_upstream.has_responses_api)
     .bind(&new_upstream.tags)
     .bind(&new_upstream.proxies)
     .bind(&new_upstream.status)
@@ -147,9 +146,6 @@ pub async fn update_upstream(
     let plaintext_key = update.api_key.as_deref().unwrap_or(&current.api_key);
     let encrypted_key = encrypt_api_key(plaintext_key)?;
     let provider = update.provider.as_deref().unwrap_or(&current.provider);
-    let has_responses_api = update
-        .has_responses_api
-        .unwrap_or(current.has_responses_api);
     let tags = update.tags.as_ref().unwrap_or(&current.tags);
     let proxies = update.proxies.as_ref().unwrap_or(&current.proxies);
     let status = update.status.as_deref().unwrap_or(&current.status);
@@ -161,15 +157,14 @@ pub async fn update_upstream(
 
     let upstream = sqlx::query_as::<_, LLMUpstream>(
         "UPDATE llm_upstreams
-         SET name = $1, api_base = $2, encrypted_api_key = $3, provider = $4, has_responses_api = $5, tags = $6, proxies = $7, status = $8, description = $9, updated_at = $10
-         WHERE id = $11
+         SET name = $1, api_base = $2, encrypted_api_key = $3, provider = $4, tags = $5, proxies = $6, status = $7, description = $8, updated_at = $9
+         WHERE id = $10
          RETURNING *",
     )
     .bind(name)
     .bind(api_base)
     .bind(&encrypted_key)
     .bind(provider)
-    .bind(has_responses_api)
     .bind(tags)
     .bind(proxies)
     .bind(status)
@@ -224,8 +219,8 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i32) -> Result<u64, sql
 /// Create a new OpenAI model
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        "INSERT INTO llm_models (upstream_id, model_id, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
@@ -235,6 +230,7 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .bind(new_model.has_chat_completion)
     .bind(new_model.has_embedding)
     .bind(new_model.has_messages)
+    .bind(new_model.has_responses_api)
     .bind(&new_model.input_token_price)
     .bind(&new_model.output_token_price)
     .bind(&new_model.batch_input_token_price)
@@ -332,6 +328,9 @@ pub async fn update_model(
         .unwrap_or(current.has_chat_completion);
     let has_embedding = update.has_embedding.unwrap_or(current.has_embedding);
     let has_messages = update.has_messages.unwrap_or(current.has_messages);
+    let has_responses_api = update
+        .has_responses_api
+        .unwrap_or(current.has_responses_api);
     let input_token_price = update
         .input_token_price
         .as_ref()
@@ -358,10 +357,11 @@ pub async fn update_model(
         "UPDATE llm_models
          SET model_id = $1, is_active = $2, has_image_generation = $3, has_speech = $4,
              has_chat_completion = $5, has_embedding = $6, has_messages = $7,
-             input_token_price = $8, output_token_price = $9,
-             batch_input_token_price = $10, batch_output_token_price = $11,
-             description = $12, updated_at = $13
-         WHERE id = $14
+             has_responses_api = $8,
+             input_token_price = $9, output_token_price = $10,
+             batch_input_token_price = $11, batch_output_token_price = $12,
+             description = $13, updated_at = $14
+         WHERE id = $15
          RETURNING *",
     )
     .bind(model_id)
@@ -371,6 +371,7 @@ pub async fn update_model(
     .bind(has_chat_completion)
     .bind(has_embedding)
     .bind(has_messages)
+    .bind(has_responses_api)
     .bind(input_token_price)
     .bind(output_token_price)
     .bind(batch_input_token_price)
@@ -606,6 +607,7 @@ struct ModelUpstreamRow {
     pub has_chat_completion: bool,
     pub has_embedding: bool,
     pub has_messages: bool,
+    pub has_responses_api: bool,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
     pub batch_input_token_price: bigdecimal::BigDecimal,
@@ -619,7 +621,6 @@ struct ModelUpstreamRow {
     pub ep_api_base: String,
     pub ep_encrypted_api_key: String,
     pub ep_provider: String,
-    pub ep_has_responses_api: bool,
     pub ep_tags: Vec<String>,
     pub ep_proxies: Vec<String>,
     pub ep_status: String,
@@ -640,6 +641,7 @@ impl ModelUpstreamRow {
             has_chat_completion: self.has_chat_completion,
             has_embedding: self.has_embedding,
             has_messages: self.has_messages,
+            has_responses_api: self.has_responses_api,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
             batch_input_token_price: self.batch_input_token_price,
@@ -656,7 +658,6 @@ impl ModelUpstreamRow {
             ellipsed_api_key: String::new(), // will be populated by decrypt_upstream
             api_key: String::new(),          // will be populated by decrypt_upstream
             provider: self.ep_provider,
-            has_responses_api: self.ep_has_responses_api,
             tags: self.ep_tags,
             proxies: self.ep_proxies,
             status: self.ep_status,
@@ -682,12 +683,12 @@ pub async fn find_models_by_name_and_capacity(
     // Build dynamic query with optional capacity filters
     let mut sql = String::from(
         "SELECT m.id, m.upstream_id, m.model_id, m.is_active, m.has_image_generation, m.has_speech,
-                m.has_chat_completion, m.has_embedding, m.has_messages, m.input_token_price, m.output_token_price,
+                m.has_chat_completion, m.has_embedding, m.has_messages, m.has_responses_api,
+                m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
                 e.id AS ep_id, e.name AS ep_name, e.api_base AS ep_api_base,
                 e.encrypted_api_key AS ep_encrypted_api_key, e.provider AS ep_provider,
-                e.has_responses_api AS ep_has_responses_api,
                 e.tags AS ep_tags, e.proxies AS ep_proxies,
                 e.status AS ep_status, e.description AS ep_description,
                 e.created_at AS ep_created_at, e.updated_at AS ep_updated_at
@@ -719,6 +720,10 @@ pub async fn find_models_by_name_and_capacity(
     }
     if capacity.has_messages == Some(true) {
         conditions.push(format!("m.has_messages = ${}", param_idx));
+        param_idx += 1;
+    }
+    if capacity.has_responses_api == Some(true) {
+        conditions.push(format!("m.has_responses_api = ${}", param_idx));
         let _ = param_idx; // suppress unused warning
     }
 
@@ -743,6 +748,9 @@ pub async fn find_models_by_name_and_capacity(
         query = query.bind(true);
     }
     if capacity.has_messages == Some(true) {
+        query = query.bind(true);
+    }
+    if capacity.has_responses_api == Some(true) {
         query = query.bind(true);
     }
 

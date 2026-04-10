@@ -5,6 +5,7 @@ pub mod files;
 pub mod helpers;
 pub mod images;
 pub mod models;
+pub mod responses;
 pub mod speechs;
 
 use apalis_redis::RedisStorage;
@@ -51,6 +52,12 @@ pub fn get_router(
         .route(
             "/batches/{batch_id}/cancel",
             post(batches::batch_cancel_handler),
+        )
+        // Responses routes
+        .route("/responses", post(responses::create_response))
+        .route(
+            "/responses/{response_id}",
+            get(responses::retrieve_response),
         )
         .route_layer(middleware::from_fn_with_state(
             state.clone(),

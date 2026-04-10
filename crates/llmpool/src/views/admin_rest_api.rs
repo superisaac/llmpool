@@ -99,7 +99,6 @@ struct UpstreamResponse {
     name: String,
     api_base: String,
     provider: String,
-    has_responses_api: bool,
     tags: Vec<String>,
     proxies: Vec<String>,
     status: String,
@@ -115,7 +114,6 @@ impl From<crate::models::LLMUpstream> for UpstreamResponse {
             name: ep.name,
             api_base: ep.api_base,
             provider: ep.provider,
-            has_responses_api: ep.has_responses_api,
             tags: ep.tags,
             proxies: ep.proxies,
             status: ep.status,
@@ -1047,7 +1045,6 @@ async fn create_upstream(
                             api_base: None,
                             api_key: None,
                             provider: Some(payload.provider),
-                            has_responses_api: None,
                             tags: if payload.tags.is_empty() {
                                 None
                             } else {
@@ -1296,7 +1293,6 @@ async fn update_upstream_by_id(
         api_base: None,
         api_key: None,
         provider: payload.provider,
-        has_responses_api: None,
         tags: payload.tags,
         proxies: payload.proxies,
         status: payload.status,
@@ -1456,6 +1452,7 @@ async fn update_model_by_id(
         has_chat_completion: None,
         has_embedding: None,
         has_messages: None,
+        has_responses_api: None,
         input_token_price: payload.input_token_price,
         output_token_price: payload.output_token_price,
         batch_input_token_price: payload.batch_input_token_price,
