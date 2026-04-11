@@ -246,21 +246,47 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .await
 }
 
-/// List all OpenAI models, optionally filtered by a required feature.
-/// If `capacity.feature` is set, only models containing that feature are returned.
+/// List all OpenAI models, optionally filtered by provider and/or feature.
+/// If `provider` is non-empty, only models belonging to upstreams with that provider are returned.
+/// If `feature` is Some, only models containing that feature are returned.
 pub async fn list_models(
     pool: &DbPool,
-    capacity: &CapacityOption,
+    provider: &str,
+    feature: Option<String>,
 ) -> Result<Vec<LLMModel>, sqlx::Error> {
-    if let Some(ref feature) = capacity.feature {
-        sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE $1 = ANY(features)")
-            .bind(feature)
+    match (provider.is_empty(), feature) {
+        (true, None) => {
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models")
+                .fetch_all(pool)
+                .await
+        }
+        (true, Some(ref feat)) => {
+            sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE $1 = ANY(features)")
+                .bind(feat)
+                .fetch_all(pool)
+                .await
+        }
+        (false, None) => {
+            sqlx::query_as::<_, LLMModel>(
+                "SELECT m.* FROM llm_models m
+                 INNER JOIN llm_upstreams e ON m.upstream_id = e.id
+                 WHERE e.provider = $1",
+            )
+            .bind(provider)
             .fetch_all(pool)
             .await
-    } else {
-        sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models")
+        }
+        (false, Some(ref feat)) => {
+            sqlx::query_as::<_, LLMModel>(
+                "SELECT m.* FROM llm_models m
+                 INNER JOIN llm_upstreams e ON m.upstream_id = e.id
+                 WHERE e.provider = $1 AND $2 = ANY(m.features)",
+            )
+            .bind(provider)
+            .bind(feat)
             .fetch_all(pool)
             .await
+        }
     }
 }
 
@@ -673,17 +699,18 @@ impl ModelUpstreamRow {
     }
 }
 
-/// Find all OpenAI models with a given cname (short name) that match the specified capacity options,
-/// along with their associated upstream information (api_key, api_base).
+/// Find all OpenAI models with a given cname (short name) that match the specified provider and
+/// feature, along with their associated upstream information (api_key, api_base).
 ///
-/// If `capacity.feature` is set, only models containing that feature string are returned.
+/// Only models belonging to upstreams with the given `provider` and containing `feature` in their
+/// features array are returned.
 pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
-    capacity: &CapacityOption,
+    provider: &str,
+    feature: &str,
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
-    // Build dynamic query with optional feature filter
-    let mut sql = String::from(
+    let sql = String::from(
         "SELECT m.id, m.upstream_id, m.fullname, m.cname, m.is_active, m.features,
                 m.max_tokens, m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
@@ -696,21 +723,18 @@ pub async fn find_models_by_name_and_capacity(
          FROM llm_models m
          INNER JOIN llm_upstreams e ON m.upstream_id = e.id
          WHERE m.cname = $1
+                AND e.provider = $2
                 AND e.status = 'online'
-                AND m.is_active = true ",
+                AND m.is_active = true
+                AND $3 = ANY(m.features)",
     );
 
-    if capacity.feature.is_some() {
-        sql.push_str(" AND $2 = ANY(m.features)");
-    }
-
-    let mut query = sqlx::query_as::<_, ModelUpstreamRow>(&sql).bind(model_name);
-
-    if let Some(ref feature) = capacity.feature {
-        query = query.bind(feature);
-    }
-
-    let rows = query.fetch_all(pool).await?;
+    let rows = sqlx::query_as::<_, ModelUpstreamRow>(&sql)
+        .bind(model_name)
+        .bind(provider)
+        .bind(feature)
+        .fetch_all(pool)
+        .await?;
     rows.into_iter()
         .map(|r| r.into_tuple())
         .collect::<Result<Vec<_>, _>>()

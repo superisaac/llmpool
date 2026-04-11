@@ -10,7 +10,6 @@ use std::sync::Arc;
 
 use super::helpers::AnthropicAppState;
 use crate::db;
-use crate::models::llm::CapacityOption;
 
 /// A single model entry in the Anthropic models list response.
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,10 +36,12 @@ pub struct ListModelsResponse {
 
 /// Handle GET /v1/models — return available model list from database in Anthropic format.
 pub async fn list_models(State(state): State<Arc<AnthropicAppState>>) -> Response {
-    let capacity = CapacityOption {
-        feature: Some(crate::anthropic::features::FEATURE_MESSAGES.to_string()),
-    };
-    let res = db::llm::list_models(&state.pool, &capacity).await;
+    let res = db::llm::list_models(
+        &state.pool,
+        "anthropic",
+        Some(crate::anthropic::features::FEATURE_MESSAGES.to_string()),
+    )
+    .await;
 
     match res {
         Ok(models) => {

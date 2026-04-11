@@ -10,7 +10,6 @@ use tracing::warn;
 use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
-use crate::models::CapacityOption;
 
 /// Handle POST /v1/audio/speech upstream (text-to-speech)
 pub async fn create_speech(
@@ -25,11 +24,15 @@ pub async fn create_speech(
         return resp;
     }
 
-    let capacity = CapacityOption {
-        feature: Some(crate::openai::features::FEATURE_AUDIO_SPEECH.to_string()),
-    };
-    let clients =
-        select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 1).await;
+    let clients = select_model_clients(
+        &state.pool,
+        &state.redis_pool,
+        &model_name,
+        "openai",
+        crate::openai::features::FEATURE_AUDIO_SPEECH,
+        1,
+    )
+    .await;
     if clients.is_empty() {
         eprintln!("No client for speech model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();

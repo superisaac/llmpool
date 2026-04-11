@@ -200,13 +200,16 @@ pub(super) async fn select_model_clients(
     db_pool: &DbPool,
     redis_pool: &RedisPool,
     model_name: &str,
-    capacity: &crate::models::CapacityOption,
+    provider: &str,
+    feature: &str,
     count: usize,
 ) -> Vec<UpstreamClient> {
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let models =
-        match db::llm::find_models_by_name_and_capacity(db_pool, model_name, capacity).await {
+        match db::llm::find_models_by_name_and_capacity(db_pool, model_name, provider, feature)
+            .await
+        {
             Ok(models) if !models.is_empty() => models,
             Ok(_) => {
                 warn!(

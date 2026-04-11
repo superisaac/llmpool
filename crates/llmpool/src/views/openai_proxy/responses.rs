@@ -20,7 +20,6 @@ use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::db;
 use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
-use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
 
 /// Generate a new UUIDv7-based response_id with a "resp-" prefix.
@@ -57,12 +56,15 @@ pub async fn create_response(
         }
     };
 
-    let capacity = CapacityOption {
-        feature: Some(crate::openai::features::FEATURE_RESPONSES.to_string()),
-    };
-
-    let clients =
-        select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 2).await;
+    let clients = select_model_clients(
+        &state.pool,
+        &state.redis_pool,
+        &model_name,
+        "openai",
+        crate::openai::features::FEATURE_RESPONSES,
+        2,
+    )
+    .await;
     if clients.is_empty() {
         eprintln!("No client for model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();

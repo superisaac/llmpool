@@ -10,14 +10,15 @@ use std::sync::Arc;
 
 use super::helpers::AppState;
 use crate::db;
-use crate::models::llm::CapacityOption;
 
 /// Handle /v1/models upstream, return available model list from database
 pub async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
-    let capacity = CapacityOption {
-        feature: Some(crate::openai::features::FEATURE_CHAT_COMPLETIONS.to_string()),
-    };
-    let res = db::llm::list_models(&state.pool, &capacity).await;
+    let res = db::llm::list_models(
+        &state.pool,
+        "openai",
+        Some(crate::openai::features::FEATURE_CHAT_COMPLETIONS.to_string()),
+    )
+    .await;
 
     match res {
         Ok(models) => {

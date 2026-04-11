@@ -201,13 +201,7 @@ pub fn print_models(models: &[ModelResponse]) {
 
     println!(
         "{:<5} {:<10} {:<35} {:<30} {:<14} {:<14} {:<20}",
-        "ID",
-        "EP ID",
-        "Model ID",
-        "Features",
-        "Input Price",
-        "Output Price",
-        "Description"
+        "ID", "EP ID", "Model ID", "Features", "Input Price", "Output Price", "Description"
     );
     println!("{}", "-".repeat(128));
     for m in models {

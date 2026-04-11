@@ -11,7 +11,6 @@ use tracing::{info, warn};
 use super::helpers::{AppState, check_wallet_balance, select_model_clients};
 use crate::defer::OpenAIEventData;
 use crate::middlewares::api_auth::{ACCOUNT, API_CREDENTIAL};
-use crate::models::CapacityOption;
 use crate::openai::session_tracer::SessionTracer;
 
 /// Handle POST /v1/images/generations upstream (image generation)
@@ -27,11 +26,15 @@ pub async fn generate_images(
         return resp;
     }
 
-    let capacity = CapacityOption {
-        feature: Some(crate::openai::features::FEATURE_IMAGES.to_string()),
-    };
-    let clients =
-        select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 2).await;
+    let clients = select_model_clients(
+        &state.pool,
+        &state.redis_pool,
+        &model_name,
+        "openai",
+        crate::openai::features::FEATURE_IMAGES,
+        2,
+    )
+    .await;
     if clients.is_empty() {
         eprintln!("No client for image model {model_name}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();

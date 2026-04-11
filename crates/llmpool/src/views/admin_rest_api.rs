@@ -1132,10 +1132,7 @@ struct ModelTestResult {
 ///
 /// Path parameters:
 /// - `model_id` (required): The database ID of the model to test
-async fn test_model(
-    State(state): State<Arc<AppState>>,
-    Path(model_id): Path<i64>,
-) -> Response {
+async fn test_model(State(state): State<Arc<AppState>>, Path(model_id): Path<i64>) -> Response {
     // Fetch the model to get its upstream_id
     let model = match db::llm::get_model(&state.pool, model_id).await {
         Ok(m) => m,

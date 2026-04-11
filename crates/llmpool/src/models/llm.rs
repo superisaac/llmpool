@@ -98,14 +98,6 @@ pub struct NewLLMModel {
     pub batch_output_token_price: BigDecimal,
 }
 
-/// Options for filtering models by their capabilities.
-/// Set `feature` to a feature string (e.g. "chat/completions") to filter models that support it.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CapacityOption {
-    /// Filter by a specific feature string (e.g. "chat/completions", "messages", "embeddings")
-    pub feature: Option<String>,
-}
-
 /// Used to update an existing OpenAI model
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateLLMModel {

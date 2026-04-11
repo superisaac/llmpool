@@ -86,7 +86,10 @@ pub fn print_model_full(m: &ModelResponse, title: &str) {
     println!("  Upstream ID:              {}", m.upstream_id);
     println!("  Fullname:                 {}", m.fullname);
     println!("  Cname:                    {}", m.cname);
-    println!("  Active:                   {}", if m.is_active { "✓" } else { "✗" });
+    println!(
+        "  Active:                   {}",
+        if m.is_active { "✓" } else { "✗" }
+    );
     println!("  Features:                 {}", m.features.join(", "));
     println!("  Input Token Price:        {}", m.input_token_price);
     println!("  Output Token Price:       {}", m.output_token_price);
