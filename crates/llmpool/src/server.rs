@@ -7,11 +7,11 @@ use tracing::info;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
+use crate::anthropic::proxy_views as anthropic_proxy;
 use crate::middlewares::rate_limit::{RateLimitState, rate_limit_middleware};
+use crate::openai::proxy_views as openai_proxy;
 use crate::telemetry;
 use crate::views::admin_rest_api;
-use crate::views::anthropic_proxy;
-use crate::views::openai_proxy;
 use crate::views::passthrough;
 
 pub async fn serve(bind: &str) {

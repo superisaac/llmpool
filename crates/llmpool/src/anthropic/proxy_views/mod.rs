@@ -16,7 +16,7 @@ use apalis_redis::RedisStorage;
 use crate::db::{DbPool, RedisPool};
 use crate::defer::{AnthropicEventTask, OpenAIEventTask};
 use crate::middlewares::api_auth::auth_anthropic_api;
-use crate::views::openai_proxy::helpers::AppState as OpenAIAppState;
+use crate::openai::proxy_views::helpers::AppState as OpenAIAppState;
 
 use helpers::AnthropicAppState;
 

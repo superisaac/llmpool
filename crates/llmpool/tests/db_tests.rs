@@ -632,15 +632,18 @@ mod openai_tests {
         // The duplicate api_base check: insert with same api_base should fail due to unique index
         // Note: there's no unique index on api_base in the current schema, so we just verify
         // the first upstream was created successfully
-        let found = sqlx::query_as::<_, LLMUpstream>(
-            "SELECT * FROM llm_upstreams WHERE api_base = $1",
-        )
-        .bind("https://api.dup.com/v1")
-        .fetch_all(&mut *tx)
-        .await
-        .unwrap();
+        let found =
+            sqlx::query_as::<_, LLMUpstream>("SELECT * FROM llm_upstreams WHERE api_base = $1")
+                .bind("https://api.dup.com/v1")
+                .fetch_all(&mut *tx)
+                .await
+                .unwrap();
 
-        assert_eq!(found.len(), 1, "Should have exactly one upstream with this api_base");
+        assert_eq!(
+            found.len(),
+            1,
+            "Should have exactly one upstream with this api_base"
+        );
 
         tx.rollback().await.unwrap();
     }

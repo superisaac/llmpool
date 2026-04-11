@@ -11,8 +11,8 @@ use tracing::warn;
 
 use crate::db;
 use crate::models::{Account, ApiCredential};
+use crate::openai::proxy_views::helpers::AppState;
 use crate::redis_utils::caches::api_key::{self as redis_cache, ApiKeyInfo};
-use crate::views::openai_proxy::helpers::AppState;
 
 /// Compute the SHA-256 hex hash of a plaintext API key token.
 /// Used as the Redis cache key and for cache-based comparison.

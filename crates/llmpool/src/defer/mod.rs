@@ -17,10 +17,10 @@ use apalis_redis::{RedisConfig, RedisStorage};
 use redis::AsyncCommands;
 use tracing::warn;
 
-use crate::config;
-use crate::views::anthropic_proxy::client::{
+use crate::anthropic::proxy_views::client::{
     CreateMessageBatchParams, CreateMessageParams, Message, MessageBatch,
 };
+use crate::config;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action", content = "body")]
