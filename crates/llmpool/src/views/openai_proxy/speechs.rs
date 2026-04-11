@@ -26,8 +26,7 @@ pub async fn create_speech(
     }
 
     let capacity = CapacityOption {
-        has_speech: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_AUDIO_SPEECH.to_string()),
     };
     let clients =
         select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 1).await;

@@ -181,6 +181,34 @@ impl ApiClient {
         self.handle_response_raw(resp).await
     }
 
+    /// Send a POST request with no body and deserialize the JSON response
+    pub async fn post_no_body<T: DeserializeOwned>(&self, path: &str) -> Result<T, String> {
+        let url = self.url(path);
+        let resp = self
+            .client
+            .post(&url)
+            .header("x-admin-token", &self.token)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        self.handle_response(resp).await
+    }
+
+    /// Send a POST request with no body and return raw JSON text
+    pub async fn post_raw_no_body(&self, path: &str) -> Result<String, String> {
+        let url = self.url(path);
+        let resp = self
+            .client
+            .post(&url)
+            .header("x-admin-token", &self.token)
+            .send()
+            .await
+            .map_err(|e| format!("Request failed: {}", e))?;
+
+        self.handle_response_raw(resp).await
+    }
+
     /// Send a PUT request with a JSON body and return raw JSON text
     pub async fn put_raw<B: Serialize>(&self, path: &str, body: &B) -> Result<String, String> {
         let url = self.url(path);

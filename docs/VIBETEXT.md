@@ -407,3 +407,13 @@ retrieve_response() 中，previouse_response_id需要通过ResponseMeta 换成or
 
 ==========
 仿造openai proxy，使用 BatchMeta 记录 Anthropic API中 /v1/messages/batches 相关请求，记录Batch 和 转换 batch_id 和 original_batch_id
+
+==========
+改变处理llm models features的逻辑.
+修改 LLMModel 模型，增加字段: features: Vec<String> 并添加索引，标识模型支持的feature, openai 模型支持的如"chat/completions", "image", "embeddings", "speech"等等，anthropic 模型支持的如"messages", "files", "messages/batches"等等。
+原有字段 has_xxx 删除，改为 features: Vec<String>。
+features.rs 中的判断逻辑改为得到features数组，并存入数据库中。
+
+detect_and_update_model_features 改成两个部分， 一个是provider specific的 detect_features, 返回一个Vec<String>. 另外一个方法是update features, 获取provider specific的features, 并更新数据库中features字段。
+admin_rest_api 中test_model 的payload中不再包含provider, 而是根据model_id 获取upstream, 然后根据upstream 中的provider 字段来判断是openai 还是 anthropic.
+更新api-schema.json 以及 llmpool-ctl 命令

@@ -942,10 +942,7 @@ struct ModelResponse {
     fullname: String,
     cname: String,
     is_active: bool,
-    has_chat_completion: bool,
-    has_embedding: bool,
-    has_image_generation: bool,
-    has_speech: bool,
+    features: Vec<String>,
     input_token_price: String,
     output_token_price: String,
     batch_input_token_price: String,
@@ -963,10 +960,7 @@ impl From<crate::models::LLMModel> for ModelResponse {
             fullname: m.fullname,
             cname: m.cname,
             is_active: m.is_active,
-            has_chat_completion: m.has_chat_completion,
-            has_embedding: m.has_embedding,
-            has_image_generation: m.has_image_generation,
-            has_speech: m.has_speech,
+            features: m.features,
             input_token_price: m.input_token_price.to_string(),
             output_token_price: m.output_token_price.to_string(),
             batch_input_token_price: m.batch_input_token_price.to_string(),
@@ -1120,14 +1114,6 @@ async fn create_upstream(
 
 // --- Model Test Handler ---
 
-/// Request body for testing a single model's features
-#[derive(Deserialize)]
-struct TestModelRequest {
-    /// Provider to use for feature detection: "openai" (default) or "anthropic"
-    #[serde(default = "default_provider")]
-    provider: String,
-}
-
 /// Response DTO for a single model test result
 #[derive(Serialize)]
 struct ModelTestResult {
@@ -1138,43 +1124,62 @@ struct ModelTestResult {
     error: Option<String>,
 }
 
-/// Valid provider values for model testing
-const VALID_TEST_PROVIDERS: &[&str] = &["openai", "anthropic"];
-
 /// POST /api/v1/models/{model_id}/tests
 ///
 /// Tests the features of the specified model (by its database ID) and updates
 /// the feature flags in the LLMModel table. All other fields remain unchanged.
+/// The provider is determined automatically from the upstream associated with the model.
 ///
 /// Path parameters:
 /// - `model_id` (required): The database ID of the model to test
-///
-/// Request body (JSON):
-/// - `provider` (optional, default: "openai"): Provider to use for feature detection.
-///   Must be one of "openai" or "anthropic".
-///   When "openai", detects has_chat_completion, has_embedding, has_image_generation, has_speech, has_responses_api.
-///   When "anthropic", detects has_messages.
 async fn test_model(
     State(state): State<Arc<AppState>>,
     Path(model_id): Path<i64>,
-    Json(payload): Json<TestModelRequest>,
 ) -> Response {
-    if !VALID_TEST_PROVIDERS.contains(&payload.provider.as_str()) {
-        return error_response(
-            StatusCode::BAD_REQUEST,
-            "validation_error",
-            &format!(
-                "Invalid provider '{}'. Must be one of: {}",
-                payload.provider,
-                VALID_TEST_PROVIDERS.join(", ")
-            ),
-        );
-    }
+    // Fetch the model to get its upstream_id
+    let model = match db::llm::get_model(&state.pool, model_id).await {
+        Ok(m) => m,
+        Err(sqlx::Error::RowNotFound) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("Model with id {} not found", model_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, model_id = model_id, "Failed to fetch model for testing");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to fetch model",
+            );
+        }
+    };
 
-    let result = if payload.provider == "anthropic" {
-        crate::anthropic::features::detect_and_update_model_features(&state.pool, model_id).await
+    // Fetch the upstream to determine the provider
+    let upstream = match db::llm::get_upstream(&state.pool, model.upstream_id).await {
+        Ok(u) => u,
+        Err(sqlx::Error::RowNotFound) => {
+            return error_response(
+                StatusCode::NOT_FOUND,
+                "not_found",
+                &format!("Upstream with id {} not found", model.upstream_id),
+            );
+        }
+        Err(e) => {
+            warn!(error = %e, upstream_id = model.upstream_id, "Failed to fetch upstream for model testing");
+            return error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "database_error",
+                "Failed to fetch upstream",
+            );
+        }
+    };
+
+    let result = if upstream.provider == "anthropic" {
+        crate::anthropic::features::update_features(&state.pool, model_id).await
     } else {
-        crate::openai::features::detect_and_update_model_features(&state.pool, model_id).await
+        crate::openai::features::update_features(&state.pool, model_id).await
     };
 
     match result {
@@ -1462,12 +1467,7 @@ async fn update_model_by_id(
     let update = crate::models::UpdateLLMModel {
         fullname: None,
         is_active: payload.is_active,
-        has_image_generation: None,
-        has_speech: None,
-        has_chat_completion: None,
-        has_embedding: None,
-        has_messages: None,
-        has_responses_api: None,
+        features: None,
         max_tokens: None,
         input_token_price: payload.input_token_price,
         output_token_price: payload.output_token_price,

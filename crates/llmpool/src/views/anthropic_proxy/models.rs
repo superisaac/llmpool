@@ -38,8 +38,7 @@ pub struct ListModelsResponse {
 /// Handle GET /v1/models — return available model list from database in Anthropic format.
 pub async fn list_models(State(state): State<Arc<AnthropicAppState>>) -> Response {
     let capacity = CapacityOption {
-        has_messages: Some(true),
-        ..Default::default()
+        feature: Some(crate::anthropic::features::FEATURE_MESSAGES.to_string()),
     };
     let res = db::llm::list_models(&state.pool, &capacity).await;
 

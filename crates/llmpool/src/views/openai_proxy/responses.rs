@@ -58,8 +58,7 @@ pub async fn create_response(
     };
 
     let capacity = CapacityOption {
-        has_responses_api: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_RESPONSES.to_string()),
     };
 
     let clients =

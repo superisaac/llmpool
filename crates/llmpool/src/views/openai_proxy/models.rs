@@ -15,8 +15,7 @@ use crate::models::llm::CapacityOption;
 /// Handle /v1/models upstream, return available model list from database
 pub async fn list_merged_models(State(state): State<Arc<AppState>>) -> Response {
     let capacity = CapacityOption {
-        has_chat_completion: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_CHAT_COMPLETIONS.to_string()),
     };
     let res = db::llm::list_models(&state.pool, &capacity).await;
 

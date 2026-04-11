@@ -72,11 +72,7 @@ pub struct ModelResponse {
     pub fullname: String,
     pub cname: String,
     pub is_active: bool,
-    pub has_chat_completion: bool,
-    pub has_embedding: bool,
-    pub has_image_generation: bool,
-    pub has_speech: bool,
-    pub has_responses_api: bool,
+    pub features: Vec<String>,
     pub input_token_price: String,
     pub output_token_price: String,
     pub batch_input_token_price: String,
@@ -204,14 +200,11 @@ pub fn print_models(models: &[ModelResponse]) {
     }
 
     println!(
-        "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
+        "{:<5} {:<10} {:<35} {:<30} {:<14} {:<14} {:<20}",
         "ID",
         "EP ID",
         "Model ID",
-        "Chat",
-        "Embed",
-        "Image",
-        "Speech",
+        "Features",
         "Input Price",
         "Output Price",
         "Description"
@@ -219,14 +212,11 @@ pub fn print_models(models: &[ModelResponse]) {
     println!("{}", "-".repeat(128));
     for m in models {
         println!(
-            "{:<5} {:<10} {:<35} {:<6} {:<6} {:<6} {:<6} {:<14} {:<14} {:<20}",
+            "{:<5} {:<10} {:<35} {:<30} {:<14} {:<14} {:<20}",
             m.id,
             m.upstream_id,
             truncate(&m.fullname, 33),
-            bool_mark(m.has_chat_completion),
-            bool_mark(m.has_embedding),
-            bool_mark(m.has_image_generation),
-            bool_mark(m.has_speech),
+            truncate(&m.features.join(","), 28),
             truncate(&m.input_token_price, 12),
             truncate(&m.output_token_price, 12),
             truncate(&m.description, 18),

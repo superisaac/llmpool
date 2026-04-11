@@ -58,20 +58,6 @@ fn default_max_tokens() -> i64 {
     100000
 }
 
-/// Used to update an existing OpenAI upstream
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateLLMUpstream {
-    pub name: Option<String>,
-    pub api_base: Option<String>,
-    pub api_key: Option<String>,
-    pub provider: Option<String>,
-    pub tags: Option<Vec<String>>,
-    pub proxies: Option<Vec<String>>,
-    pub status: Option<String>,
-    pub description: Option<String>,
-    pub updated_at: Option<NaiveDateTime>,
-}
-
 /// Represents a model available on an OpenAI-compatible upstream
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
 pub struct LLMModel {
@@ -82,14 +68,10 @@ pub struct LLMModel {
     /// The short name after "/" in fullname; equals fullname if no "/" present. Used for client-facing model name matching.
     pub cname: String,
     pub is_active: bool,
-    pub has_image_generation: bool,
-    pub has_speech: bool,
-    pub has_chat_completion: bool,
-    pub has_embedding: bool,
-    /// Whether the model supports the Anthropic /v1/messages API
-    pub has_messages: bool,
-    /// Whether the model supports the OpenAI /v1/responses API
-    pub has_responses_api: bool,
+    /// Features supported by this model.
+    /// OpenAI examples: "chat/completions", "images", "embeddings", "audio/speech", "responses"
+    /// Anthropic examples: "messages", "files", "messages/batches"
+    pub features: Vec<String>,
     pub max_tokens: i64,
     pub input_token_price: BigDecimal,
     pub output_token_price: BigDecimal,
@@ -106,16 +88,8 @@ pub struct NewLLMModel {
     pub upstream_id: i64,
     /// The full model identifier (e.g. "provider/model-name")
     pub fullname: String,
-    pub has_image_generation: bool,
-    pub has_speech: bool,
-    pub has_chat_completion: bool,
-    pub has_embedding: bool,
-    /// Whether the model supports the Anthropic /v1/messages API
     #[serde(default)]
-    pub has_messages: bool,
-    /// Whether the model supports the OpenAI /v1/responses API
-    #[serde(default)]
-    pub has_responses_api: bool,
+    pub features: Vec<String>,
     #[serde(default = "default_max_tokens")]
     pub max_tokens: i64,
     pub input_token_price: BigDecimal,
@@ -125,18 +99,11 @@ pub struct NewLLMModel {
 }
 
 /// Options for filtering models by their capabilities.
-/// Only fields set to `Some(true)` will be used as filters.
+/// Set `feature` to a feature string (e.g. "chat/completions") to filter models that support it.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CapacityOption {
-    pub has_chat_completion: Option<bool>,
-    pub has_embedding: Option<bool>,
-    pub has_image_generation: Option<bool>,
-    pub has_speech: Option<bool>,
-    /// Whether the model supports the Anthropic /v1/messages API
-    pub has_messages: Option<bool>,
-    /// Whether the model supports the OpenAI /v1/responses API
-    #[serde(default)]
-    pub has_responses_api: Option<bool>,
+    /// Filter by a specific feature string (e.g. "chat/completions", "messages", "embeddings")
+    pub feature: Option<String>,
 }
 
 /// Used to update an existing OpenAI model
@@ -145,19 +112,27 @@ pub struct UpdateLLMModel {
     /// If provided, updates both fullname and cname (cname is derived from fullname)
     pub fullname: Option<String>,
     pub is_active: Option<bool>,
-    pub has_image_generation: Option<bool>,
-    pub has_speech: Option<bool>,
-    pub has_chat_completion: Option<bool>,
-    pub has_embedding: Option<bool>,
-    /// Whether the model supports the Anthropic /v1/messages API
-    pub has_messages: Option<bool>,
-    /// Whether the model supports the OpenAI /v1/responses API
-    pub has_responses_api: Option<bool>,
+    /// If provided, replaces the entire features array
+    pub features: Option<Vec<String>>,
     pub max_tokens: Option<i64>,
     pub input_token_price: Option<BigDecimal>,
     pub output_token_price: Option<BigDecimal>,
     pub batch_input_token_price: Option<BigDecimal>,
     pub batch_output_token_price: Option<BigDecimal>,
+    pub description: Option<String>,
+    pub updated_at: Option<NaiveDateTime>,
+}
+
+/// Used to update an existing OpenAI upstream
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateLLMUpstream {
+    pub name: Option<String>,
+    pub api_base: Option<String>,
+    pub api_key: Option<String>,
+    pub provider: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub proxies: Option<Vec<String>>,
+    pub status: Option<String>,
     pub description: Option<String>,
     pub updated_at: Option<NaiveDateTime>,
 }

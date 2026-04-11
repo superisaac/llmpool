@@ -35,8 +35,7 @@ pub async fn chat_completions(
     }
 
     let capacity = CapacityOption {
-        has_chat_completion: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_CHAT_COMPLETIONS.to_string()),
     };
     let clients =
         select_model_clients(&state.pool, &state.redis_pool, model_name, &capacity, 2).await;

@@ -107,13 +107,10 @@
         "properties": {
           "id": { "type": "integer" },
           "upstream_id": { "type": "integer" },
-          "model_id": { "type": "string" },
+          "fullname": { "type": "string" },
+          "cname": { "type": "string" },
           "is_active": { "type": "boolean" },
-          "has_chat_completion": { "type": "boolean" },
-          "has_embedding": { "type": "boolean" },
-          "has_image_generation": { "type": "boolean" },
-          "has_speech": { "type": "boolean" },
-          "has_responses_api": { "type": "boolean" },
+          "features": { "type": "array", "items": { "type": "string" }, "description": "List of supported feature identifiers (e.g. 'chat/completions', 'embeddings', 'images', 'audio/speech', 'responses', 'messages', 'files', 'messages/batches')" },
           "input_token_price": { "type": "string" },
           "output_token_price": { "type": "string" },
           "batch_input_token_price": { "type": "string" },
@@ -718,30 +715,12 @@
     "/models/{model_id}/tests": {
       "post": {
         "summary": "Test model features",
-        "description": "Tests the features of the specified model (by its database ID) and updates the feature flags in the database. When provider is 'openai', detects has_chat_completion, has_embedding, has_image_generation, has_speech, has_responses_api. When provider is 'anthropic', detects has_messages.",
+        "description": "Tests the features of the specified model (by its database ID) and updates the features field in the database. The provider is determined automatically from the upstream associated with the model (openai or anthropic). No request body is required.",
         "operationId": "testModel",
         "tags": ["Models"],
         "parameters": [
           { "name": "model_id", "in": "path", "required": true, "schema": { "type": "integer" }, "description": "Database ID of the model to test" }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "provider": {
-                    "type": "string",
-                    "enum": ["openai", "anthropic"],
-                    "default": "openai",
-                    "description": "Provider to use for feature detection"
-                  }
-                }
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Model test result",
@@ -758,12 +737,8 @@
               }
             }
           },
-          "400": {
-            "description": "Invalid provider value",
-            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
-          },
           "404": {
-            "description": "Model not found",
+            "description": "Model or upstream not found",
             "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorResponse" } } }
           }
         }

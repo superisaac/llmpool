@@ -1,9 +1,7 @@
 use clap::Subcommand;
 use serde::Serialize;
 
-use super::{
-    ModelResponse, ModelTestResult, PaginatedResponse, bool_mark, print_models, print_pagination,
-};
+use super::{ModelResponse, ModelTestResult, PaginatedResponse, print_models, print_pagination};
 use crate::client::ApiClient;
 
 // ============================================================
@@ -48,14 +46,12 @@ pub enum ModelAction {
         #[arg(long)]
         batch_output_token_price: Option<String>,
     },
-    /// Detect features of a model and update its feature flags
+    /// Detect features of a model and update its feature flags.
+    /// The provider is determined automatically from the upstream associated with the model.
     Detect {
         /// Model path (upstream_name/model_name) or model database ID
         #[arg(long)]
         model: String,
-        /// Provider to use for feature detection: "openai" (default) or "anthropic"
-        #[arg(long, default_value = "openai")]
-        provider: String,
     },
 }
 
@@ -79,11 +75,6 @@ struct UpdateModelRequestBody {
     batch_output_token_price: Option<String>,
 }
 
-#[derive(Serialize)]
-struct TestModelRequestBody {
-    provider: String,
-}
-
 // ============================================================
 // Display Helpers
 // ============================================================
@@ -95,17 +86,8 @@ pub fn print_model_full(m: &ModelResponse, title: &str) {
     println!("  Upstream ID:              {}", m.upstream_id);
     println!("  Fullname:                 {}", m.fullname);
     println!("  Cname:                    {}", m.cname);
-    println!("  Active:                   {}", bool_mark(m.is_active));
-    println!(
-        "  Chat Completion:          {}",
-        bool_mark(m.has_chat_completion)
-    );
-    println!("  Embedding:                {}", bool_mark(m.has_embedding));
-    println!(
-        "  Image Generation:         {}",
-        bool_mark(m.has_image_generation)
-    );
-    println!("  Speech:                   {}", bool_mark(m.has_speech));
+    println!("  Active:                   {}", if m.is_active { "✓" } else { "✗" });
+    println!("  Features:                 {}", m.features.join(", "));
     println!("  Input Token Price:        {}", m.input_token_price);
     println!("  Output Token Price:       {}", m.output_token_price);
     println!("  Batch Input Token Price:  {}", m.batch_input_token_price);
@@ -210,19 +192,18 @@ pub async fn handle_model(
                 print_model_full(&resp, "Model updated successfully!");
             }
         }
-        ModelAction::Detect { model, provider } => {
+        ModelAction::Detect { model } => {
             // Resolve model path or ID to a numeric model ID
             let model_id = resolve_model_id(&model, client).await?;
 
-            let body = TestModelRequestBody { provider };
             let path = format!("/models/{}/tests", model_id);
 
             if json_output {
-                let raw = client.post_raw(&path, &body).await?;
+                let raw = client.post_raw_no_body(&path).await?;
                 println!("{}", raw);
             } else {
                 println!("Detecting features for model {}...", model);
-                let result: ModelTestResult = client.post(&path, &body).await?;
+                let result: ModelTestResult = client.post_no_body(&path).await?;
                 println!();
                 print_model_detect_result(&result);
             }

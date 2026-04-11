@@ -29,8 +29,7 @@ pub async fn create_embeddings(
     }
 
     let capacity = CapacityOption {
-        has_embedding: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_EMBEDDINGS.to_string()),
     };
     let clients =
         select_model_clients(&state.pool, &state.redis_pool, model_name, &capacity, 2).await;

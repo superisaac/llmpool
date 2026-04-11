@@ -23,12 +23,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
     fullname VARCHAR NOT NULL,
     cname VARCHAR NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    has_image_generation BOOLEAN NOT NULL DEFAULT FALSE,
-    has_speech BOOLEAN NOT NULL DEFAULT FALSE,
-    has_chat_completion BOOLEAN NOT NULL DEFAULT FALSE,
-    has_embedding BOOLEAN NOT NULL DEFAULT FALSE,
-    has_messages BOOLEAN NOT NULL DEFAULT FALSE,
-    has_responses_api BOOLEAN NOT NULL DEFAULT FALSE,
+    features TEXT[] NOT NULL DEFAULT '{}',
     max_tokens BIGINT NOT NULL DEFAULT 100000,
     input_token_price NUMERIC NOT NULL DEFAULT 0.000001,
     output_token_price NUMERIC NOT NULL DEFAULT 0.000001,
@@ -40,6 +35,7 @@ CREATE TABLE IF NOT EXISTS llm_models (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_llm_models_upstream_model ON llm_models (upstream_id, fullname);
 CREATE INDEX IF NOT EXISTS idx_llm_models_upstream_id ON llm_models (upstream_id);
+CREATE INDEX IF NOT EXISTS idx_llm_models_features ON llm_models USING GIN (features);
 
 -- Create accounts table
 CREATE TABLE IF NOT EXISTS accounts (

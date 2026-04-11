@@ -28,8 +28,7 @@ pub async fn generate_images(
     }
 
     let capacity = CapacityOption {
-        has_image_generation: Some(true),
-        ..Default::default()
+        feature: Some(crate::openai::features::FEATURE_IMAGES.to_string()),
     };
     let clients =
         select_model_clients(&state.pool, &state.redis_pool, &model_name, &capacity, 2).await;

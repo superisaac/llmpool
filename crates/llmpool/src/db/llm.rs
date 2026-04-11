@@ -229,19 +229,14 @@ pub async fn delete_upstream(pool: &DbPool, upstream_id: i64) -> Result<u64, sql
 pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMModel, sqlx::Error> {
     let cname = derive_cname(&new_model.fullname);
     sqlx::query_as::<_, LLMModel>(
-        "INSERT INTO llm_models (upstream_id, fullname, cname, has_image_generation, has_speech, has_chat_completion, has_embedding, has_messages, has_responses_api, max_tokens, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        "INSERT INTO llm_models (upstream_id, fullname, cname, features, max_tokens, input_token_price, output_token_price, batch_input_token_price, batch_output_token_price)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *"
     )
     .bind(new_model.upstream_id)
     .bind(&new_model.fullname)
     .bind(&cname)
-    .bind(new_model.has_image_generation)
-    .bind(new_model.has_speech)
-    .bind(new_model.has_chat_completion)
-    .bind(new_model.has_embedding)
-    .bind(new_model.has_messages)
-    .bind(new_model.has_responses_api)
+    .bind(&new_model.features)
     .bind(new_model.max_tokens)
     .bind(&new_model.input_token_price)
     .bind(&new_model.output_token_price)
@@ -251,61 +246,22 @@ pub async fn create_model(pool: &DbPool, new_model: &NewLLMModel) -> Result<LLMM
     .await
 }
 
-/// List all OpenAI models, optionally filtered by capacity options.
-/// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
+/// List all OpenAI models, optionally filtered by a required feature.
+/// If `capacity.feature` is set, only models containing that feature are returned.
 pub async fn list_models(
     pool: &DbPool,
     capacity: &CapacityOption,
 ) -> Result<Vec<LLMModel>, sqlx::Error> {
-    let mut sql = String::from("SELECT * FROM llm_models WHERE 1=1");
-    let mut param_idx = 0u32;
-
-    if capacity.has_chat_completion == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_chat_completion = ${}", param_idx));
+    if let Some(ref feature) = capacity.feature {
+        sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models WHERE $1 = ANY(features)")
+            .bind(feature)
+            .fetch_all(pool)
+            .await
+    } else {
+        sqlx::query_as::<_, LLMModel>("SELECT * FROM llm_models")
+            .fetch_all(pool)
+            .await
     }
-    if capacity.has_embedding == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_embedding = ${}", param_idx));
-    }
-    if capacity.has_image_generation == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_image_generation = ${}", param_idx));
-    }
-    if capacity.has_speech == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_speech = ${}", param_idx));
-    }
-    if capacity.has_messages == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_messages = ${}", param_idx));
-    }
-    if capacity.has_responses_api == Some(true) {
-        param_idx += 1;
-        sql.push_str(&format!(" AND has_responses_api = ${}", param_idx));
-    }
-    let _ = param_idx;
-
-    let mut query = sqlx::query_as::<_, LLMModel>(&sql);
-    if capacity.has_chat_completion == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_embedding == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_image_generation == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_speech == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_messages == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_responses_api == Some(true) {
-        query = query.bind(true);
-    }
-    query.fetch_all(pool).await
 }
 
 /// List models belonging to a specific upstream
@@ -385,18 +341,7 @@ pub async fn update_model(
         (current.fullname.as_str(), current.cname.clone())
     };
     let is_active = update.is_active.unwrap_or(current.is_active);
-    let has_image_generation = update
-        .has_image_generation
-        .unwrap_or(current.has_image_generation);
-    let has_speech = update.has_speech.unwrap_or(current.has_speech);
-    let has_chat_completion = update
-        .has_chat_completion
-        .unwrap_or(current.has_chat_completion);
-    let has_embedding = update.has_embedding.unwrap_or(current.has_embedding);
-    let has_messages = update.has_messages.unwrap_or(current.has_messages);
-    let has_responses_api = update
-        .has_responses_api
-        .unwrap_or(current.has_responses_api);
+    let features = update.features.as_ref().unwrap_or(&current.features);
     let max_tokens = update.max_tokens.unwrap_or(current.max_tokens);
     let input_token_price = update
         .input_token_price
@@ -422,24 +367,18 @@ pub async fn update_model(
 
     sqlx::query_as::<_, LLMModel>(
         "UPDATE llm_models
-         SET fullname = $1, cname = $2, is_active = $3, has_image_generation = $4, has_speech = $5,
-             has_chat_completion = $6, has_embedding = $7, has_messages = $8,
-             has_responses_api = $9, max_tokens = $10,
-             input_token_price = $11, output_token_price = $12,
-             batch_input_token_price = $13, batch_output_token_price = $14,
-             description = $15, updated_at = $16
-         WHERE id = $17
+         SET fullname = $1, cname = $2, is_active = $3, features = $4,
+             max_tokens = $5,
+             input_token_price = $6, output_token_price = $7,
+             batch_input_token_price = $8, batch_output_token_price = $9,
+             description = $10, updated_at = $11
+         WHERE id = $12
          RETURNING *",
     )
     .bind(fullname)
     .bind(&cname)
     .bind(is_active)
-    .bind(has_image_generation)
-    .bind(has_speech)
-    .bind(has_chat_completion)
-    .bind(has_embedding)
-    .bind(has_messages)
-    .bind(has_responses_api)
+    .bind(features)
     .bind(max_tokens)
     .bind(input_token_price)
     .bind(output_token_price)
@@ -672,12 +611,7 @@ struct ModelUpstreamRow {
     pub fullname: String,
     pub cname: String,
     pub is_active: bool,
-    pub has_image_generation: bool,
-    pub has_speech: bool,
-    pub has_chat_completion: bool,
-    pub has_embedding: bool,
-    pub has_messages: bool,
-    pub has_responses_api: bool,
+    pub features: Vec<String>,
     pub max_tokens: i64,
     pub input_token_price: bigdecimal::BigDecimal,
     pub output_token_price: bigdecimal::BigDecimal,
@@ -708,12 +642,7 @@ impl ModelUpstreamRow {
             fullname: self.fullname,
             cname: self.cname,
             is_active: self.is_active,
-            has_image_generation: self.has_image_generation,
-            has_speech: self.has_speech,
-            has_chat_completion: self.has_chat_completion,
-            has_embedding: self.has_embedding,
-            has_messages: self.has_messages,
-            has_responses_api: self.has_responses_api,
+            features: self.features,
             max_tokens: self.max_tokens,
             input_token_price: self.input_token_price,
             output_token_price: self.output_token_price,
@@ -747,16 +676,15 @@ impl ModelUpstreamRow {
 /// Find all OpenAI models with a given cname (short name) that match the specified capacity options,
 /// along with their associated upstream information (api_key, api_base).
 ///
-/// Only capacity fields set to `Some(true)` in `capacity` will be used as filters.
+/// If `capacity.feature` is set, only models containing that feature string are returned.
 pub async fn find_models_by_name_and_capacity(
     pool: &DbPool,
     model_name: &str,
     capacity: &CapacityOption,
 ) -> Result<Vec<(LLMModel, LLMUpstream)>, sqlx::Error> {
-    // Build dynamic query with optional capacity filters
+    // Build dynamic query with optional feature filter
     let mut sql = String::from(
-        "SELECT m.id, m.upstream_id, m.fullname, m.cname, m.is_active, m.has_image_generation, m.has_speech,
-                m.has_chat_completion, m.has_embedding, m.has_messages, m.has_responses_api,
+        "SELECT m.id, m.upstream_id, m.fullname, m.cname, m.is_active, m.features,
                 m.max_tokens, m.input_token_price, m.output_token_price,
                 m.batch_input_token_price, m.batch_output_token_price,
                 m.description, m.created_at, m.updated_at,
@@ -772,59 +700,14 @@ pub async fn find_models_by_name_and_capacity(
                 AND m.is_active = true ",
     );
 
-    let mut param_idx = 2u32;
-    let mut conditions = Vec::new();
-
-    if capacity.has_chat_completion == Some(true) {
-        conditions.push(format!("m.has_chat_completion = ${}", param_idx));
-        param_idx += 1;
-    }
-    if capacity.has_embedding == Some(true) {
-        conditions.push(format!("m.has_embedding = ${}", param_idx));
-        param_idx += 1;
-    }
-    if capacity.has_image_generation == Some(true) {
-        conditions.push(format!("m.has_image_generation = ${}", param_idx));
-        param_idx += 1;
-    }
-    if capacity.has_speech == Some(true) {
-        conditions.push(format!("m.has_speech = ${}", param_idx));
-        param_idx += 1;
-    }
-    if capacity.has_messages == Some(true) {
-        conditions.push(format!("m.has_messages = ${}", param_idx));
-        param_idx += 1;
-    }
-    if capacity.has_responses_api == Some(true) {
-        conditions.push(format!("m.has_responses_api = ${}", param_idx));
-        let _ = param_idx; // suppress unused warning
-    }
-
-    for cond in &conditions {
-        sql.push_str(" AND ");
-        sql.push_str(cond);
+    if capacity.feature.is_some() {
+        sql.push_str(" AND $2 = ANY(m.features)");
     }
 
     let mut query = sqlx::query_as::<_, ModelUpstreamRow>(&sql).bind(model_name);
 
-    // Bind the `true` values for each capacity filter
-    if capacity.has_chat_completion == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_embedding == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_image_generation == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_speech == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_messages == Some(true) {
-        query = query.bind(true);
-    }
-    if capacity.has_responses_api == Some(true) {
-        query = query.bind(true);
+    if let Some(ref feature) = capacity.feature {
+        query = query.bind(feature);
     }
 
     let rows = query.fetch_all(pool).await?;

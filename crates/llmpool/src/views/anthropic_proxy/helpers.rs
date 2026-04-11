@@ -72,8 +72,7 @@ pub async fn select_anthropic_clients(
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let capacity = CapacityOption {
-        has_messages: Some(true),
-        ..Default::default()
+        feature: Some(crate::anthropic::features::FEATURE_MESSAGES.to_string()),
     };
 
     let models =

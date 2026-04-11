@@ -20,35 +20,38 @@ use std::str::FromStr;
 use crate::db::{self, DbPool};
 use crate::models::{NewLLMModel, NewLLMUpstream, UpdateLLMModel, UpdateLLMUpstream};
 
-pub struct ModelFeatures {
-    pub model: Model,
-    pub has_image_generation: bool,
-    // has_video: bool,
-    pub has_speech: bool,
-    pub has_embedding: bool,
-    pub has_chat_completion: bool,
-    pub has_responses_api: bool,
-}
+/// OpenAI feature identifiers
+pub const FEATURE_CHAT_COMPLETIONS: &str = "chat/completions";
+pub const FEATURE_IMAGES: &str = "images";
+pub const FEATURE_EMBEDDINGS: &str = "embeddings";
+pub const FEATURE_AUDIO_SPEECH: &str = "audio/speech";
+pub const FEATURE_RESPONSES: &str = "responses";
 
-/// Detect model features through actual upstream calls
-async fn detect_model_features(
+/// Detect model features through actual upstream calls.
+/// Returns a Vec<String> of supported feature identifiers.
+pub async fn detect_features(
     client: &Client<async_openai::config::OpenAIConfig>,
     model: &Model,
-) -> ModelFeatures {
-    let has_image_generation = check_image_generation_support(client, model).await;
-    let has_speech = check_speech_support(client, model).await;
-    let has_embedding = check_embedding_support(client, model).await;
-    let has_chat_completion = check_chat_completion_support(client, model).await;
-    let has_responses_api = check_responses_api_support(client, model).await;
+) -> Vec<String> {
+    let mut features = Vec::new();
 
-    ModelFeatures {
-        model: model.clone(),
-        has_image_generation,
-        has_speech,
-        has_embedding,
-        has_chat_completion,
-        has_responses_api,
+    if check_chat_completion_support(client, model).await {
+        features.push(FEATURE_CHAT_COMPLETIONS.to_string());
     }
+    if check_image_generation_support(client, model).await {
+        features.push(FEATURE_IMAGES.to_string());
+    }
+    if check_embedding_support(client, model).await {
+        features.push(FEATURE_EMBEDDINGS.to_string());
+    }
+    if check_speech_support(client, model).await {
+        features.push(FEATURE_AUDIO_SPEECH.to_string());
+    }
+    if check_responses_api_support(client, model).await {
+        features.push(FEATURE_RESPONSES.to_string());
+    }
+
+    features
 }
 
 async fn check_image_generation_support(
@@ -161,7 +164,7 @@ async fn check_responses_api_support(
 }
 
 /// Fetch the model list from the upstream and save each model to the database without
-/// performing any feature detection. All feature flags are set to `false`.
+/// performing any feature detection. All features are set to an empty array.
 /// This will upsert the upstream (by api_base) and insert any new models (by upstream_id + model_id).
 pub async fn list_and_save_without_detect(
     pool: &DbPool,
@@ -211,23 +214,18 @@ pub async fn list_and_save_without_detect(
         Err(e) => return Err(Box::new(e)),
     };
 
-    // 3. For each model, insert a record with all features set to false (skip if already exists)
+    // 3. For each model, insert a record with empty features (skip if already exists)
     let default_token_price = BigDecimal::from_str("0.000001").unwrap();
     for model in &models {
         match db::llm::find_model_by_upstream_and_model_id(pool, upstream.id, &model.id).await {
             Ok(_existing) => {
-                // Model already exists — leave it untouched so existing feature flags are preserved
+                // Model already exists — leave it untouched so existing features are preserved
             }
             Err(sqlx::Error::RowNotFound) => {
                 let new_model = NewLLMModel {
                     upstream_id: upstream.id,
                     fullname: model.id.clone(),
-                    has_image_generation: false,
-                    has_speech: false,
-                    has_chat_completion: false,
-                    has_embedding: false,
-                    has_messages: false,
-                    has_responses_api: false,
+                    features: vec![],
                     max_tokens: 100000,
                     input_token_price: default_token_price.clone(),
                     output_token_price: default_token_price.clone(),
@@ -243,10 +241,11 @@ pub async fn list_and_save_without_detect(
     Ok(())
 }
 
-/// Detect features for a single model given its upstream credentials, and update the database.
-/// Only the feature flags (has_image_generation, has_speech, has_chat_completion, has_embedding)
-/// are updated; all other fields remain unchanged.
-pub async fn detect_and_update_model_features(
+/// Update the features of a model in the database using OpenAI feature detection.
+/// Fetches the model and its upstream, runs detect_features, merges with existing
+/// non-OpenAI features, and writes the result back to the database.
+/// Only the features field is updated; all other fields remain unchanged.
+pub async fn update_features(
     pool: &DbPool,
     model_pk: i64,
 ) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
@@ -271,18 +270,33 @@ pub async fn detect_and_update_model_features(
     };
 
     // 5. Detect features
-    let features = detect_model_features(&client, &model_info).await;
+    let openai_features = detect_features(&client, &model_info).await;
 
-    // 6. Update only the feature flags in the database
+    // 6. Merge with existing features: keep non-OpenAI features, replace OpenAI ones
+    let openai_feature_set: std::collections::HashSet<&str> = [
+        FEATURE_CHAT_COMPLETIONS,
+        FEATURE_IMAGES,
+        FEATURE_EMBEDDINGS,
+        FEATURE_AUDIO_SPEECH,
+        FEATURE_RESPONSES,
+    ]
+    .iter()
+    .copied()
+    .collect();
+
+    let mut merged_features: Vec<String> = model
+        .features
+        .iter()
+        .filter(|f| !openai_feature_set.contains(f.as_str()))
+        .cloned()
+        .collect();
+    merged_features.extend(openai_features);
+
+    // 7. Update only the features field in the database
     let update = UpdateLLMModel {
         fullname: None,
         is_active: None,
-        has_image_generation: Some(features.has_image_generation),
-        has_speech: Some(features.has_speech),
-        has_chat_completion: Some(features.has_chat_completion),
-        has_embedding: Some(features.has_embedding),
-        has_messages: None,
-        has_responses_api: Some(features.has_responses_api),
+        features: Some(merged_features),
         max_tokens: None,
         input_token_price: None,
         output_token_price: None,
