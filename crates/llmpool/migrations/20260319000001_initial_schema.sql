@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS batch_metas (
     original_batch_id VARCHAR NOT NULL DEFAULT '',
     upstream_id BIGINT NOT NULL DEFAULT 0,
     status VARCHAR NOT NULL DEFAULT 'pending',
+    provider VARCHAR NOT NULL DEFAULT 'openai',
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_batch_metas_batch_id ON batch_metas (batch_id);

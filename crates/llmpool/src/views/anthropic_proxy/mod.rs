@@ -54,7 +54,7 @@ pub fn get_router(
         // GET  /v1/messages/batches — List Message Batches
         .route(
             "/messages/batches",
-            post(batches::create_message_batch), //.get(batches::list_message_batches),
+            post(batches::create_message_batch).get(batches::list_message_batches),
         )
         // GET  /v1/messages/batches/:id — Retrieve a Message Batch
         .route(

@@ -1,11 +1,12 @@
 use axum::{
     Json,
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use std::sync::Arc;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use super::client::{CreateMessageBatchParams, ListMessageBatchesResponse, MessageBatch};
 use super::helpers::{
@@ -14,6 +15,11 @@ use super::helpers::{
 };
 use crate::db;
 use crate::middlewares::api_auth::ACCOUNT;
+
+/// Generate a new UUIDv7-based batch_id with a "msgbatch-" prefix (Anthropic style).
+fn new_batch_id() -> String {
+    format!("msgbatch-{}", Uuid::now_v7().to_string().replace('-', ""))
+}
 
 /// Map an `anthropic_sdk::AnthropicError` to an Axum error response.
 fn sdk_error_response(e: &anthropic_sdk::AnthropicError) -> Response {
@@ -46,6 +52,41 @@ fn maybe_mark_offline(
                 );
             }
         });
+    }
+}
+
+/// Look up the BatchMeta for a given internal batch_id.
+/// Returns an error Response if not found or DB error.
+async fn resolve_batch_meta(
+    state: &AnthropicAppState,
+    batch_id: &str,
+) -> Result<db::batches::BatchMeta, Response> {
+    match db::batches::get_batch_meta_by_batch_id(&state.pool, batch_id).await {
+        Ok(Some(meta)) => Ok(meta),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({
+                "type": "error",
+                "error": {
+                    "type": "not_found_error",
+                    "message": format!("Message batch '{}' not found.", batch_id)
+                }
+            })),
+        )
+            .into_response()),
+        Err(e) => {
+            warn!(batch_id = %batch_id, error = %e, "DB error looking up anthropic batch meta");
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
+}
+
+/// Sync the batch processing_status from a MessageBatch to the batch_meta table.
+async fn sync_batch_status(state: &AnthropicAppState, batch_id: &str, batch: &MessageBatch) {
+    if let Err(e) =
+        db::batches::update_batch_meta_status(&state.pool, batch_id, &batch.processing_status).await
+    {
+        warn!(batch_id = %batch_id, error = %e, "Failed to sync anthropic batch status to batch_meta");
     }
 }
 
@@ -96,9 +137,42 @@ pub async fn create_message_batch(
     )
     .await
     {
-        Ok(batch) => {
+        Ok(mut batch) => {
+            // Generate our own batch_id and store the mapping
+            let our_batch_id = new_batch_id();
+            let original_batch_id = batch.id.clone();
+
+            match db::batches::create_batch_meta_with_provider(
+                &state.pool,
+                &our_batch_id,
+                &original_batch_id,
+                upstream_client.upstream_id,
+                "anthropic",
+            )
+            .await
+            {
+                Ok(_) => {
+                    info!(
+                        batch_id = %our_batch_id,
+                        original_batch_id = %original_batch_id,
+                        upstream_id = %upstream_client.upstream_id,
+                        "Anthropic message batch created and meta stored"
+                    );
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to store anthropic batch meta in DB");
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+
+            // Replace the upstream batch_id with our own in the response
+            batch.id = our_batch_id.clone();
+
+            // Sync batch status to batch_meta
+            sync_batch_status(&state, &our_batch_id, &batch).await;
+
             info!(
-                batch_id = %batch.id,
+                batch_id = %our_batch_id,
                 processing_status = %batch.processing_status,
                 "Anthropic message batch created"
             );
@@ -165,13 +239,18 @@ pub async fn list_message_batches(State(state): State<Arc<AnthropicAppState>>) -
 /// GET /v1/messages/batches/:message_batch_id — retrieve a specific message batch
 pub async fn retrieve_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
-    axum::extract::Path(message_batch_id): axum::extract::Path<String>,
+    Path(message_batch_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
+
+    let meta = match resolve_batch_meta(&state, &message_batch_id).await {
+        Ok(m) => m,
+        Err(resp) => return resp,
+    };
 
     let clients = select_anthropic_clients(&state.pool, &state.redis_pool, "", 1).await;
     if clients.is_empty() {
@@ -190,10 +269,24 @@ pub async fn retrieve_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let path = format!("/v1/messages/batches/{}", message_batch_id);
+    let path = format!("/v1/messages/batches/{}", meta.original_batch_id);
+
+    info!(
+        batch_id = %message_batch_id,
+        original_batch_id = %meta.original_batch_id,
+        "Retrieving anthropic message batch"
+    );
 
     match anthropic_sdk_get_request::<MessageBatch>(&upstream_client.client, &path).await {
-        Ok(batch) => Json(batch).into_response(),
+        Ok(mut batch) => {
+            // Replace upstream batch_id with our own in the response
+            batch.id = message_batch_id.clone();
+
+            // Sync batch status to batch_meta
+            sync_batch_status(&state, &message_batch_id, &batch).await;
+
+            Json(batch).into_response()
+        }
         Err(e) => {
             maybe_mark_offline(&e, state.pool.clone(), upstream_client.upstream_id);
             warn!(batch_id = %message_batch_id, error = %e, "Anthropic retrieve message batch failed");
@@ -209,13 +302,18 @@ pub async fn retrieve_message_batch(
 /// POST /v1/messages/batches/:message_batch_id/cancel — cancel a message batch
 pub async fn cancel_message_batch(
     State(state): State<Arc<AnthropicAppState>>,
-    axum::extract::Path(message_batch_id): axum::extract::Path<String>,
+    Path(message_batch_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
+
+    let meta = match resolve_batch_meta(&state, &message_batch_id).await {
+        Ok(m) => m,
+        Err(resp) => return resp,
+    };
 
     let clients = select_anthropic_clients(&state.pool, &state.redis_pool, "", 1).await;
     if clients.is_empty() {
@@ -234,7 +332,13 @@ pub async fn cancel_message_batch(
     }
 
     let upstream_client = &clients[0];
-    let path = format!("/v1/messages/batches/{}/cancel", message_batch_id);
+    let path = format!("/v1/messages/batches/{}/cancel", meta.original_batch_id);
+
+    info!(
+        batch_id = %message_batch_id,
+        original_batch_id = %meta.original_batch_id,
+        "Cancelling anthropic message batch"
+    );
 
     // Cancel is a POST with an empty body
     match anthropic_sdk_request::<serde_json::Value, MessageBatch>(
@@ -244,7 +348,13 @@ pub async fn cancel_message_batch(
     )
     .await
     {
-        Ok(batch) => {
+        Ok(mut batch) => {
+            // Replace upstream batch_id with our own in the response
+            batch.id = message_batch_id.clone();
+
+            // Sync batch status to batch_meta
+            sync_batch_status(&state, &message_batch_id, &batch).await;
+
             info!(batch_id = %message_batch_id, "Anthropic message batch cancelled");
             Json(batch).into_response()
         }
@@ -263,13 +373,18 @@ pub async fn cancel_message_batch(
 /// GET /v1/messages/batches/:message_batch_id/results — stream batch results (JSONL)
 pub async fn retrieve_message_batch_results(
     State(state): State<Arc<AnthropicAppState>>,
-    axum::extract::Path(message_batch_id): axum::extract::Path<String>,
+    Path(message_batch_id): Path<String>,
 ) -> Response {
     let account_id = ACCOUNT.with(|u| u.id);
 
     if let Err(resp) = check_wallet_balance(&state, account_id).await {
         return resp;
     }
+
+    let meta = match resolve_batch_meta(&state, &message_batch_id).await {
+        Ok(m) => m,
+        Err(resp) => return resp,
+    };
 
     let clients = select_anthropic_clients(&state.pool, &state.redis_pool, "", 1).await;
     if clients.is_empty() {
@@ -288,7 +403,13 @@ pub async fn retrieve_message_batch_results(
     }
 
     let upstream_client = &clients[0];
-    let path = format!("/v1/messages/batches/{}/results", message_batch_id);
+    let path = format!("/v1/messages/batches/{}/results", meta.original_batch_id);
+
+    info!(
+        batch_id = %message_batch_id,
+        original_batch_id = %meta.original_batch_id,
+        "Retrieving anthropic message batch results"
+    );
 
     match anthropic_sdk_get_raw(&upstream_client.client, &path).await {
         Ok(upstream_resp) => {

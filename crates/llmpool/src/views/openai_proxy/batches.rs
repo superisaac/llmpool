@@ -196,11 +196,12 @@ pub async fn create_batch_handler(
             let our_batch_id = new_batch_id();
             let original_batch_id = batch.id.clone();
 
-            match db::batches::create_batch_meta(
+            match db::batches::create_batch_meta_with_provider(
                 &state.pool,
                 &our_batch_id,
                 &original_batch_id,
                 upstream.id,
+                "openai",
             )
             .await
             {

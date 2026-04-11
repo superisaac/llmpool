@@ -404,3 +404,6 @@ retrieve_response() 中，previouse_response_id需要通过ResponseMeta 换成or
 用于original_response_id和response_id的的转换，并替换现有openai_proxy/respnses.rs中的方法
 
 实现代理方法 DELETE /v1/responses/:id, 去对应的Upstream delete responses 以后 标记ResponseMeta.deleted = true
+
+==========
+仿造openai proxy，使用 BatchMeta 记录 Anthropic API中 /v1/messages/batches 相关请求，记录Batch 和 转换 batch_id 和 original_batch_id
