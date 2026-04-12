@@ -1,4 +1,3 @@
-use async_openai::Client;
 use axum::Router;
 
 use super::proxy_views::helpers::build_client_from_upstream;
@@ -28,19 +27,25 @@ impl Provider for OpenAIProvider {
         )
     }
 
-    async fn detect_features(self, model: &LLMModel, upstream: &LLMUpstream) -> Vec<String> {
-        // 1. Build the OpenAI client
-        let client = build_client_from_upstream(upstream);
+    fn detect_features<'a>(
+        &'a self,
+        model: &'a LLMModel,
+        upstream: &'a LLMUpstream,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<String>> + Send + 'a>> {
+        Box::pin(async move {
+            // 1. Build the OpenAI client
+            let client = build_client_from_upstream(upstream);
 
-        // 3. Build a minimal Model struct for feature detection
-        let model_info = async_openai::types::models::Model {
-            id: model.fullname.clone(),
-            created: 0,
-            object: "model".to_string(),
-            owned_by: String::new(),
-        };
+            // 3. Build a minimal Model struct for feature detection
+            let model_info = async_openai::types::models::Model {
+                id: model.fullname.clone(),
+                created: 0,
+                object: "model".to_string(),
+                owned_by: String::new(),
+            };
 
-        // 4. Delegate to the OpenAI feature detection logic
-        crate::openai::features::detect_features(&client, &model_info).await
+            // 4. Delegate to the OpenAI feature detection logic
+            crate::openai::features::detect_features(&client, &model_info).await
+        })
     }
 }

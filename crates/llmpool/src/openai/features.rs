@@ -18,7 +18,7 @@ use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
 use crate::db::{self, DbPool};
-use crate::models::{NewLLMModel, NewLLMUpstream, UpdateLLMModel, UpdateLLMUpstream};
+use crate::models::{NewLLMModel, NewLLMUpstream, UpdateLLMUpstream};
 
 /// OpenAI feature identifiers
 pub const FEATURE_CHAT_COMPLETIONS: &str = "chat/completions";
@@ -239,74 +239,6 @@ pub async fn list_and_save_without_detect(
     }
 
     Ok(())
-}
-
-/// Update the features of a model in the database using OpenAI feature detection.
-/// Fetches the model and its upstream, runs detect_features, merges with existing
-/// non-OpenAI features, and writes the result back to the database.
-/// Only the features field is updated; all other fields remain unchanged.
-pub async fn update_features(
-    pool: &DbPool,
-    model_pk: i64,
-) -> Result<crate::models::LLMModel, Box<dyn std::error::Error + Send + Sync>> {
-    // 1. Fetch the model record
-    let model = db::llm::get_model(pool, model_pk).await?;
-
-    // 2. Fetch the upstream to get api_key and api_base
-    let upstream = db::llm::get_upstream(pool, model.upstream_id).await?;
-
-    // 3. Build the OpenAI client
-    let config = async_openai::config::OpenAIConfig::new()
-        .with_api_key(upstream.api_key.clone())
-        .with_api_base(upstream.api_base.clone());
-    let client = Client::with_config(config);
-
-    // 4. Build a minimal Model struct for feature detection
-    let model_info = async_openai::types::models::Model {
-        id: model.fullname.clone(),
-        created: 0,
-        object: "model".to_string(),
-        owned_by: String::new(),
-    };
-
-    // 5. Detect features
-    let openai_features = detect_features(&client, &model_info).await;
-
-    // 6. Merge with existing features: keep non-OpenAI features, replace OpenAI ones
-    let openai_feature_set: std::collections::HashSet<&str> = [
-        FEATURE_CHAT_COMPLETIONS,
-        FEATURE_IMAGES,
-        FEATURE_EMBEDDINGS,
-        FEATURE_AUDIO_SPEECH,
-        FEATURE_RESPONSES,
-    ]
-    .iter()
-    .copied()
-    .collect();
-
-    let mut merged_features: Vec<String> = model
-        .features
-        .iter()
-        .filter(|f| !openai_feature_set.contains(f.as_str()))
-        .cloned()
-        .collect();
-    merged_features.extend(openai_features);
-
-    // 7. Update only the features field in the database
-    let update = UpdateLLMModel {
-        fullname: None,
-        is_active: None,
-        features: Some(merged_features),
-        max_tokens: None,
-        input_token_price: None,
-        output_token_price: None,
-        batch_input_token_price: None,
-        batch_output_token_price: None,
-        description: None,
-        updated_at: Some(Utc::now().naive_utc()),
-    };
-    let updated_model = db::llm::update_model(pool, model_pk, &update).await?;
-    Ok(updated_model)
 }
 
 /// Helper function: Determine if error indicates feature is truly unavailable

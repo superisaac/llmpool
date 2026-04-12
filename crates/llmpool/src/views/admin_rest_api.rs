@@ -1173,11 +1173,19 @@ async fn test_model(State(state): State<Arc<AppState>>, Path(model_id): Path<i64
         }
     };
 
-    let result = if upstream.provider == "anthropic" {
-        crate::anthropic::features::update_features(&state.pool, model_id).await
-    } else {
-        crate::openai::features::update_features(&state.pool, model_id).await
+    let provider = match crate::provider::get_provider(&upstream.provider) {
+        Some(provider) => provider,
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_provider",
+                &format!("Unsupported provider '{}'", upstream.provider),
+            );
+        }
     };
+
+    let features = provider.detect_features(&model, &upstream).await;
+    let result = db::llm::update_model_features(&state.pool, model_id, features).await;
 
     match result {
         Ok(updated_model) => Json(ModelTestResult {

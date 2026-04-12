@@ -1,5 +1,6 @@
 use axum::Router;
 
+use crate::anthropic::proxy_views::helpers::build_anthropic_client_context;
 use crate::models::{LLMModel, LLMUpstream};
 use crate::provider::types::{Provider, ProviderContext};
 
@@ -27,8 +28,14 @@ impl Provider for AnthropicProvider {
         )
     }
 
-    async fn detect_features(self, _model: &LLMModel, upstream: &LLMUpstream) -> Vec<String> {
-        // 2. Delegate to the Anthropic feature detection logic
-        crate::anthropic::features::detect_features(&upstream.api_key, &upstream.api_base).await
+    fn detect_features<'a>(
+        &'a self,
+        model: &'a LLMModel,
+        upstream: &'a LLMUpstream,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Vec<String>> + Send + 'a>> {
+        Box::pin(async move {
+            let ctx = build_anthropic_client_context(model, upstream);
+            crate::anthropic::features::detect_features(&ctx.client, model).await
+        })
     }
 }

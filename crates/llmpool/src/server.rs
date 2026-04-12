@@ -50,21 +50,13 @@ pub async fn serve(bind: &str) {
 
     for provider in get_all_providers() {
         let prefix = provider.get_router_prefix().to_string();
-        let router = provider.get_router(&provider_ctx);
-
-        let router = if provider.provider_name() == "openai" {
-            // Apply rate limiting to the OpenAI provider before CORS so that
-            // rate-limited requests are rejected early, before any CORS headers
-            // are added.
-            router
-                .route_layer(middleware::from_fn_with_state(
-                    rate_limit_state.clone(),
-                    rate_limit_middleware,
-                ))
-                .layer(CorsLayer::very_permissive())
-        } else {
-            router.layer(CorsLayer::very_permissive())
-        };
+        let router = provider
+            .get_router(&provider_ctx)
+            .route_layer(middleware::from_fn_with_state(
+                rate_limit_state.clone(),
+                rate_limit_middleware,
+            ))
+            .layer(CorsLayer::very_permissive());
 
         info!(prefix = %prefix, provider = %provider.provider_name(), "Mounting provider router");
         app = app.nest(&prefix, router);

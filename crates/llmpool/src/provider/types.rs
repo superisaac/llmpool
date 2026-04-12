@@ -1,6 +1,7 @@
 use axum::Router;
 
 use apalis_redis::RedisStorage;
+use std::{future::Future, pin::Pin};
 
 use crate::db::{DbPool, RedisPool};
 use crate::defer::{AnthropicEventTask, OpenAIEventTask};
@@ -40,10 +41,11 @@ pub trait Provider: Send + Sync {
     /// Fetches the upstream associated with `model`, builds the provider-specific
     /// client, and delegates to the concrete provider's feature-detection logic.
     /// Returns a list of supported feature identifier strings.
-    #[allow(async_fn_in_trait)]
-    async fn detect_features(self, model: &LLMModel, upstream: &LLMUpstream) -> Vec<String>
-    where
-        Self: Sized;
+    fn detect_features<'a>(
+        &'a self,
+        model: &'a LLMModel,
+        upstream: &'a LLMUpstream,
+    ) -> Pin<Box<dyn Future<Output = Vec<String>> + Send + 'a>>;
 }
 
 /// Look up a provider by its canonical name.

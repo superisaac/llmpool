@@ -417,6 +417,24 @@ pub async fn update_model(
     .await
 }
 
+/// Update only the features field of a model.
+pub async fn update_model_features(
+    pool: &DbPool,
+    model_id: i64,
+    features: Vec<String>,
+) -> Result<LLMModel, sqlx::Error> {
+    sqlx::query_as::<_, LLMModel>(
+        "UPDATE llm_models
+         SET features = $1, updated_at = NOW()
+         WHERE id = $2
+         RETURNING *",
+    )
+    .bind(features)
+    .bind(model_id)
+    .fetch_one(pool)
+    .await
+}
+
 /// Find the first model by cname (short name)
 pub async fn find_first_model_by_name(
     pool: &DbPool,
