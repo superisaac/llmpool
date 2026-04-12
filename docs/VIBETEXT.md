@@ -417,3 +417,25 @@ features.rs 中的判断逻辑改为得到features数组，并存入数据库中
 detect_and_update_model_features 改成两个部分， 一个是provider specific的 detect_features, 返回一个Vec<String>. 另外一个方法是update features, 获取provider specific的features, 并更新数据库中features字段。
 admin_rest_api 中test_model 的payload中不再包含provider, 而是根据model_id 获取upstream, 然后根据upstream 中的provider 字段来判断是openai 还是 anthropic.
 更新api-schema.json 以及 llmpool-ctl 命令
+
+===========
+重构Provider逻辑
+```rust
+// API provider 的抽象接口
+trait Provider {
+  fn provider_name(&self) -> &str;
+  fn get_router_prefix(&self) -> &str;
+  fn get_router(&self) -> Router;
+  fn detect_features(&self, model_id: &str) -> Vec<String>;
+
+}
+
+// 通过名字获取API provider
+fn get_provider(provider_name: &str) -> Box<dyn Provider> {}
+
+// 获得所有API providers
+fn get_all_providers() -> Vec<Box<dyn Provider>> {}
+```
+并分别实现OpenAIProvider 和 AnthropicProvider
+
+实现 trait Provider 的方法 `async fn detect_features_async(self, pool: &DbPool, model: &LLMModel) -> Vec<String>`, 通过model 获得upstream, 并通过upstream 获得client, 调用具体provider 的detect_features方法并await, 返回结果 

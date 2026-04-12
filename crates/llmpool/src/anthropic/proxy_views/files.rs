@@ -96,7 +96,7 @@ fn add_auth_headers(req: reqwest::RequestBuilder, client: &Anthropic) -> reqwest
 /// Select the first available upstream client (no model filter needed for files).
 async fn get_upstream_client(
     state: &AnthropicAppState,
-) -> Result<super::helpers::AnthropicUpstreamClient, Response> {
+) -> Result<super::helpers::AnthropicClientContext, Response> {
     let clients = select_anthropic_clients(&state.pool, &state.redis_pool, "", 1).await;
     if clients.is_empty() {
         warn!("No anthropic upstream client found for files API");

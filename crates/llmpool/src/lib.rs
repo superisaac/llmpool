@@ -6,6 +6,7 @@ pub mod defer;
 pub mod middlewares;
 pub mod models;
 pub mod openai;
+pub mod provider;
 pub mod redis_utils;
 pub mod server;
 pub mod telemetry;

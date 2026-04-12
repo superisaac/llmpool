@@ -114,7 +114,7 @@ pub(super) async fn select_first_upstream(
 }
 
 /// Build an async-openai Client from an LLMUpstream (no model_id needed).
-pub(super) fn build_client_from_upstream(
+pub fn build_client_from_upstream(
     upstream: &crate::models::LLMUpstream,
 ) -> async_openai::Client<async_openai::config::OpenAIConfig> {
     use async_openai::{Client, config::OpenAIConfig};
@@ -145,7 +145,7 @@ pub(super) fn build_client_from_upstream(
 
 /// Build a Client from an (LLMModel, LLMUpstream) pair.
 /// If the upstream has proxies configured, a random one is selected and used.
-pub(super) fn build_client_from_model_upstream(
+pub fn build_client_from_model_upstream(
     model: &crate::models::LLMModel,
     upstream: &crate::models::LLMUpstream,
 ) -> (

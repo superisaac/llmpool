@@ -16,7 +16,7 @@ use crate::defer::AnthropicEventTask;
 
 // --- Upstream client for Anthropic ---
 
-pub struct AnthropicUpstreamClient {
+pub struct AnthropicClientContext {
     /// The Anthropic SDK client
     pub client: Anthropic,
     /// The LLMModel primary key
@@ -31,7 +31,10 @@ pub struct AnthropicUpstreamClient {
 /// Uses `anthropic-sdk-rust`'s `Anthropic` client with `ClientConfig`.
 /// If the upstream has proxies configured, a random one is selected and used via
 /// `ClientConfig::with_proxy_url()`.
-pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> AnthropicUpstreamClient {
+pub fn build_anthropic_client_context(
+    model: &LLMModel,
+    upstream: &LLMUpstream,
+) -> AnthropicClientContext {
     use rand::seq::IndexedRandom;
 
     // Build the ClientConfig with the upstream's API key and base URL
@@ -53,7 +56,7 @@ pub fn build_anthropic_client(model: &LLMModel, upstream: &LLMUpstream) -> Anthr
 
     let client = Anthropic::with_config(config).expect("Failed to build Anthropic SDK client");
 
-    AnthropicUpstreamClient {
+    AnthropicClientContext {
         client,
         model_db_id: model.id,
         upstream_id: upstream.id,
@@ -68,7 +71,7 @@ pub async fn select_anthropic_clients(
     redis_pool: &RedisPool,
     model_name: &str,
     count: usize,
-) -> Vec<AnthropicUpstreamClient> {
+) -> Vec<AnthropicClientContext> {
     use crate::redis_utils::counters::get_output_token_usage_batch;
 
     let models = match db::llm::find_models_by_name_and_capacity(
@@ -116,7 +119,7 @@ pub async fn select_anthropic_clients(
                 output_token_usage = usage,
                 "Selected anthropic upstream candidate by lowest output token usage"
             );
-            build_anthropic_client(model, upstream)
+            build_anthropic_client_context(model, upstream)
         })
         .collect()
 }
